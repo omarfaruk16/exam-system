@@ -15,6 +15,7 @@ import { RedisModule } from './common/redis/redis.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
+import { AttemptModule } from './modules/attempt/attempt.module';
 import { ExamModule } from './modules/exam/exam.module';
 import { ImportModule } from './modules/import/import.module';
 import { OrgModule } from './modules/org/org.module';
@@ -50,6 +51,7 @@ import { QueueModule } from './queue/queue.module';
             limit: config.get('THROTTLE_LIMIT', { infer: true }),
           },
         ],
+        skipIf: () => config.get('DISABLE_THROTTLE', { infer: true }),
       }),
     }),
     PrismaModule,
@@ -61,6 +63,7 @@ import { QueueModule } from './queue/queue.module';
     UsersModule,
     OrgModule,
     ExamModule.register(),
+    AttemptModule.register(),
     ImportModule.register(),
     HealthModule,
   ],

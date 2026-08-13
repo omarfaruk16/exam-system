@@ -385,7 +385,7 @@ export class ExamService {
             explanation: true,
             modelAnswer: true,
             options: {
-              select: { text: true, isCorrect: true, order: true },
+              select: { publicId: true, text: true, isCorrect: true, order: true },
               orderBy: { order: 'asc' },
             },
           },
@@ -410,8 +410,16 @@ export class ExamService {
             snapshotModelAnswer: eq.question.modelAnswer,
             snapshotOptions:
               eq.question.type === 'mcq'
-                ? (eq.question.options as unknown as Prisma.InputJsonValue)
+                ? (eq.question.options.map((o) => ({
+                    id: o.publicId,
+                    text: o.text,
+                    order: o.order,
+                  })) as unknown as Prisma.InputJsonValue)
                 : Prisma.JsonNull,
+            snapshotCorrectOptionId:
+              eq.question.type === 'mcq'
+                ? (eq.question.options.find((o) => o.isCorrect)?.publicId ?? null)
+                : null,
           },
         });
       }
@@ -432,5 +440,27 @@ export class ExamService {
       return updated;
     });
     return result;
+  }
+
+  // ── post-exam lifecycle (admin): ended → grading → results_published → archived ──
+  async startGrading(user: AuthUser, ip: string, publicId: string) {
+    const exam = await this.loadExam(publicId);
+    this.access.assertAdminScope(user, exam);
+    this.assertTransition(exam.status, 'grading');
+    return this.changeStatus(user, ip, exam, 'grading', 'exam.start_grading');
+  }
+
+  async publishResults(user: AuthUser, ip: string, publicId: string) {
+    const exam = await this.loadExam(publicId);
+    this.access.assertAdminScope(user, exam);
+    this.assertTransition(exam.status, 'results_published');
+    return this.changeStatus(user, ip, exam, 'results_published', 'exam.publish_results');
+  }
+
+  async archive(user: AuthUser, ip: string, publicId: string) {
+    const exam = await this.loadExam(publicId);
+    this.access.assertAdminScope(user, exam);
+    this.assertTransition(exam.status, 'archived');
+    return this.changeStatus(user, ip, exam, 'archived', 'exam.archive');
   }
 }

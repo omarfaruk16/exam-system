@@ -36,6 +36,8 @@ export const envSchema = z.object({
 
   THROTTLE_TTL_SECONDS: z.coerce.number().int().positive().default(60),
   THROTTLE_LIMIT: z.coerce.number().int().positive().default(120),
+  // Disable per-IP rate limiting (only for single-source load testing — never in production).
+  DISABLE_THROTTLE: zBool(false),
   LOGIN_THROTTLE_TTL_SECONDS: z.coerce.number().int().positive().default(60),
   LOGIN_THROTTLE_LIMIT: z.coerce.number().int().positive().default(10),
 

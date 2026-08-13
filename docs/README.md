@@ -115,9 +115,23 @@ pnpm -r typecheck        # strict TS across the workspace
 pnpm --filter @exam/api test   # vitest unit tests
 ```
 
-Phase-1 unit tests cover the student-import row validator, scoped-RBAC logic, and argon2
-hash/verify. The critical exam-taking path (server timer, autosave, idempotent submit, auto-submit,
-MCQ auto-grade) is tested thoroughly in phase 4, plus a k6 load test of the submit path.
+Unit + integration tests cover student-import validation, scoped RBAC, argon2, the exam state
+machine + snapshot, and the full exam-taking path (idempotent/concurrent submit, deadline 409,
+session supersession, auto-submit, snapshot-based MCQ scoring, results gating).
+
+**k6 load test** (`tests/load/exam-submit.js`): 300 students each start, autosave 5 answers, and
+submit within a 60s window.
+
+```bash
+# API must be running; disable per-IP throttle for the single-source run (all traffic = one IP):
+pnpm --filter @exam/api exec tsx scripts/load-setup.ts 300      # prints EXAM_ID
+docker run --rm -i --add-host=host.docker.internal:host-gateway grafana/k6 run \
+  -e BASE=http://host.docker.internal:4100/api/v1 -e EXAM_ID=<id> -e VUS=300 - < tests/load/exam-submit.js
+```
+
+Measured result: **submit p95 ≈ 336 ms** (target < 2 s), **zero 5xx**, and **zero duplicate
+`(examId, studentId)` rows** — the unique constraint plus the Redis lock hold under 300 concurrent
+submitters, all auto-graded.
 
 ## 9. Key decisions & deviations
 
@@ -140,6 +154,16 @@ MCQ auto-grade) is tested thoroughly in phase 4, plus a k6 load test of the subm
   `published → live → ended` fire automatically by `startAt`/`endAt` via a BullMQ repeatable sweep
   (`ExamSchedulerService`), which is restart-safe and race-guarded. Creating/publishing an exam
   re-checks that the OfferingPart and its CourseOffering are not soft-deleted (closes the cascade gap).
+- **Exam-taking**: the deadline is `min(exam.endAt, startedAt + durationMinutes)`, computed once on
+  the server and stored in Redis — never from the client. The paper is cached per exam (Redis) with
+  correct answers stripped; shuffle is seeded from the attempt id so a reconnect is stable. Autosave
+  UPSERTs on `(attemptId, questionId)`. Submit is idempotent: an idempotency key returns the cached
+  result and a Redis lock serializes concurrent submits; auto-submit uses the SAME finalize path.
+  MCQ scoring compares the answer to `ExamQuestion.snapshotCorrectOptionId` (frozen at publish), so
+  bank edits can't change a graded score.
+- **Rate limiting** is per-IP. The k6 run sets `DISABLE_THROTTLE=true` only because all 300 VUs share
+  one source IP; in production throttling stays on. For multiple API instances, move the throttler
+  store to Redis (phase 6).
 - **Ports** moved off defaults to avoid collisions with other local projects (see §3).
 - Native build scripts are explicitly allow-listed in `pnpm-workspace.yaml` (`allowBuilds`) per
   pnpm 11's supply-chain safety; the optional `msgpackr-extract` accelerator is declined (JS fallback).
@@ -152,6 +176,8 @@ MCQ auto-grade) is tested thoroughly in phase 4, plus a k6 load test of the subm
 3. **Exam & question authoring** — question banks (MCQ/written, manual + Excel import),
    exam builder, publish-time question snapshot, and the role-guarded status state machine
    with automatic time-based live/ended transitions. ✅ **done**
-4. Exam-taking engine (server timer, autosave, idempotent submit, MCQ auto-grade) + k6 load test.
+4. **Exam-taking engine** — server-authoritative deadline, cached paper delivery (no correct
+   answers, deterministic per-student shuffle), autosave (UPSERT + Redis snapshot), single active
+   session, idempotent + auto-submit, MCQ auto-grade from snapshot, k6 load test. ✅ **done**
 5. Grading & reporting (written marking, result rollups, Excel/PDF export).
 6. Hardening & polish (2FA, rate-limit lockout, maintenance mode, observability, backups, a11y, e2e).

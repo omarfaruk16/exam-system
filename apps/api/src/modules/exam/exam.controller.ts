@@ -120,4 +120,25 @@ export class ExamController {
   remove(@CurrentUser() u: AuthUser, @Ip() ip: string, @Param('publicId') id: string) {
     return this.exams.remove(u, ip, id);
   }
+
+  @Roles('admin', 'super_admin')
+  @Post(':publicId/start-grading')
+  @HttpCode(200)
+  startGrading(@CurrentUser() u: AuthUser, @Ip() ip: string, @Param('publicId') id: string) {
+    return this.exams.startGrading(u, ip, id);
+  }
+
+  @Roles('admin', 'super_admin')
+  @Post(':publicId/publish-results')
+  @HttpCode(200)
+  publishResults(@CurrentUser() u: AuthUser, @Ip() ip: string, @Param('publicId') id: string) {
+    return this.exams.publishResults(u, ip, id);
+  }
+
+  @Roles('admin', 'super_admin')
+  @Post(':publicId/archive')
+  @HttpCode(200)
+  archive(@CurrentUser() u: AuthUser, @Ip() ip: string, @Param('publicId') id: string) {
+    return this.exams.archive(u, ip, id);
+  }
 }

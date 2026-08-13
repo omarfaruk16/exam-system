@@ -269,8 +269,9 @@ model Student {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  user  User  @relation(fields: [userId], references: [id])
-  batch Batch @relation(fields: [batchId], references: [id])
+  user     User           @relation(fields: [userId], references: [id])
+  batch    Batch          @relation(fields: [batchId], references: [id])
+  attempts ExamAttempt[]
 
   @@index([batchId])
 }
@@ -290,6 +291,7 @@ model Teacher {
   offeringParts OfferingPart[]
   createdBanks  QuestionBank[]
   createdExams  Exam[]
+  gradedAnswers Answer[]
 
   @@index([departmentId])
 }
@@ -402,6 +404,7 @@ model Question {
   bank          QuestionBank     @relation(fields: [bankId], references: [id])
   options       QuestionOption[]
   examQuestions ExamQuestion[]
+  answers       Answer[]
 
   @@index([bankId])
   @@index([deletedAt])
@@ -444,6 +447,7 @@ model Exam {
   offeringPart  OfferingPart   @relation(fields: [offeringPartId], references: [id])
   createdBy     Teacher        @relation(fields: [createdByTeacherId], references: [id])
   examQuestions ExamQuestion[]
+  attempts      ExamAttempt[]
 
   @@index([offeringPartId, status])
   @@index([status])
@@ -466,7 +470,9 @@ model ExamQuestion {
   snapshotMarks       Float?
   snapshotExplanation String?
   snapshotModelAnswer String?
-  snapshotOptions     Json? // [{ text, isCorrect, order }]
+  snapshotOptions     Json? // MCQ: [{ id, text, order }] — id is the original option's publicId
+  // The correct option's id (from the snapshot). MCQ scoring compares against THIS, never the bank.
+  snapshotCorrectOptionId String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -476,4 +482,87 @@ model ExamQuestion {
 
   @@unique([examId, questionId])
   @@index([examId])
+}
+
+// ───────────────────────── Attempts, answers, results (Phase 4) ─────────────────────────
+
+enum AttemptStatus {
+  in_progress
+  submitted
+  grading
+  graded
+}
+
+enum GradingStatus {
+  pending
+  awaiting_manual
+  graded
+}
+
+// One row per (student, exam). The UNIQUE (examId, studentId) is the DB backstop against
+// duplicate attempts — concurrent starts collide here, they cannot both create an attempt.
+model ExamAttempt {
+  id            Int           @id @default(autoincrement())
+  publicId      String        @unique @default(uuid())
+  examId        Int
+  studentId     Int
+  startedAt     DateTime      @default(now())
+  submittedAt   DateTime?
+  autoSubmitted Boolean       @default(false)
+  status        AttemptStatus @default(in_progress)
+  gradingStatus GradingStatus @default(pending)
+  totalScore    Float?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  exam    Exam        @relation(fields: [examId], references: [id])
+  student Student     @relation(fields: [studentId], references: [id])
+  answers Answer[]
+  result  ExamResult?
+
+  @@unique([examId, studentId])
+  @@index([examId, studentId])
+  @@index([examId, status])
+  @@index([createdAt])
+}
+
+// One row per (attempt, question). UNIQUE (attemptId, questionId) backstops duplicate answers;
+// autosave UPSERTs onto it (never select-then-insert).
+model Answer {
+  id                Int      @id @default(autoincrement())
+  publicId          String   @unique @default(uuid())
+  attemptId         Int
+  questionId        Int
+  selectedOptionId  String? // MCQ: chosen snapshot option id (a QuestionOption publicId)
+  writtenText       String?
+  autoScore         Float?
+  manualScore       Float?
+  isGraded          Boolean  @default(false)
+  gradedByTeacherId Int?
+  feedback          String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  attempt  ExamAttempt @relation(fields: [attemptId], references: [id])
+  question Question    @relation(fields: [questionId], references: [id])
+  gradedBy Teacher?    @relation(fields: [gradedByTeacherId], references: [id])
+
+  @@unique([attemptId, questionId])
+  @@index([attemptId, questionId])
+  @@index([createdAt])
+}
+
+// Rollup per attempt — reports read this, never the raw answers.
+model ExamResult {
+  id         Int      @id @default(autoincrement())
+  publicId   String   @unique @default(uuid())
+  attemptId  Int      @unique
+  finalScore Float
+  percentage Float
+  rank       Int?
+  computedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  attempt ExamAttempt @relation(fields: [attemptId], references: [id])
 }
