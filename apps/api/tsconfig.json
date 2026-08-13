@@ -1,0 +1,12 @@
+{
+  "extends": "@exam/config/tsconfig.node.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "baseUrl": "./",
+    "declaration": false,
+    "sourceMap": true,
+    "resolveJsonModule": true
+  },
+  "include": ["src", "prisma", "test", "vitest.config.ts"],
+  "exclude": ["node_modules", "dist"]
+}

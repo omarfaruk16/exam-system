@@ -10,8 +10,8 @@
   },
   "scripts": {
     "build": "pnpm -r build",
-    "dev": "pnpm -r --parallel dev",
-    "typecheck": "pnpm -r typecheck",
+    "dev": "pnpm --filter @exam/types build && pnpm -r --parallel dev",
+    "typecheck": "pnpm --filter @exam/types build && pnpm -r typecheck",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
@@ -21,7 +21,7 @@
     "db:migrate": "pnpm --filter @exam/api prisma:migrate",
     "db:seed": "pnpm --filter @exam/api prisma:seed",
     "db:reset": "pnpm --filter @exam/api prisma:reset",
-    "infra:up": "docker compose -f infra/docker-compose.yml up -d postgres redis pgbouncer",
+    "infra:up": "docker compose -f infra/docker-compose.yml up -d postgres redis",
     "infra:down": "docker compose -f infra/docker-compose.yml down",
     "prepare": "husky"
   },

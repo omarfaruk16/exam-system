@@ -1,0 +1,339 @@
+// University Examination System — Prisma schema
+// Phase 1: users / roles / organizational hierarchy / audit.
+// Exam, question, attempt, grading, result and report models are added in later phases.
+//
+// Conventions (see docs/README.md → Data model):
+//   - Int autoincrement `id` for joins; `publicId` (uuid) for anything exposed in a URL.
+//   - createdAt / updatedAt everywhere; deletedAt where the row is academic (soft delete only).
+//   - Every foreign key is indexed. Composite indexes on hot paths.
+//   - CHECK constraints (marks >= 0, semester 1..8, ...) are added in the migration SQL.
+//   - ExamAttempt / Answer / AuditLog are the high-growth tables — structured so monthly
+//     range partitioning on createdAt can be added later without a schema rewrite.
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─────────────────────────────── Enums ───────────────────────────────
+
+enum RoleName {
+  super_admin
+  admin
+  department_head
+  teacher
+  student
+}
+
+enum UserStatus {
+  active
+  suspended
+}
+
+enum DegreeType {
+  bachelor
+  masters
+  mphil
+  phd
+  diploma
+}
+
+// ───────────────────────── Organizational hierarchy ─────────────────────────
+
+model Faculty {
+  id        Int       @id @default(autoincrement())
+  publicId  String    @unique @default(uuid())
+  name      String
+  code      String    @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  departments Department[]
+  scopedRoles UserRole[]   @relation("FacultyScope")
+
+  @@index([deletedAt])
+}
+
+model Department {
+  id        Int       @id @default(autoincrement())
+  publicId  String    @unique @default(uuid())
+  facultyId Int
+  name      String
+  code      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  faculty     Faculty    @relation(fields: [facultyId], references: [id])
+  programs    Program[]
+  teachers    Teacher[]
+  scopedRoles UserRole[] @relation("DepartmentScope")
+
+  @@unique([facultyId, code])
+  @@index([facultyId])
+  @@index([deletedAt])
+}
+
+model Program {
+  id            Int        @id @default(autoincrement())
+  publicId      String     @unique @default(uuid())
+  departmentId  Int
+  name          String
+  degreeType    DegreeType
+  durationYears Int
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  deletedAt     DateTime?
+
+  department Department @relation(fields: [departmentId], references: [id])
+  batches    Batch[]
+  semesters  Semester[]
+
+  @@index([departmentId])
+  @@index([deletedAt])
+}
+
+model Batch {
+  id            Int       @id @default(autoincrement())
+  publicId      String    @unique @default(uuid())
+  programId     Int
+  name          String
+  admissionYear Int
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  program   Program          @relation(fields: [programId], references: [id])
+  students  Student[]
+  offerings CourseOffering[]
+
+  @@unique([programId, name])
+  @@index([programId])
+  @@index([deletedAt])
+}
+
+model Semester {
+  id        Int       @id @default(autoincrement())
+  publicId  String    @unique @default(uuid())
+  programId Int
+  number    Int
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  program Program  @relation(fields: [programId], references: [id])
+  courses Course[]
+
+  @@unique([programId, number])
+  @@index([programId])
+}
+
+model Course {
+  id         Int       @id @default(autoincrement())
+  publicId   String    @unique @default(uuid())
+  semesterId Int
+  code       String
+  name       String
+  credit     Float
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+
+  semester  Semester         @relation(fields: [semesterId], references: [id])
+  parts     CoursePart[]
+  offerings CourseOffering[]
+
+  @@unique([semesterId, code])
+  @@index([semesterId])
+  @@index([deletedAt])
+}
+
+model CoursePart {
+  id          Int       @id @default(autoincrement())
+  publicId    String    @unique @default(uuid())
+  courseId    Int
+  name        String
+  marksWeight Float
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  course        Course         @relation(fields: [courseId], references: [id])
+  offeringParts OfferingPart[]
+
+  @@index([courseId])
+}
+
+model AcademicTerm {
+  id        Int      @id @default(autoincrement())
+  publicId  String   @unique @default(uuid())
+  name      String   @unique
+  startDate DateTime
+  endDate   DateTime
+  isActive  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  offerings CourseOffering[]
+}
+
+// A concrete class: one course, taught to one batch, in one term.
+model CourseOffering {
+  id        Int       @id @default(autoincrement())
+  publicId  String    @unique @default(uuid())
+  courseId  Int
+  batchId   Int
+  termId    Int
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  course Course         @relation(fields: [courseId], references: [id])
+  batch  Batch          @relation(fields: [batchId], references: [id])
+  term   AcademicTerm   @relation(fields: [termId], references: [id])
+  parts  OfferingPart[]
+
+  @@unique([courseId, batchId, termId])
+  @@index([batchId])
+  @@index([termId])
+  @@index([deletedAt])
+}
+
+// The reassignable teacher link. Exams attach here (added in phase 3).
+// Reassigning a teacher just updates assignedTeacherId (and writes an audit entry).
+model OfferingPart {
+  id                Int       @id @default(autoincrement())
+  publicId          String    @unique @default(uuid())
+  offeringId        Int
+  coursePartId      Int
+  assignedTeacherId Int?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
+
+  offering        CourseOffering @relation(fields: [offeringId], references: [id])
+  coursePart      CoursePart     @relation(fields: [coursePartId], references: [id])
+  assignedTeacher Teacher?       @relation(fields: [assignedTeacherId], references: [id])
+
+  @@unique([offeringId, coursePartId])
+  @@index([assignedTeacherId])
+  @@index([offeringId])
+}
+
+// ───────────────────────────── People & access ─────────────────────────────
+
+model User {
+  id                 Int        @id @default(autoincrement())
+  publicId           String     @unique @default(uuid())
+  username           String     @unique
+  email              String?    @unique
+  passwordHash       String
+  displayName        String
+  status             UserStatus @default(active)
+  mustChangePassword Boolean    @default(true)
+  twoFactorSecret    String?
+  twoFactorEnabled   Boolean    @default(false)
+  lastLoginAt        DateTime?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  deletedAt          DateTime?
+
+  student   Student?
+  teacher   Teacher?
+  roles     UserRole[]
+  auditLogs AuditLog[] @relation("ActorAudit")
+
+  @@index([status])
+  @@index([deletedAt])
+}
+
+model Student {
+  id        Int       @id @default(autoincrement())
+  publicId  String    @unique @default(uuid())
+  userId    Int       @unique
+  studentId String    @unique
+  batchId   Int
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  user  User  @relation(fields: [userId], references: [id])
+  batch Batch @relation(fields: [batchId], references: [id])
+
+  @@index([batchId])
+}
+
+model Teacher {
+  id           Int       @id @default(autoincrement())
+  publicId     String    @unique @default(uuid())
+  userId       Int       @unique
+  departmentId Int
+  designation  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  user          User           @relation(fields: [userId], references: [id])
+  department    Department     @relation(fields: [departmentId], references: [id])
+  offeringParts OfferingPart[]
+
+  @@index([departmentId])
+}
+
+model Role {
+  id        Int      @id @default(autoincrement())
+  name      RoleName @unique
+  createdAt DateTime @default(now())
+
+  userRoles UserRole[]
+}
+
+// Scoped RBAC: a role assignment may carry a faculty and/or department scope.
+// Guards check both the role AND the scope (see src/common/guards).
+model UserRole {
+  id                Int      @id @default(autoincrement())
+  userId            Int
+  roleId            Int
+  scopeFacultyId    Int?
+  scopeDepartmentId Int?
+  createdAt         DateTime @default(now())
+
+  user            User        @relation(fields: [userId], references: [id])
+  role            Role        @relation(fields: [roleId], references: [id])
+  scopeFaculty    Faculty?    @relation("FacultyScope", fields: [scopeFacultyId], references: [id])
+  scopeDepartment Department? @relation("DepartmentScope", fields: [scopeDepartmentId], references: [id])
+
+  @@unique([userId, roleId, scopeFacultyId, scopeDepartmentId])
+  @@index([userId])
+  @@index([roleId])
+}
+
+// ─────────────────────────────── Audit ───────────────────────────────
+// Append-only: the AuditService only ever inserts. No update/delete paths exist in code,
+// and in production the DB role is granted INSERT/SELECT only on this table.
+// High-growth: plan monthly range partitioning on createdAt (see docs/README.md → Scaling).
+model AuditLog {
+  id          BigInt   @id @default(autoincrement())
+  actorUserId Int?
+  action      String
+  entity      String
+  entityId    String?
+  beforeJson  Json?
+  afterJson   Json?
+  ip          String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  actor User? @relation("ActorAudit", fields: [actorUserId], references: [id])
+
+  @@index([entity, entityId])
+  @@index([actorUserId])
+  @@index([createdAt])
+}

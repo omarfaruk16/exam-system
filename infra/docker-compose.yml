@@ -1,0 +1,71 @@
+name: exam-system
+
+# Local development infrastructure.
+#   pnpm infra:up   -> starts postgres + redis (what dev needs)
+#   docker compose --profile pgbouncer up -d   -> also starts PgBouncer (prod-parity pooling)
+#
+# The API connects DIRECTLY to Postgres in local dev (simple + reliable). In production,
+# point DATABASE_URL at PgBouncer (port 6432, transaction pooling, ?pgbouncer=true) and keep
+# DIRECT_URL on 5432 for Prisma Migrate. See docs/README.md → Database.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: exam_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-exam}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-exam_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-exam}
+    ports:
+      # Host 5433 (5432 is commonly taken by other local Postgres instances); container stays 5432.
+      - '${POSTGRES_PORT:-5436}:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-exam} -d ${POSTGRES_DB:-exam}']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    container_name: exam_redis
+    restart: unless-stopped
+    # appendonly so sessions/queues survive a restart; noeviction so we never silently drop jobs.
+    command: ['redis-server', '--appendonly', 'yes', '--maxmemory-policy', 'noeviction']
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: exam_pgbouncer
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER:-exam}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-exam_dev_password}
+      DB_NAME: ${POSTGRES_DB:-exam}
+      POOL_MODE: transaction
+      AUTH_TYPE: scram-sha-256
+      MAX_CLIENT_CONN: 1000
+      DEFAULT_POOL_SIZE: 25
+      LISTEN_PORT: 6432
+    ports:
+      - '${PGBOUNCER_PORT:-6432}:6432'
+    profiles: ['pgbouncer', 'full']
+
+volumes:
+  pgdata:
+  redisdata:
