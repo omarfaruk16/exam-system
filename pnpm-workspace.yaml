@@ -13,3 +13,6 @@ allowBuilds:
   unrs-resolver: true
   # optional native msgpack accelerator; msgpackr's pure-JS path is plenty fast for our use.
   msgpackr-extract: false
+  # Tailwind v4 + Vite toolchain (native).
+  '@tailwindcss/oxide': true
+  lightningcss: true

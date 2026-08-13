@@ -1,0 +1,122 @@
+import {
+  BarChart3,
+  BookOpen,
+  Building2,
+  ClipboardCheck,
+  FileCheck2,
+  GraduationCap,
+  ListChecks,
+  Loader2,
+  ScrollText,
+  Upload,
+  Users,
+} from 'lucide-react';
+import { Navigate, Route, Routes } from 'react-router-dom';
+import { AppShell } from '@/components/layout/AppShell';
+import { ChangePasswordPage } from '@/features/auth/ChangePasswordPage';
+import { LoginPage } from '@/features/auth/LoginPage';
+import { DashboardPage } from '@/features/dashboard/DashboardPage';
+import { NotFoundPage } from '@/features/misc/NotFoundPage';
+import { PlaceholderPage } from '@/features/misc/PlaceholderPage';
+import { useSession } from '@/lib/session';
+
+function FullScreenLoader() {
+  return (
+    <div className="flex min-h-screen items-center justify-center">
+      <Loader2 className="text-muted-foreground size-6 animate-spin" />
+    </div>
+  );
+}
+
+export function App() {
+  const { data: user, isLoading } = useSession();
+
+  if (isLoading) return <FullScreenLoader />;
+
+  // Unauthenticated: only the login screen.
+  if (!user) {
+    return (
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    );
+  }
+
+  // Forced first-login password change gates everything else.
+  if (user.mustChangePassword) {
+    return (
+      <Routes>
+        <Route path="/change-password" element={<ChangePasswordPage />} />
+        <Route path="*" element={<Navigate to="/change-password" replace />} />
+      </Routes>
+    );
+  }
+
+  return (
+    <Routes>
+      <Route path="/login" element={<Navigate to="/" replace />} />
+      <Route path="/change-password" element={<ChangePasswordPage />} />
+      <Route element={<AppShell user={user} />}>
+        <Route path="/" element={<DashboardPage user={user} />} />
+        <Route
+          path="/org"
+          element={<PlaceholderPage title="Organization" phase={2} icon={Building2} />}
+        />
+        <Route
+          path="/students"
+          element={
+            <PlaceholderPage
+              title="Students"
+              phase={2}
+              icon={Upload}
+              description="Bulk student import from Excel. The import API and worker are ready; the admin UI ships with the organization module in Phase 2."
+            />
+          }
+        />
+        <Route
+          path="/exams"
+          element={<PlaceholderPage title="Exams" phase={3} icon={FileCheck2} />}
+        />
+        <Route
+          path="/reports"
+          element={<PlaceholderPage title="Reports" phase={5} icon={BarChart3} />}
+        />
+        <Route path="/users" element={<PlaceholderPage title="Users" phase={2} icon={Users} />} />
+        <Route
+          path="/audit"
+          element={<PlaceholderPage title="Audit Log" phase={2} icon={ScrollText} />}
+        />
+        <Route
+          path="/department"
+          element={<PlaceholderPage title="Department" phase={2} icon={Building2} />}
+        />
+        <Route
+          path="/teachers"
+          element={<PlaceholderPage title="Teachers" phase={2} icon={Users} />}
+        />
+        <Route
+          path="/courses"
+          element={<PlaceholderPage title="My Courses" phase={2} icon={BookOpen} />}
+        />
+        <Route
+          path="/questions"
+          element={<PlaceholderPage title="Question Bank" phase={3} icon={ListChecks} />}
+        />
+        <Route
+          path="/grading"
+          element={<PlaceholderPage title="Grading" phase={5} icon={ClipboardCheck} />}
+        />
+        <Route
+          path="/my-exams"
+          element={<PlaceholderPage title="My Exams" phase={4} icon={GraduationCap} />}
+        />
+        <Route
+          path="/results"
+          element={<PlaceholderPage title="Results" phase={5} icon={BarChart3} />}
+        />
+        <Route path="*" element={<NotFoundPage />} />
+      </Route>
+    </Routes>
+  );
+}
