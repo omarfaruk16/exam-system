@@ -133,6 +133,13 @@ MCQ auto-grade) is tested thoroughly in phase 4, plus a k6 load test of the subm
   auto-filtered — add an explicit `where: { deletedAt: null }` there when it matters.
 - **Scope** is enforced at the service layer via `AccessControlService` (super_admin unscoped,
   admin optional faculty scope, department_head department scope) — proven by integration tests.
+- **Exam snapshot**: on `approved → published` each question's text/options/correct-answer/marks is
+  copied into its `ExamQuestion` (snapshot* columns). The exam serves the snapshot from then on, so
+  later bank edits can never alter a published exam. Questions in published+ exams are edit-locked.
+- **Exam state machine** (`exam-state.ts`) is enforced server-side; invalid transitions are rejected.
+  `published → live → ended` fire automatically by `startAt`/`endAt` via a BullMQ repeatable sweep
+  (`ExamSchedulerService`), which is restart-safe and race-guarded. Creating/publishing an exam
+  re-checks that the OfferingPart and its CourseOffering are not soft-deleted (closes the cascade gap).
 - **Ports** moved off defaults to avoid collisions with other local projects (see §3).
 - Native build scripts are explicitly allow-listed in `pnpm-workspace.yaml` (`allowBuilds`) per
   pnpm 11's supply-chain safety; the optional `msgpackr-extract` accelerator is declined (JS fallback).
@@ -142,7 +149,9 @@ MCQ auto-grade) is tested thoroughly in phase 4, plus a k6 load test of the subm
 1. **Foundation** — monorepo, auth, RBAC, org schema, student import, seed. ✅ **done**
 2. **Org & assignment** — CRUD for faculty→offering (publicId-based), scoped teacher
    assignment (dept head own-dept only), audit on every mutation. ✅ **done**
-3. Exam & question authoring + review/approval state machine.
+3. **Exam & question authoring** — question banks (MCQ/written, manual + Excel import),
+   exam builder, publish-time question snapshot, and the role-guarded status state machine
+   with automatic time-based live/ended transitions. ✅ **done**
 4. Exam-taking engine (server timer, autosave, idempotent submit, MCQ auto-grade) + k6 load test.
 5. Grading & reporting (written marking, result rollups, Excel/PDF export).
 6. Hardening & polish (2FA, rate-limit lockout, maintenance mode, observability, backups, a11y, e2e).

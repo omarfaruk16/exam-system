@@ -15,6 +15,7 @@ import { RedisModule } from './common/redis/redis.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
+import { ExamModule } from './modules/exam/exam.module';
 import { ImportModule } from './modules/import/import.module';
 import { OrgModule } from './modules/org/org.module';
 import { UsersModule } from './modules/users/users.module';
@@ -59,6 +60,7 @@ import { QueueModule } from './queue/queue.module';
     AuthModule,
     UsersModule,
     OrgModule,
+    ExamModule.register(),
     ImportModule.register(),
     HealthModule,
   ],

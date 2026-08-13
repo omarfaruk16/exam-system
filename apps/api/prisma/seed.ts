@@ -244,7 +244,7 @@ async function main(): Promise<void> {
     update: {},
     create: { courseId: course.id, batchId: cseBatch.id, termId: term.id },
   });
-  await prisma.offeringPart.upsert({
+  const cseOfferingPartA = await prisma.offeringPart.upsert({
     where: { offeringId_coursePartId: { offeringId: offering.id, coursePartId: partA.id } },
     update: { assignedTeacherId: teacher1.id },
     create: { offeringId: offering.id, coursePartId: partA.id, assignedTeacherId: teacher1.id },
@@ -337,6 +337,105 @@ async function main(): Promise<void> {
       create: { userId: u.id, studentId: s.studentId, batchId: cseBatch.id },
     });
     await setRoles(u.id, [{ name: 'student' }]);
+  }
+
+  // 13. Sample question bank + a draft exam (MCQ + written) for CSE Part A, owned by teacher1.
+  const bank =
+    (await prisma.questionBank.findFirst({
+      where: { offeringPartId: cseOfferingPartA.id, name: 'CSE-1101 Bank' },
+    })) ??
+    (await prisma.questionBank.create({
+      data: {
+        offeringPartId: cseOfferingPartA.id,
+        name: 'CSE-1101 Bank',
+        createdByTeacherId: teacher1.id,
+      },
+    }));
+
+  async function ensureMcq(
+    text: string,
+    marks: number,
+    opts: { text: string; isCorrect: boolean }[],
+    explanation?: string,
+  ) {
+    const existing = await prisma.question.findFirst({ where: { bankId: bank.id, text } });
+    if (existing) return existing;
+    const q = await prisma.question.create({
+      data: { bankId: bank.id, type: 'mcq', text, marks, explanation: explanation ?? null },
+    });
+    await prisma.questionOption.createMany({
+      data: opts.map((o, i) => ({
+        questionId: q.id,
+        text: o.text,
+        isCorrect: o.isCorrect,
+        order: i,
+      })),
+    });
+    return q;
+  }
+  async function ensureWritten(text: string, marks: number, modelAnswer?: string) {
+    const existing = await prisma.question.findFirst({ where: { bankId: bank.id, text } });
+    if (existing) return existing;
+    return prisma.question.create({
+      data: { bankId: bank.id, type: 'written', text, marks, modelAnswer: modelAnswer ?? null },
+    });
+  }
+
+  const q1 = await ensureMcq(
+    'Which data type stores whole numbers in C?',
+    2,
+    [
+      { text: 'int', isCorrect: true },
+      { text: 'char', isCorrect: false },
+      { text: 'float', isCorrect: false },
+    ],
+    'int stores integers; float stores decimals; char stores a single character.',
+  );
+  const q2 = await ensureMcq('Which symbol terminates a statement in C?', 1, [
+    { text: 'Semicolon ;', isCorrect: true },
+    { text: 'Colon :', isCorrect: false },
+    { text: 'Comma ,', isCorrect: false },
+  ]);
+  const q3 = await ensureWritten(
+    'Explain the difference between a while loop and a for loop.',
+    5,
+    'Both repeat a block; a for loop is typically count-controlled, a while loop condition-controlled.',
+  );
+
+  const sampleExam =
+    (await prisma.exam.findFirst({
+      where: { offeringPartId: cseOfferingPartA.id, title: 'CSE-1101 Midterm (Sample)' },
+    })) ??
+    (await prisma.exam.create({
+      data: {
+        offeringPartId: cseOfferingPartA.id,
+        createdByTeacherId: teacher1.id,
+        title: 'CSE-1101 Midterm (Sample)',
+        instructions:
+          'Answer all questions. MCQs are auto-graded; written answers are marked by your teacher.',
+        startAt: new Date('2026-03-01T04:00:00Z'),
+        endAt: new Date('2026-03-01T05:00:00Z'),
+        durationMinutes: 60,
+        status: 'draft',
+        totalMarks: 8,
+        settings: {
+          showMarksAfterSubmit: true,
+          showExplanation: true,
+          shuffleQuestions: true,
+          shuffleOptions: true,
+          negativeMarking: false,
+          negativeMarkValue: 0,
+        },
+      },
+    }));
+  let order = 1;
+  for (const q of [q1, q2, q3]) {
+    await prisma.examQuestion.upsert({
+      where: { examId_questionId: { examId: sampleExam.id, questionId: q.id } },
+      update: { order },
+      create: { examId: sampleExam.id, questionId: q.id, order },
+    });
+    order++;
   }
 
   console.log(`

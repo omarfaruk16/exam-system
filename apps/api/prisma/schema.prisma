@@ -224,6 +224,8 @@ model OfferingPart {
   offering        CourseOffering @relation(fields: [offeringId], references: [id])
   coursePart      CoursePart     @relation(fields: [coursePartId], references: [id])
   assignedTeacher Teacher?       @relation(fields: [assignedTeacherId], references: [id])
+  questionBanks   QuestionBank[]
+  exams           Exam[]
 
   @@unique([offeringId, coursePartId])
   @@index([assignedTeacherId])
@@ -286,6 +288,8 @@ model Teacher {
   user          User           @relation(fields: [userId], references: [id])
   department    Department     @relation(fields: [departmentId], references: [id])
   offeringParts OfferingPart[]
+  createdBanks  QuestionBank[]
+  createdExams  Exam[]
 
   @@index([departmentId])
 }
@@ -339,4 +343,137 @@ model AuditLog {
   @@index([entity, entityId])
   @@index([actorUserId])
   @@index([createdAt])
+}
+
+// ─────────────────────────── Exam & questions (Phase 3) ───────────────────────────
+
+enum QuestionType {
+  mcq
+  written
+}
+
+// Strict lifecycle state machine — transitions enforced server-side (see exam-state.ts).
+enum ExamStatus {
+  draft
+  in_review
+  approved
+  changes_requested
+  rejected
+  published
+  live
+  ended
+  grading
+  results_published
+  archived
+}
+
+// A reusable bank of questions scoped to one OfferingPart (the teacher's assigned part).
+model QuestionBank {
+  id                 Int       @id @default(autoincrement())
+  publicId           String    @unique @default(uuid())
+  offeringPartId     Int
+  name               String
+  createdByTeacherId Int?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  deletedAt          DateTime?
+
+  offeringPart OfferingPart @relation(fields: [offeringPartId], references: [id])
+  createdBy    Teacher?     @relation(fields: [createdByTeacherId], references: [id])
+  questions    Question[]
+
+  @@index([offeringPartId])
+  @@index([deletedAt])
+}
+
+model Question {
+  id          Int          @id @default(autoincrement())
+  publicId    String       @unique @default(uuid())
+  bankId      Int
+  type        QuestionType
+  text        String
+  marks       Float
+  explanation String? // MCQ: shown per exam settings
+  modelAnswer String? // written: reference answer for graders
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  deletedAt   DateTime?
+
+  bank          QuestionBank     @relation(fields: [bankId], references: [id])
+  options       QuestionOption[]
+  examQuestions ExamQuestion[]
+
+  @@index([bankId])
+  @@index([deletedAt])
+}
+
+model QuestionOption {
+  id         Int      @id @default(autoincrement())
+  publicId   String   @unique @default(uuid())
+  questionId Int
+  text       String
+  isCorrect  Boolean  @default(false)
+  order      Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  question Question @relation(fields: [questionId], references: [id])
+
+  @@index([questionId])
+}
+
+model Exam {
+  id                 Int        @id @default(autoincrement())
+  publicId           String     @unique @default(uuid())
+  offeringPartId     Int
+  createdByTeacherId Int
+  title              String
+  instructions       String?
+  startAt            DateTime
+  endAt              DateTime
+  durationMinutes    Int
+  totalMarks         Float      @default(0)
+  status             ExamStatus @default(draft)
+  settings           Json
+  reviewNote         String? // admin note for changes_requested / rejected
+  publishedAt        DateTime?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  deletedAt          DateTime?
+
+  offeringPart  OfferingPart   @relation(fields: [offeringPartId], references: [id])
+  createdBy     Teacher        @relation(fields: [createdByTeacherId], references: [id])
+  examQuestions ExamQuestion[]
+
+  @@index([offeringPartId, status])
+  @@index([status])
+  @@index([deletedAt])
+}
+
+// Links an exam to a bank question. On publish, the question is SNAPSHOTTED into the snapshot*
+// columns; from then on the exam serves the snapshot, so later bank edits never alter it.
+model ExamQuestion {
+  id            Int    @id @default(autoincrement())
+  publicId      String @unique @default(uuid())
+  examId        Int
+  questionId    Int
+  order         Int
+  marksOverride Float?
+
+  snapshotAt          DateTime?
+  snapshotType        QuestionType?
+  snapshotText        String?
+  snapshotMarks       Float?
+  snapshotExplanation String?
+  snapshotModelAnswer String?
+  snapshotOptions     Json? // [{ text, isCorrect, order }]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  exam     Exam     @relation(fields: [examId], references: [id])
+  question Question @relation(fields: [questionId], references: [id])
+
+  @@unique([examId, questionId])
+  @@index([examId])
 }
