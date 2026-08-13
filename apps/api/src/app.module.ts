@@ -16,6 +16,7 @@ import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
 import { ImportModule } from './modules/import/import.module';
+import { OrgModule } from './modules/org/org.module';
 import { UsersModule } from './modules/users/users.module';
 import { QueueModule } from './queue/queue.module';
 
@@ -57,7 +58,8 @@ import { QueueModule } from './queue/queue.module';
     QueueModule,
     AuthModule,
     UsersModule,
-    ImportModule,
+    OrgModule,
+    ImportModule.register(),
     HealthModule,
   ],
   providers: [

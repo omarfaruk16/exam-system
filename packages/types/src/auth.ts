@@ -37,10 +37,16 @@ export const changePasswordSchema = z
   });
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 
+/** A scope target exposed to the client — never a raw autoincrement id. */
+export interface SessionScopeRef {
+  publicId: string;
+  code: string;
+}
+
 export interface SessionRole {
   role: RoleName;
-  scopeFacultyId: number | null;
-  scopeDepartmentId: number | null;
+  scopeFaculty: SessionScopeRef | null;
+  scopeDepartment: SessionScopeRef | null;
 }
 
 /** The authenticated principal returned by `GET /auth/me` and stored in the SPA. */

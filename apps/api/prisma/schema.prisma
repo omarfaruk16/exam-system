@@ -172,16 +172,19 @@ model CoursePart {
 }
 
 model AcademicTerm {
-  id        Int      @id @default(autoincrement())
-  publicId  String   @unique @default(uuid())
-  name      String   @unique
+  id        Int       @id @default(autoincrement())
+  publicId  String    @unique @default(uuid())
+  name      String    @unique
   startDate DateTime
   endDate   DateTime
-  isActive  Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  isActive  Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   offerings CourseOffering[]
+
+  @@index([deletedAt])
 }
 
 // A concrete class: one course, taught to one batch, in one term.

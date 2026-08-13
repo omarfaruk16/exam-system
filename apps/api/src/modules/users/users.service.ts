@@ -60,6 +60,6 @@ export class UsersService {
     });
 
     const fresh = await this.auth.buildAuthUser(user.id);
-    return { user: this.auth.toSessionUser(fresh ?? user) };
+    return { user: await this.auth.toSessionUser(fresh ?? user) };
   }
 }

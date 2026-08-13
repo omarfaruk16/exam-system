@@ -39,6 +39,9 @@ export const envSchema = z.object({
   LOGIN_THROTTLE_TTL_SECONDS: z.coerce.number().int().positive().default(60),
   LOGIN_THROTTLE_LIMIT: z.coerce.number().int().positive().default(10),
 
+  // When false, the API stops running import/grading workers embedded — run `worker.ts` instead.
+  RUN_EMBEDDED_WORKERS: zBool(true),
+
   STORAGE_DIR: z.string().default('./storage'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   SENTRY_DSN: z.string().default(''),

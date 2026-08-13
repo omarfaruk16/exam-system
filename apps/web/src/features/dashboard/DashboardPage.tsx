@@ -30,7 +30,7 @@ export function DashboardPage({ user }: { user: SessionUser }) {
         <div className="flex flex-wrap items-center gap-2">
           {user.roles.map((r) => (
             <Badge
-              key={`${r.role}-${r.scopeDepartmentId ?? r.scopeFacultyId ?? 'all'}`}
+              key={`${r.role}-${r.scopeDepartment?.publicId ?? r.scopeFaculty?.publicId ?? 'all'}`}
               variant="primary"
             >
               {ROLE_LABELS[r.role]}

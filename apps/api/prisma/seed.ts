@@ -90,7 +90,7 @@ async function main(): Promise<void> {
     update: { name: 'Computer Science & Engineering' },
     create: { facultyId: sci.id, name: 'Computer Science & Engineering', code: 'CSE' },
   });
-  await prisma.department.upsert({
+  const phy = await prisma.department.upsert({
     where: { facultyId_code: { facultyId: sci.id, code: 'PHY' } },
     update: {},
     create: { facultyId: sci.id, name: 'Physics', code: 'PHY' },
@@ -253,6 +253,69 @@ async function main(): Promise<void> {
     where: { offeringId_coursePartId: { offeringId: offering.id, coursePartId: partB.id } },
     update: { assignedTeacherId: teacher2.id },
     create: { offeringId: offering.id, coursePartId: partB.id, assignedTeacherId: teacher2.id },
+  });
+
+  // 11b. Physics subtree (second department under the same faculty) so cross-department
+  //      scoping can be tested for real: cse.head must NOT reach these Physics entities.
+  const phyProgram =
+    (await prisma.program.findFirst({ where: { departmentId: phy.id, name: 'BSc in Physics' } })) ??
+    (await prisma.program.create({
+      data: {
+        departmentId: phy.id,
+        name: 'BSc in Physics',
+        degreeType: DegreeType.bachelor,
+        durationYears: 4,
+      },
+    }));
+  const phyBatch = await prisma.batch.upsert({
+    where: { programId_name: { programId: phyProgram.id, name: '2021 Batch' } },
+    update: { admissionYear: 2021 },
+    create: { programId: phyProgram.id, name: '2021 Batch', admissionYear: 2021 },
+  });
+  const phySem1 = await prisma.semester.upsert({
+    where: { programId_number: { programId: phyProgram.id, number: 1 } },
+    update: {},
+    create: { programId: phyProgram.id, number: 1 },
+  });
+  const phyCourse = await prisma.course.upsert({
+    where: { semesterId_code: { semesterId: phySem1.id, code: 'PHY-1101' } },
+    update: { name: 'Mechanics', credit: 3 },
+    create: { semesterId: phySem1.id, code: 'PHY-1101', name: 'Mechanics', credit: 3 },
+  });
+  const phyPartA =
+    (await prisma.coursePart.findFirst({ where: { courseId: phyCourse.id, name: 'Part A' } })) ??
+    (await prisma.coursePart.create({
+      data: { courseId: phyCourse.id, name: 'Part A', marksWeight: 100 },
+    }));
+
+  const phyTeacherUser = await upsertUser({
+    username: 'phy.teacher',
+    email: 'phy.teacher@ru.ac.bd',
+    displayName: 'Dr. Imran Hossain',
+    password: STAFF_PW,
+  });
+  const phyTeacher = await prisma.teacher.upsert({
+    where: { userId: phyTeacherUser.id },
+    update: { departmentId: phy.id, designation: 'Assistant Professor' },
+    create: { userId: phyTeacherUser.id, departmentId: phy.id, designation: 'Assistant Professor' },
+  });
+  await setRoles(phyTeacherUser.id, [{ name: 'teacher' }]);
+
+  const phyOffering = await prisma.courseOffering.upsert({
+    where: {
+      courseId_batchId_termId: { courseId: phyCourse.id, batchId: phyBatch.id, termId: term.id },
+    },
+    update: {},
+    create: { courseId: phyCourse.id, batchId: phyBatch.id, termId: term.id },
+  });
+  await prisma.offeringPart.upsert({
+    where: { offeringId_coursePartId: { offeringId: phyOffering.id, coursePartId: phyPartA.id } },
+    update: { assignedTeacherId: phyTeacher.id },
+    create: {
+      offeringId: phyOffering.id,
+      coursePartId: phyPartA.id,
+      assignedTeacherId: phyTeacher.id,
+    },
   });
 
   // 12. Students in the CSE 2021 batch

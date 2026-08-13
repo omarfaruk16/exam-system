@@ -80,9 +80,49 @@ export class AuthService {
     };
   }
 
-  /** Strip the internal id before sending the principal to the client. */
-  toSessionUser(user: AuthUser): SessionUser {
-    const { id: _id, ...session } = user;
-    return session;
+  /**
+   * Build the client-facing principal. Scope ids are mapped to publicIds/codes here so the payload
+   * never exposes internal autoincrement ids.
+   */
+  async toSessionUser(user: AuthUser): Promise<SessionUser> {
+    const facultyIds = [
+      ...new Set(user.roles.map((r) => r.scopeFacultyId).filter((x): x is number => x !== null)),
+    ];
+    const departmentIds = [
+      ...new Set(user.roles.map((r) => r.scopeDepartmentId).filter((x): x is number => x !== null)),
+    ];
+
+    const [faculties, departments] = await Promise.all([
+      facultyIds.length
+        ? this.prisma.db.faculty.findMany({
+            where: { id: { in: facultyIds } },
+            select: { id: true, publicId: true, code: true },
+          })
+        : Promise.resolve([]),
+      departmentIds.length
+        ? this.prisma.db.department.findMany({
+            where: { id: { in: departmentIds } },
+            select: { id: true, publicId: true, code: true },
+          })
+        : Promise.resolve([]),
+    ]);
+    const fMap = new Map(faculties.map((f) => [f.id, { publicId: f.publicId, code: f.code }]));
+    const dMap = new Map(departments.map((d) => [d.id, { publicId: d.publicId, code: d.code }]));
+
+    return {
+      publicId: user.publicId,
+      username: user.username,
+      email: user.email,
+      displayName: user.displayName,
+      status: user.status,
+      mustChangePassword: user.mustChangePassword,
+      twoFactorEnabled: user.twoFactorEnabled,
+      roles: user.roles.map((r) => ({
+        role: r.role,
+        scopeFaculty: r.scopeFacultyId !== null ? (fMap.get(r.scopeFacultyId) ?? null) : null,
+        scopeDepartment:
+          r.scopeDepartmentId !== null ? (dMap.get(r.scopeDepartmentId) ?? null) : null,
+      })),
+    };
   }
 }

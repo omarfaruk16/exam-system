@@ -51,11 +51,11 @@ export class AuthController {
       userAgent: req.headers['user-agent'] ?? null,
     });
 
-    return { status: 'ok', user: this.auth.toSessionUser(user) };
+    return { status: 'ok', user: await this.auth.toSessionUser(user) };
   }
 
   @Get('me')
-  me(@CurrentUser() user: AuthUser): SessionUser {
+  me(@CurrentUser() user: AuthUser): Promise<SessionUser> {
     return this.auth.toSessionUser(user);
   }
 

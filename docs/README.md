@@ -125,8 +125,14 @@ MCQ auto-grade) is tested thoroughly in phase 4, plus a k6 load test of the subm
   chosen over a bespoke cookie scheme — matches the brief and is well-trodden.
 - **PDF export** will use **pdfkit** (no headless Chromium) rather than puppeteer — lighter on a VPS
   and sufficient for tabular mark sheets. (Decided now; implemented phase 5.)
-- **Import worker** runs **embedded** in the API for phase 1 (one `pnpm dev`); it splits into a
-  dedicated worker process in phase 4 where submit/grading load makes separation matter.
+- **Workers** run **embedded** in the API by default (one `pnpm dev`). A separate entrypoint
+  (`src/worker.ts` + `WorkerModule`) already exists: set `RUN_EMBEDDED_WORKERS=false` on the API and
+  run `node dist/worker.js` to move them to their own process/container — no code change needed.
+- **Soft delete** is enforced by a Prisma client extension (`PrismaService.db`), not per-query filters:
+  reads exclude `deletedAt` rows and deletes set `deletedAt`. Note: nested `include` reads are not
+  auto-filtered — add an explicit `where: { deletedAt: null }` there when it matters.
+- **Scope** is enforced at the service layer via `AccessControlService` (super_admin unscoped,
+  admin optional faculty scope, department_head department scope) — proven by integration tests.
 - **Ports** moved off defaults to avoid collisions with other local projects (see §3).
 - Native build scripts are explicitly allow-listed in `pnpm-workspace.yaml` (`allowBuilds`) per
   pnpm 11's supply-chain safety; the optional `msgpackr-extract` accelerator is declined (JS fallback).
@@ -134,7 +140,8 @@ MCQ auto-grade) is tested thoroughly in phase 4, plus a k6 load test of the subm
 ## 10. Roadmap
 
 1. **Foundation** — monorepo, auth, RBAC, org schema, student import, seed. ✅ **done**
-2. Org & assignment CRUD + teacher assignment + audit.
+2. **Org & assignment** — CRUD for faculty→offering (publicId-based), scoped teacher
+   assignment (dept head own-dept only), audit on every mutation. ✅ **done**
 3. Exam & question authoring + review/approval state machine.
 4. Exam-taking engine (server timer, autosave, idempotent submit, MCQ auto-grade) + k6 load test.
 5. Grading & reporting (written marking, result rollups, Excel/PDF export).
