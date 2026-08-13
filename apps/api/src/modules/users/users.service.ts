@@ -34,7 +34,7 @@ export class UsersService {
     newPassword: string,
     ctx: ChangePasswordContext,
   ): Promise<{ user: SessionUser }> {
-    const dbUser = await this.prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    const dbUser = await this.prisma.db.user.findFirstOrThrow({ where: { id: user.id } });
 
     const ok = await this.password.verify(dbUser.passwordHash, currentPassword);
     if (!ok) throw new BadRequestException('Your current password is incorrect');

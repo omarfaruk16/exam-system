@@ -23,9 +23,9 @@ export class AuthService {
    * Uses a single generic error for every failure mode to avoid user enumeration.
    */
   async validateUser(identifier: string, plainPassword: string): Promise<AuthUser> {
-    const user = await this.prisma.user.findFirst({
+    // `prisma.db` is the soft-delete-aware client: deletedAt filtering is automatic.
+    const user = await this.prisma.db.user.findFirst({
       where: {
-        deletedAt: null,
         OR: [
           { username: identifier },
           { email: identifier },
@@ -51,8 +51,8 @@ export class AuthService {
 
   /** Loads a fresh principal by internal id — called by the Passport deserializer on every request. */
   async buildAuthUser(userId: number): Promise<AuthUser | null> {
-    const user = await this.prisma.user.findFirst({
-      where: { id: userId, deletedAt: null },
+    const user = await this.prisma.db.user.findFirst({
+      where: { id: userId },
       ...userWithRoles,
     });
     return user ? this.toAuthUser(user) : null;
