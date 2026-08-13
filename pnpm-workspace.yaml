@@ -1,0 +1,13 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# pnpm 11 blocks postinstall build scripts by default (supply-chain safety).
+# Only these vetted native/codegen packages are allowed to run their scripts.
+allowBuilds:
+  esbuild: true
+  argon2: true
+  prisma: true
+  '@prisma/client': true
+  '@prisma/engines': true
+  unrs-resolver: true

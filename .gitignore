@@ -1,0 +1,43 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# builds
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# env (never commit real secrets; only .env.example is tracked)
+.env
+.env.*
+!.env.example
+
+# logs
+*.log
+logs/
+npm-debug.log*
+pnpm-debug.log*
+
+# tests / coverage
+coverage/
+playwright-report/
+test-results/
+.nyc_output/
+
+# prisma local artifacts
+apps/api/prisma/*.db
+apps/api/prisma/*.db-journal
+
+# generated / runtime storage
+apps/api/storage/
+uploads/
+tmp/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json

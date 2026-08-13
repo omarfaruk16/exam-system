@@ -1,0 +1,10 @@
+node_modules
+dist
+build
+coverage
+pnpm-lock.yaml
+apps/api/prisma/generated
+**/*.min.js
+**/*.min.css
+playwright-report
+test-results
