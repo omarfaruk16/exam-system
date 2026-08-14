@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Ip, Param, Patch, Post, Put } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Ip, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import type { AuthUser } from '../../common/types/auth';
@@ -42,6 +42,13 @@ export class OfferingController {
   @Delete('terms/:publicId')
   removeTerm(@CurrentUser() u: AuthUser, @Ip() ip: string, @Param('publicId') id: string) {
     return this.svc.removeTerm(this.ctx(u, ip), id);
+  }
+
+  // Teachers (for the assign-teacher selector)
+  @Roles('super_admin', 'admin', 'department_head')
+  @Get('teachers')
+  listTeachers(@CurrentUser() u: AuthUser, @Query('department') department: string) {
+    return this.svc.listTeachers(u, department);
   }
 
   // Offerings

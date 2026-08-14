@@ -4,12 +4,17 @@ import { Prisma } from '@prisma/client';
  * Client-safe Prisma selects: every one omits internal `id` and exposes `publicId` plus the
  * parent's publicId. Responses therefore never leak autoincrement ints.
  */
+// Child counts below use a filtered relation count so soft-deleted children are excluded
+// (the soft-delete extension does not auto-filter nested `_count`).
+const notDeleted = { where: { deletedAt: null } };
+
 export const facultySelect = {
   publicId: true,
   name: true,
   code: true,
   createdAt: true,
   updatedAt: true,
+  _count: { select: { departments: notDeleted } },
 } satisfies Prisma.FacultySelect;
 
 export const departmentSelect = {
@@ -19,6 +24,7 @@ export const departmentSelect = {
   createdAt: true,
   updatedAt: true,
   faculty: { select: { publicId: true, code: true, name: true } },
+  _count: { select: { programs: notDeleted } },
 } satisfies Prisma.DepartmentSelect;
 
 export const programSelect = {
@@ -27,6 +33,7 @@ export const programSelect = {
   degreeType: true,
   durationYears: true,
   department: { select: { publicId: true, code: true, name: true } },
+  _count: { select: { batches: notDeleted, semesters: notDeleted } },
 } satisfies Prisma.ProgramSelect;
 
 export const batchSelect = {
@@ -34,12 +41,14 @@ export const batchSelect = {
   name: true,
   admissionYear: true,
   program: { select: { publicId: true, name: true } },
+  _count: { select: { students: notDeleted } },
 } satisfies Prisma.BatchSelect;
 
 export const semesterSelect = {
   publicId: true,
   number: true,
   program: { select: { publicId: true, name: true } },
+  _count: { select: { courses: notDeleted } },
 } satisfies Prisma.SemesterSelect;
 
 export const courseSelect = {
@@ -48,6 +57,7 @@ export const courseSelect = {
   name: true,
   credit: true,
   semester: { select: { publicId: true, number: true } },
+  _count: { select: { parts: notDeleted } },
 } satisfies Prisma.CourseSelect;
 
 export const coursePartSelect = {
@@ -67,7 +77,19 @@ export const termSelect = {
 
 export const offeringSelect = {
   publicId: true,
-  course: { select: { publicId: true, code: true, name: true } },
+  course: {
+    select: {
+      publicId: true,
+      code: true,
+      name: true,
+      // Expose the owning department so the UI can scope the "assign teacher" selector.
+      semester: {
+        select: {
+          program: { select: { department: { select: { publicId: true, name: true } } } },
+        },
+      },
+    },
+  },
   batch: { select: { publicId: true, name: true } },
   term: { select: { publicId: true, name: true } },
 } satisfies Prisma.CourseOfferingSelect;

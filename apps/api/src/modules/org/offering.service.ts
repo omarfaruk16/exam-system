@@ -83,6 +83,31 @@ export class OfferingService {
     return or.length ? { OR: or } : { id: -1 };
   }
 
+  /** Teachers in a department — feeds the "assign teacher" searchable selector. */
+  async listTeachers(actor: AuthUser, departmentPublicId: string) {
+    const dept = await this.prisma.db.department.findFirst({
+      where: { publicId: departmentPublicId },
+      select: { id: true, facultyId: true },
+    });
+    if (!dept) throw new NotFoundException('Department not found');
+    this.acl.assertDepartment(actor, dept.id, dept.facultyId);
+    const teachers = await this.prisma.db.teacher.findMany({
+      where: { departmentId: dept.id },
+      select: {
+        publicId: true,
+        designation: true,
+        user: { select: { username: true, displayName: true } },
+      },
+      orderBy: { user: { displayName: 'asc' } },
+    });
+    return teachers.map((t) => ({
+      publicId: t.publicId,
+      displayName: t.user.displayName,
+      username: t.user.username,
+      designation: t.designation,
+    }));
+  }
+
   // ─────────────────────────────── Academic term ───────────────────────────────
   listTerms() {
     return this.prisma.db.academicTerm.findMany({

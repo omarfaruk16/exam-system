@@ -22,6 +22,7 @@ export interface ExamListItem {
   questionCount: number;
   status: string;
   reviewNote: string | null;
+  updatedAt: string;
   createdByName: string;
 }
 
@@ -45,7 +46,7 @@ export interface ExamDetail {
   createdBy: { publicId: string; user: { displayName: string } };
 }
 
-/** A question attached to an exam (right panel of the builder). */
+/** A question attached to an exam (builder right panel + admin review detail). */
 export interface ExamQuestionItem {
   publicId: string;
   order: number;
@@ -55,13 +56,33 @@ export interface ExamQuestionItem {
   snapshotText: string | null;
   snapshotMarks: number | null;
   snapshotExplanation: string | null;
+  snapshotModelAnswer: string | null;
   snapshotOptions: unknown;
+  snapshotCorrectOptionId: string | null;
   question: {
     publicId: string;
     type: 'mcq' | 'written';
     text: string;
     marks: number;
+    explanation: string | null;
+    modelAnswer: string | null;
+    // Authoring/review view only — carries the correct answer; never sent to students.
+    options: { publicId: string; text: string; isCorrect: boolean; order: number }[];
   };
+}
+
+/** One enrolled student for the individual mark-sheet selector. */
+export interface RosterStudent {
+  publicId: string;
+  studentId: string;
+  name: string;
+}
+
+/** Report job status (GET /reports/:jobId). */
+export interface ReportJobStatus {
+  status: 'pending' | 'ready' | 'failed';
+  downloads?: { excel: string; pdf: string };
+  message?: string;
 }
 
 /** A question bank for an offering part. */

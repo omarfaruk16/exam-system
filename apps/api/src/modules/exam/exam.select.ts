@@ -50,6 +50,7 @@ export const examListSelect = {
   totalMarks: true,
   status: true,
   reviewNote: true,
+  updatedAt: true,
   offeringPart: {
     select: {
       coursePart: { select: { name: true } },
@@ -60,7 +61,10 @@ export const examListSelect = {
   _count: { select: { examQuestions: true } },
 } satisfies Prisma.ExamSelect;
 
-// Shows the snapshot (what the exam actually serves once published) alongside the live link.
+// Shows the snapshot (what the exam actually serves once published) alongside the live question.
+// Includes the live question's options WITH isCorrect + explanation/model answer so the admin
+// review screen can display the correct answers. This projection is teacher/admin-only — it is
+// NEVER used to build a student-facing paper (see PaperService for that).
 export const examQuestionSelect = {
   publicId: true,
   order: true,
@@ -70,6 +74,21 @@ export const examQuestionSelect = {
   snapshotText: true,
   snapshotMarks: true,
   snapshotExplanation: true,
+  snapshotModelAnswer: true,
   snapshotOptions: true,
-  question: { select: { publicId: true, type: true, text: true, marks: true } },
+  snapshotCorrectOptionId: true,
+  question: {
+    select: {
+      publicId: true,
+      type: true,
+      text: true,
+      marks: true,
+      explanation: true,
+      modelAnswer: true,
+      options: {
+        select: { publicId: true, text: true, isCorrect: true, order: true },
+        orderBy: { order: 'asc' },
+      },
+    },
+  },
 } satisfies Prisma.ExamQuestionSelect;

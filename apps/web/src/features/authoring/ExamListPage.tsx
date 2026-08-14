@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ExamListItem } from '@exam/types';
-import { AlertTriangle, CalendarClock, FileText, Loader2, Plus, Trash2 } from 'lucide-react';
+import { CalendarClock, FileText, Loader2, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ChangesRequestedBanner } from '../shared/ChangesRequestedBanner';
 import { StatusPill } from '../shared/StatusPill';
 import { deleteExam, fetchExams, reviseExam } from './authoringApi';
 
@@ -183,15 +184,8 @@ function ExamCard({ exam }: { exam: ExamListItem }) {
         <p className="text-muted-foreground mt-3 text-xs">Ready to publish.</p>
       )}
       {isChanges && (
-        <div className="mt-3 rounded-r-md border-l-2 border-amber-500 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
-          <p className="flex items-center gap-1.5 font-medium">
-            <AlertTriangle className="size-4" /> Changes requested
-          </p>
-          {exam.reviewNote ? (
-            <p className="mt-1">{exam.reviewNote}</p>
-          ) : (
-            <p className="mt-1">The reviewer asked for changes before this exam can be approved.</p>
-          )}
+        <div className="mt-3">
+          <ChangesRequestedBanner note={exam.reviewNote} />
         </div>
       )}
 

@@ -167,13 +167,24 @@ export class ExamService {
     });
   }
 
-  /** Every exam the current teacher owns (or, for an admin, every exam in their scope). */
+  /** Every exam the current teacher owns (admin: all in scope; department_head: their department). */
   async listExams(user: AuthUser) {
     let where: Prisma.ExamWhereInput;
     if (this.isAdmin(user)) {
       // Admins see everything they can scope to; the ACL is enforced per-exam on open. A broad list
       // is acceptable here because the detail/action endpoints already gate on department scope.
       where = { deletedAt: null };
+    } else if (user.roles.some((r) => r.role === 'department_head')) {
+      // A department head sees exams within the department(s) they head — read-only (review/report).
+      const deptIds = user.roles
+        .filter((r) => r.role === 'department_head' && r.scopeDepartmentId !== null)
+        .map((r) => r.scopeDepartmentId as number);
+      where = {
+        deletedAt: null,
+        offeringPart: {
+          offering: { course: { semester: { program: { departmentId: { in: deptIds } } } } },
+        },
+      };
     } else {
       const teacher = await this.access.requireTeacher(user);
       where = { deletedAt: null, createdByTeacherId: teacher.id };
@@ -195,6 +206,7 @@ export class ExamService {
       questionCount: e._count.examQuestions,
       status: e.status,
       reviewNote: e.reviewNote,
+      updatedAt: e.updatedAt.toISOString(),
       createdByName: e.createdBy.user.displayName,
     }));
   }
@@ -251,7 +263,40 @@ export class ExamService {
       this.access.assertAdminScope(user, exam);
       return;
     }
+    // A department head may read (not act on) exams within their department scope.
+    if (user.roles.some((r) => r.role === 'department_head')) {
+      this.access.assertAdminScope(user, exam);
+      return;
+    }
     await this.assertOwner(user, exam);
+  }
+
+  /** Enrolled students for this exam's offering batch — feeds the individual mark-sheet selector. */
+  async getRoster(user: AuthUser, publicId: string) {
+    const exam = await this.loadExam(publicId);
+    await this.assertReadAccess(user, exam);
+    const full = await this.prisma.db.exam.findFirstOrThrow({
+      where: { publicId },
+      select: {
+        offeringPart: {
+          select: { offering: { select: { batchId: true } } },
+        },
+      },
+    });
+    const students = await this.prisma.db.student.findMany({
+      where: { batchId: full.offeringPart.offering.batchId },
+      select: {
+        publicId: true,
+        studentId: true,
+        user: { select: { displayName: true } },
+      },
+      orderBy: { studentId: 'asc' },
+    });
+    return students.map((s) => ({
+      publicId: s.publicId,
+      studentId: s.studentId,
+      name: s.user.displayName,
+    }));
   }
 
   async updateExam(user: AuthUser, ip: string, publicId: string, dto: UpdateExamDto) {

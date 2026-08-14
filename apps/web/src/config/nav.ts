@@ -30,6 +30,7 @@ const BY_ROLE: Record<RoleName, NavItem[]> = {
     { label: 'Organization', path: '/org', icon: Building2, phase: 2 },
     { label: 'Students', path: '/students', icon: Upload, phase: 2 },
     { label: 'Exams', path: '/exams', icon: FileCheck2, phase: 3 },
+    { label: 'Review', path: '/review', icon: ClipboardCheck, phase: 5 },
     { label: 'Reports', path: '/reports', icon: BarChart3, phase: 5 },
     { label: 'Users', path: '/users', icon: Users, phase: 2 },
     { label: 'Audit Log', path: '/audit', icon: ScrollText, phase: 2 },
@@ -39,14 +40,15 @@ const BY_ROLE: Record<RoleName, NavItem[]> = {
     { label: 'Organization', path: '/org', icon: Building2, phase: 2 },
     { label: 'Students', path: '/students', icon: Upload, phase: 2 },
     { label: 'Exams', path: '/exams', icon: FileCheck2, phase: 3 },
+    { label: 'Review', path: '/review', icon: ClipboardCheck, phase: 5 },
     { label: 'Reports', path: '/reports', icon: BarChart3, phase: 5 },
     { label: 'Audit Log', path: '/audit', icon: ScrollText, phase: 2 },
   ],
   department_head: [
     HOME,
-    { label: 'Department', path: '/department', icon: Building2, phase: 2 },
-    { label: 'Teachers', path: '/teachers', icon: Users, phase: 2 },
-    { label: 'Exams', path: '/exams', icon: FileCheck2, phase: 3 },
+    // Structure/terms are admin-only; a department head lands on the offerings view.
+    { label: 'Offerings', path: '/org/offerings', icon: Building2, phase: 2 },
+    { label: 'Review', path: '/review', icon: ClipboardCheck, phase: 5 },
     { label: 'Reports', path: '/reports', icon: BarChart3, phase: 5 },
   ],
   teacher: [
@@ -55,6 +57,7 @@ const BY_ROLE: Record<RoleName, NavItem[]> = {
     { label: 'Exams', path: '/exams', icon: FileCheck2, phase: 3 },
     { label: 'Question Bank', path: '/questions', icon: ListChecks, phase: 3 },
     { label: 'Grading', path: '/grading', icon: ClipboardCheck, phase: 5 },
+    { label: 'Reports', path: '/reports', icon: BarChart3, phase: 5 },
   ],
   student: [
     HOME,

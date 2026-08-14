@@ -16,7 +16,7 @@ export class ExamController {
   constructor(private readonly exams: ExamService) {}
 
   // ── authoring (teacher) ──
-  @Roles('teacher', 'admin', 'super_admin')
+  @Roles('teacher', 'admin', 'super_admin', 'department_head')
   @Get()
   list(@CurrentUser() u: AuthUser) {
     return this.exams.listExams(u);
@@ -35,16 +35,22 @@ export class ExamController {
     return this.exams.createExam(u, ip, dto);
   }
 
-  @Roles('teacher', 'admin', 'super_admin')
+  @Roles('teacher', 'admin', 'super_admin', 'department_head')
   @Get(':publicId')
   get(@CurrentUser() u: AuthUser, @Param('publicId') id: string) {
     return this.exams.getExam(u, id);
   }
 
-  @Roles('teacher', 'admin', 'super_admin')
+  @Roles('teacher', 'admin', 'super_admin', 'department_head')
   @Get(':publicId/questions')
   questions(@CurrentUser() u: AuthUser, @Param('publicId') id: string) {
     return this.exams.getExamQuestions(u, id);
+  }
+
+  @Roles('teacher', 'admin', 'super_admin', 'department_head')
+  @Get(':publicId/roster')
+  roster(@CurrentUser() u: AuthUser, @Param('publicId') id: string) {
+    return this.exams.getRoster(u, id);
   }
 
   @Roles('teacher', 'admin', 'super_admin')

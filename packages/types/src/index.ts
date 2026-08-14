@@ -5,3 +5,4 @@ export * from './import';
 export * from './exam-taking';
 export * from './grading';
 export * from './authoring';
+export * from './org';
