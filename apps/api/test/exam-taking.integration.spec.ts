@@ -8,7 +8,7 @@
  *   (f) showMarksAfterSubmit=false -> result 403 until exam is results_published.
  * (g) "zero duplicate (examId, studentId) after load" is verified from the k6 run.
  */
-import { ConflictException, ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import IORedis, { type Redis } from 'ioredis';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -320,10 +320,9 @@ describe('Phase 4 — exam-taking engine', () => {
     });
     await grading.grade(await attemptId(s.attempt.publicId));
 
-    // Student cannot see the result yet.
-    await expect(attempts.getResult(student, s.attempt.publicId)).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
+    // Student sees a holding response (showMarks=false) — not a 403 — while results are withheld.
+    const hidden = await attempts.getResult(student, s.attempt.publicId);
+    expect(hidden.showMarks).toBe(false);
 
     // Move the exam through ended -> grading -> results_published.
     await prisma.exam.update({
@@ -335,6 +334,7 @@ describe('Phase 4 — exam-taking engine', () => {
     await exams.publishResults(admin, 't', ex.examPublicId);
 
     const result = await attempts.getResult(student, s.attempt.publicId);
-    expect(result.totalScore).toBe(5);
+    expect(result.showMarks).toBe(true);
+    if (result.showMarks) expect(result.totalScore).toBe(5);
   });
 });

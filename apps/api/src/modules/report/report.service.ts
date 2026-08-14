@@ -89,7 +89,24 @@ export class ReportService {
     if (exam.status !== 'results_published') {
       throw new ForbiddenException('Reports are available only after results are published');
     }
-    await this.assertReportAccess(user, exam);
+
+    // Students may download their own individual mark sheet.
+    const isStudent = user.roles.some((r) => r.role === 'student');
+    if (isStudent) {
+      if (dto.type !== 'individual' || !dto.studentPublicId) {
+        throw new ForbiddenException('Students may only download their own individual mark sheet');
+      }
+      const student = await this.prisma.db.student.findFirst({
+        where: { userId: user.id },
+        select: { publicId: true },
+      });
+      if (student?.publicId !== dto.studentPublicId) {
+        throw new ForbiddenException('You can only download your own mark sheet');
+      }
+    } else {
+      await this.assertReportAccess(user, exam);
+    }
+
     if (dto.type === 'individual' && !dto.studentPublicId) {
       throw new BadRequestException('studentPublicId is required for an individual report');
     }

@@ -66,28 +66,54 @@ export interface MyExamListItem {
   startAt: string;
   endAt: string;
   durationMinutes: number;
+  totalMarks: number;
   status: string;
-  attempt: { publicId: string; status: string; submittedAt: string | null } | null;
+  showMarksAfterSubmit: boolean;
+  attempt: {
+    publicId: string;
+    status: string;
+    gradingStatus: string;
+    totalScore: number | null;
+    submittedAt: string | null;
+  } | null;
+}
+
+export interface SnapshotOption {
+  id: string;
+  text: string;
+  order: number;
 }
 
 export interface AttemptResultQuestion {
   questionPublicId: string;
+  order: number;
   type: string;
+  snapshotText: string | null;
+  snapshotOptions: SnapshotOption[] | null;
   marks: number | null;
-  autoScore: number | null;
+  score: number | null;
   selectedOptionId: string | null;
   writtenText: string | null;
   correctOptionId: string | null;
   explanation: string | null;
+  feedback: string | null;
 }
+
+/** Returned by GET /attempts/:id/result. showMarks=false → Mode B (no breakdown). */
 export interface AttemptResult {
   attemptPublicId: string;
   status: string;
   gradingStatus: string;
   autoSubmitted: boolean;
   submittedAt: string | null;
-  totalScore: number | null;
-  totalMarks: number;
-  percentage: number | null;
-  questions: AttemptResultQuestion[];
+  showMarks: boolean;
+  // Only present when showMarks = true
+  examPublicId?: string;
+  totalScore?: number | null;
+  totalMarks?: number;
+  percentage?: number | null;
+  rank?: number | null;
+  totalStudents?: number;
+  myStudentPublicId?: string | null;
+  questions?: AttemptResultQuestion[];
 }

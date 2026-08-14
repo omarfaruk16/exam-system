@@ -56,7 +56,9 @@ export class AttemptService {
         startAt: true,
         endAt: true,
         durationMinutes: true,
+        totalMarks: true,
         status: true,
+        settings: true,
         offeringPart: {
           select: {
             coursePart: { select: { name: true } },
@@ -65,7 +67,13 @@ export class AttemptService {
         },
         attempts: {
           where: { studentId: student.id },
-          select: { publicId: true, status: true, submittedAt: true },
+          select: {
+            publicId: true,
+            status: true,
+            gradingStatus: true,
+            totalScore: true,
+            submittedAt: true,
+          },
           take: 1,
         },
       },
@@ -73,6 +81,7 @@ export class AttemptService {
     });
     return exams.map((e) => {
       const a = e.attempts[0];
+      const settings = (e.settings as ExamSettings) ?? {};
       return {
         examPublicId: e.publicId,
         title: e.title,
@@ -81,11 +90,15 @@ export class AttemptService {
         startAt: e.startAt.toISOString(),
         endAt: e.endAt.toISOString(),
         durationMinutes: e.durationMinutes,
+        totalMarks: e.totalMarks,
         status: e.status,
+        showMarksAfterSubmit: settings.showMarksAfterSubmit !== false,
         attempt: a
           ? {
               publicId: a.publicId,
               status: a.status,
+              gradingStatus: a.gradingStatus,
+              totalScore: a.totalScore,
               submittedAt: a.submittedAt?.toISOString() ?? null,
             }
           : null,
@@ -297,11 +310,19 @@ export class AttemptService {
         autoSubmitted: true,
         submittedAt: true,
         examId: true,
-        student: { select: { userId: true } },
-        exam: { select: { status: true, settings: true, totalMarks: true } },
-        result: { select: { finalScore: true, percentage: true } },
+        student: { select: { userId: true, publicId: true } },
+        exam: { select: { publicId: true, status: true, settings: true, totalMarks: true } },
+        result: { select: { finalScore: true, percentage: true, rank: true } },
         answers: {
-          select: { questionId: true, selectedOptionId: true, writtenText: true, autoScore: true },
+          select: {
+            questionId: true,
+            selectedOptionId: true,
+            writtenText: true,
+            autoScore: true,
+            manualScore: true,
+            isGraded: true,
+            feedback: true,
+          },
         },
       },
     });
@@ -312,14 +333,23 @@ export class AttemptService {
     if (!isOwner && !isStaff) throw new ForbiddenException('Not your result');
 
     const settings = (attempt.exam.settings as ExamSettings) ?? {};
-    // Server-enforced gate: students can't see marks early unless results are published.
-    if (
-      isOwner &&
-      settings.showMarksAfterSubmit === false &&
-      attempt.exam.status !== 'results_published'
-    ) {
-      throw new ForbiddenException('Results are not yet published');
-    }
+    // When showMarksAfterSubmit=false and results are not yet published, return a
+    // holding response (showMarks=false) rather than a 403 — the frontend shows Mode B.
+    const showMarks =
+      !isOwner ||
+      settings.showMarksAfterSubmit !== false ||
+      attempt.exam.status === 'results_published';
+
+    const baseFields = {
+      attemptPublicId: attempt.publicId,
+      status: attempt.status,
+      gradingStatus: attempt.gradingStatus,
+      autoSubmitted: attempt.autoSubmitted,
+      submittedAt: attempt.submittedAt ? attempt.submittedAt.toISOString() : null,
+    };
+
+    // Return literal-typed showMarks so the union is discriminated by TypeScript callers.
+    if (!showMarks) return { ...baseFields, showMarks: false as const };
 
     const eqs = await this.prisma.db.examQuestion.findMany({
       where: { examId: attempt.examId },
@@ -327,38 +357,57 @@ export class AttemptService {
         questionId: true,
         order: true,
         snapshotType: true,
+        snapshotText: true,
         snapshotMarks: true,
         snapshotExplanation: true,
         snapshotCorrectOptionId: true,
+        snapshotOptions: true,
         question: { select: { publicId: true } },
       },
       orderBy: { order: 'asc' },
     });
     const answerByQ = new Map(attempt.answers.map((a) => [a.questionId, a]));
 
+    type SnapshotOption = { id: string; text: string; order: number };
+
     const questions = eqs.map((eq) => {
       const a = answerByQ.get(eq.questionId);
+      const opts = (eq.snapshotOptions ?? []) as SnapshotOption[];
+      const score = a
+        ? a.isGraded
+          ? (a.autoScore ?? 0) + (a.manualScore ?? 0)
+          : (a.autoScore ?? null)
+        : null;
       return {
         questionPublicId: eq.question.publicId,
+        order: eq.order,
         type: eq.snapshotType,
+        snapshotText: eq.snapshotText ?? null,
+        snapshotOptions: eq.snapshotType === 'mcq' ? opts : null,
         marks: eq.snapshotMarks,
-        autoScore: a?.autoScore ?? null,
+        score,
         selectedOptionId: a?.selectedOptionId ?? null,
         writtenText: a?.writtenText ?? null,
         correctOptionId: eq.snapshotType === 'mcq' ? eq.snapshotCorrectOptionId : null,
-        explanation: settings.showExplanation ? eq.snapshotExplanation : null,
+        explanation: settings.showExplanation ? (eq.snapshotExplanation ?? null) : null,
+        feedback: a?.feedback ?? null,
       };
     });
 
+    const totalStudents = await this.prisma.db.examResult.count({
+      where: { attempt: { examId: attempt.examId } },
+    });
+
     return {
-      attemptPublicId: attempt.publicId,
-      status: attempt.status,
-      gradingStatus: attempt.gradingStatus,
-      autoSubmitted: attempt.autoSubmitted,
-      submittedAt: attempt.submittedAt ? attempt.submittedAt.toISOString() : null,
+      ...baseFields,
+      showMarks: true as const,
+      examPublicId: attempt.exam.publicId,
       totalScore: attempt.totalScore,
       totalMarks: attempt.exam.totalMarks,
       percentage: attempt.result?.percentage ?? null,
+      rank: attempt.result?.rank ?? null,
+      totalStudents,
+      myStudentPublicId: isOwner ? attempt.student.publicId : null,
       questions,
     };
   }

@@ -19,6 +19,7 @@ import { ExamTakingPage } from '@/features/exam-taking/ExamTakingPage';
 import { MyExamsPage } from '@/features/student/MyExamsPage';
 import { GradingExamsPage } from '@/features/teacher/GradingExamsPage';
 import { GradingWorkspace } from '@/features/teacher/GradingWorkspace';
+import { ResultPage } from '@/features/student/ResultPage';
 import { NotFoundPage } from '@/features/misc/NotFoundPage';
 import { PlaceholderPage } from '@/features/misc/PlaceholderPage';
 import { useSession } from '@/lib/session';
@@ -112,6 +113,7 @@ export function App() {
         <Route path="/grading" element={<GradingExamsPage />} />
         <Route path="/grading/:examPublicId" element={<GradingWorkspace />} />
         <Route path="/my-exams" element={<MyExamsPage />} />
+        <Route path="/results/:attemptPublicId" element={<ResultPage />} />
         <Route
           path="/results"
           element={<PlaceholderPage title="Results" phase={5} icon={BarChart3} />}
