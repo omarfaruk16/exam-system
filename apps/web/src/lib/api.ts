@@ -16,12 +16,13 @@ export class ApiError extends Error {
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     credentials: 'include',
+    ...options,
+    // headers must come AFTER ...options so the computed Content-Type/Accept aren't clobbered.
     headers: {
       Accept: 'application/json',
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
       ...(options.headers ?? {}),
     },
-    ...options,
   });
 
   const text = await res.text();
@@ -38,11 +39,25 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return data as T;
 }
 
+export interface RequestOptions {
+  headers?: Record<string, string>;
+}
+
 export const api = {
-  get: <T>(path: string): Promise<T> => request<T>(path),
-  post: <T>(path: string, body?: unknown): Promise<T> =>
-    request<T>(path, { method: 'POST', body: body != null ? JSON.stringify(body) : undefined }),
-  patch: <T>(path: string, body?: unknown): Promise<T> =>
-    request<T>(path, { method: 'PATCH', body: body != null ? JSON.stringify(body) : undefined }),
-  del: <T>(path: string): Promise<T> => request<T>(path, { method: 'DELETE' }),
+  get: <T>(path: string, opts?: RequestOptions): Promise<T> =>
+    request<T>(path, { headers: opts?.headers }),
+  post: <T>(path: string, body?: unknown, opts?: RequestOptions): Promise<T> =>
+    request<T>(path, {
+      method: 'POST',
+      body: body != null ? JSON.stringify(body) : undefined,
+      headers: opts?.headers,
+    }),
+  patch: <T>(path: string, body?: unknown, opts?: RequestOptions): Promise<T> =>
+    request<T>(path, {
+      method: 'PATCH',
+      body: body != null ? JSON.stringify(body) : undefined,
+      headers: opts?.headers,
+    }),
+  del: <T>(path: string, opts?: RequestOptions): Promise<T> =>
+    request<T>(path, { method: 'DELETE', headers: opts?.headers }),
 };

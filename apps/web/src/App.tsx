@@ -4,7 +4,6 @@ import {
   Building2,
   ClipboardCheck,
   FileCheck2,
-  GraduationCap,
   ListChecks,
   Loader2,
   ScrollText,
@@ -16,6 +15,9 @@ import { AppShell } from '@/components/layout/AppShell';
 import { ChangePasswordPage } from '@/features/auth/ChangePasswordPage';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
+import { DevShowcase } from '@/features/exam-taking/DevShowcase';
+import { ExamTakingPage } from '@/features/exam-taking/ExamTakingPage';
+import { MyExamsPage } from '@/features/student/MyExamsPage';
 import { NotFoundPage } from '@/features/misc/NotFoundPage';
 import { PlaceholderPage } from '@/features/misc/PlaceholderPage';
 import { useSession } from '@/lib/session';
@@ -57,6 +59,9 @@ export function App() {
     <Routes>
       <Route path="/login" element={<Navigate to="/" replace />} />
       <Route path="/change-password" element={<ChangePasswordPage />} />
+      {/* Distraction-free, full-screen — deliberately outside the app shell (no sidebar). */}
+      <Route path="/exam/:examPublicId" element={<ExamTakingPage />} />
+      {import.meta.env.DEV && <Route path="/dev/exam-ui" element={<DevShowcase />} />}
       <Route element={<AppShell user={user} />}>
         <Route path="/" element={<DashboardPage user={user} />} />
         <Route
@@ -107,10 +112,7 @@ export function App() {
           path="/grading"
           element={<PlaceholderPage title="Grading" phase={5} icon={ClipboardCheck} />}
         />
-        <Route
-          path="/my-exams"
-          element={<PlaceholderPage title="My Exams" phase={4} icon={GraduationCap} />}
-        />
+        <Route path="/my-exams" element={<MyExamsPage />} />
         <Route
           path="/results"
           element={<PlaceholderPage title="Results" phase={5} icon={BarChart3} />}

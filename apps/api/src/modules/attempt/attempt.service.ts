@@ -42,6 +42,57 @@ export class AttemptService {
     return student;
   }
 
+  /** The student's visible exams (their batch's offerings), with any existing attempt. */
+  async listMyExams(user: AuthUser) {
+    const student = await this.requireStudent(user);
+    const exams = await this.prisma.db.exam.findMany({
+      where: {
+        offeringPart: { offering: { batchId: student.batchId } },
+        status: { in: ['published', 'live', 'ended', 'grading', 'results_published'] },
+      },
+      select: {
+        publicId: true,
+        title: true,
+        startAt: true,
+        endAt: true,
+        durationMinutes: true,
+        status: true,
+        offeringPart: {
+          select: {
+            coursePart: { select: { name: true } },
+            offering: { select: { course: { select: { code: true } } } },
+          },
+        },
+        attempts: {
+          where: { studentId: student.id },
+          select: { publicId: true, status: true, submittedAt: true },
+          take: 1,
+        },
+      },
+      orderBy: [{ startAt: 'desc' }],
+    });
+    return exams.map((e) => {
+      const a = e.attempts[0];
+      return {
+        examPublicId: e.publicId,
+        title: e.title,
+        courseCode: e.offeringPart.offering.course.code,
+        part: e.offeringPart.coursePart.name,
+        startAt: e.startAt.toISOString(),
+        endAt: e.endAt.toISOString(),
+        durationMinutes: e.durationMinutes,
+        status: e.status,
+        attempt: a
+          ? {
+              publicId: a.publicId,
+              status: a.status,
+              submittedAt: a.submittedAt?.toISOString() ?? null,
+            }
+          : null,
+      };
+    });
+  }
+
   // ─────────────────────────────── START ───────────────────────────────
   async start(user: AuthUser, examPublicId: string, ip: string | null) {
     const student = await this.requireStudent(user);
@@ -128,6 +179,16 @@ export class AttemptService {
       attempt.publicId,
     );
 
+    // Already-persisted answers, so a reconnect resumes where the student left off.
+    const saved = await this.prisma.db.answer.findMany({
+      where: { attemptId: attempt.id },
+      select: {
+        selectedOptionId: true,
+        writtenText: true,
+        question: { select: { publicId: true } },
+      },
+    });
+
     return {
       attempt: {
         publicId: attempt.publicId,
@@ -139,6 +200,11 @@ export class AttemptService {
       sessionId,
       serverTime: new Date().toISOString(),
       paper,
+      savedAnswers: saved.map((a) => ({
+        questionPublicId: a.question.publicId,
+        selectedOptionId: a.selectedOptionId,
+        writtenText: a.writtenText,
+      })),
     };
   }
 

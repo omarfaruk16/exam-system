@@ -66,6 +66,51 @@ services:
       - '${PGBOUNCER_PORT:-6432}:6432'
     profiles: ['pgbouncer', 'full']
 
+  # ─── The application itself (NestJS API + embedded workers, and the nginx-served SPA) ───
+  #   docker compose --profile app up -d --build
+  api:
+    build:
+      context: ..
+      dockerfile: infra/api.Dockerfile
+    container_name: exam_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      API_PORT: 4100
+      API_HOST: 0.0.0.0
+      DATABASE_URL: postgresql://${POSTGRES_USER:-exam}:${POSTGRES_PASSWORD:-exam_dev_password}@postgres:5432/${POSTGRES_DB:-exam}?schema=public
+      DIRECT_URL: postgresql://${POSTGRES_USER:-exam}:${POSTGRES_PASSWORD:-exam_dev_password}@postgres:5432/${POSTGRES_DB:-exam}?schema=public
+      REDIS_URL: redis://redis:6379
+      SESSION_SECRET: ${SESSION_SECRET:-dev_only_session_secret_change_me_please_0123456789abcdef}
+      CORS_ORIGINS: http://localhost:${WEB_PORT:-8080}
+      WEB_APP_URL: http://localhost:${WEB_PORT:-8080}
+      COOKIE_SECURE: 'false'
+      INSTITUTION_NAME: University of Rajshahi
+      BRAND_PRIMARY: '#1E3A5F'
+      STORAGE_DIR: /app/apps/api/storage
+      LOG_LEVEL: info
+    volumes:
+      - apistorage:/app/apps/api/storage
+    profiles: ['app', 'full']
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/web.Dockerfile
+    container_name: exam_web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - '${WEB_PORT:-8080}:80'
+    profiles: ['app', 'full']
+
 volumes:
   pgdata:
   redisdata:
+  apistorage:

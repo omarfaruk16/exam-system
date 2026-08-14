@@ -13,6 +13,18 @@ export class AttemptController {
     private readonly finalize: AttemptFinalizeService,
   ) {}
 
+  /** Server clock — the SPA computes its offset from this to render an accurate countdown. */
+  @Get('time')
+  serverTime(): { serverTime: string } {
+    return { serverTime: new Date().toISOString() };
+  }
+
+  @Roles('student')
+  @Get('me/exams')
+  myExams(@CurrentUser() u: AuthUser) {
+    return this.attempts.listMyExams(u);
+  }
+
   @Roles('student')
   @Post('exams/:examPublicId/start')
   @HttpCode(200)
