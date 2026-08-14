@@ -68,6 +68,51 @@ export class WrittenGradingService {
     }
   }
 
+  /** The teacher's assigned exams that have written questions, with a pending-grade count. */
+  async listExamsToGrade(user: AuthUser) {
+    const teacher = this.isAdmin(user) ? null : await this.access.requireTeacher(user);
+    const exams = await this.prisma.db.exam.findMany({
+      where: {
+        ...(teacher ? { offeringPart: { assignedTeacherId: teacher.id } } : {}),
+        status: { in: ['live', 'ended', 'grading', 'results_published'] },
+        examQuestions: { some: { snapshotType: 'written' } },
+      },
+      select: {
+        id: true,
+        publicId: true,
+        title: true,
+        status: true,
+        offeringPart: {
+          select: {
+            coursePart: { select: { name: true } },
+            offering: { select: { course: { select: { code: true } } } },
+          },
+        },
+      },
+      orderBy: { publishedAt: 'desc' },
+    });
+
+    const out = [];
+    for (const e of exams) {
+      const pendingCount = await this.prisma.db.answer.count({
+        where: {
+          isGraded: false,
+          attempt: { examId: e.id },
+          question: { examQuestions: { some: { examId: e.id, snapshotType: 'written' } } },
+        },
+      });
+      out.push({
+        examPublicId: e.publicId,
+        title: e.title,
+        courseCode: e.offeringPart.offering.course.code,
+        part: e.offeringPart.coursePart.name,
+        status: e.status,
+        pendingCount,
+      });
+    }
+    return out;
+  }
+
   /** Ungraded written answers for the exam, grouped by question. */
   async getPending(user: AuthUser, examPublicId: string) {
     const exam = await this.prisma.db.exam.findFirst({

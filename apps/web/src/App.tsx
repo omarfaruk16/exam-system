@@ -2,7 +2,6 @@ import {
   BarChart3,
   BookOpen,
   Building2,
-  ClipboardCheck,
   FileCheck2,
   ListChecks,
   Loader2,
@@ -18,6 +17,8 @@ import { DashboardPage } from '@/features/dashboard/DashboardPage';
 import { DevShowcase } from '@/features/exam-taking/DevShowcase';
 import { ExamTakingPage } from '@/features/exam-taking/ExamTakingPage';
 import { MyExamsPage } from '@/features/student/MyExamsPage';
+import { GradingExamsPage } from '@/features/teacher/GradingExamsPage';
+import { GradingWorkspace } from '@/features/teacher/GradingWorkspace';
 import { NotFoundPage } from '@/features/misc/NotFoundPage';
 import { PlaceholderPage } from '@/features/misc/PlaceholderPage';
 import { useSession } from '@/lib/session';
@@ -108,10 +109,8 @@ export function App() {
           path="/questions"
           element={<PlaceholderPage title="Question Bank" phase={3} icon={ListChecks} />}
         />
-        <Route
-          path="/grading"
-          element={<PlaceholderPage title="Grading" phase={5} icon={ClipboardCheck} />}
-        />
+        <Route path="/grading" element={<GradingExamsPage />} />
+        <Route path="/grading/:examPublicId" element={<GradingWorkspace />} />
         <Route path="/my-exams" element={<MyExamsPage />} />
         <Route
           path="/results"

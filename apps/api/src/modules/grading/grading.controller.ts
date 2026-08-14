@@ -10,6 +10,12 @@ export class GradingController {
   constructor(private readonly written: WrittenGradingService) {}
 
   @Roles('teacher', 'admin', 'super_admin')
+  @Get('me/grading/exams')
+  examsToGrade(@CurrentUser() u: AuthUser) {
+    return this.written.listExamsToGrade(u);
+  }
+
+  @Roles('teacher', 'admin', 'super_admin')
   @Get('exams/:examPublicId/answers/pending')
   pending(@CurrentUser() u: AuthUser, @Param('examPublicId') examPublicId: string) {
     return this.written.getPending(u, examPublicId);
