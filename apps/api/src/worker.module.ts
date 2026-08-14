@@ -16,12 +16,18 @@ import { ExamAccessService } from './modules/exam/exam-access.service';
 import { ExamSchedulerProcessor } from './modules/exam/exam-scheduler.processor';
 import { ExamSchedulerService } from './modules/exam/exam-scheduler.service';
 import { QuestionImportProcessor } from './modules/exam/question-import.processor';
+import { AttemptGradingService } from './modules/grading/attempt-grading.service';
+import { ResultsProcessor } from './modules/grading/results.processor';
+import { ResultsService } from './modules/grading/results.service';
+import { ReportProcessor } from './modules/report/report.processor';
 import { StudentImportProcessor } from './modules/import/student-import.processor';
 import {
   QUEUE_ATTEMPT_SWEEP,
   QUEUE_EXAM_SCHEDULER,
   QUEUE_GRADING,
   QUEUE_QUESTION_IMPORT,
+  QUEUE_REPORT,
+  QUEUE_RESULTS,
   QUEUE_STUDENT_IMPORT,
 } from './queue/queue.constants';
 import { QueueModule } from './queue/queue.module';
@@ -46,6 +52,8 @@ import { QueueModule } from './queue/queue.module';
       { name: QUEUE_EXAM_SCHEDULER },
       { name: QUEUE_GRADING },
       { name: QUEUE_ATTEMPT_SWEEP },
+      { name: QUEUE_RESULTS },
+      { name: QUEUE_REPORT },
     ),
   ],
   providers: [
@@ -56,9 +64,13 @@ import { QueueModule } from './queue/queue.module';
     ExamAccessService,
     AttemptRedisService,
     AttemptFinalizeService,
+    AttemptGradingService,
     GradingService,
     GradingProcessor,
     AttemptSweepProcessor,
+    ResultsService,
+    ResultsProcessor,
+    ReportProcessor,
   ],
 })
 export class WorkerModule {}

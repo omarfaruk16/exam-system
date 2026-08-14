@@ -8,6 +8,8 @@
  *   (f) automatic live→ended fires for a past endAt.
  */
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Queue } from 'bullmq';
+import IORedis, { type Redis } from 'ioredis';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AccessControlService } from '../src/common/access/access-control.service';
 import { PrismaService } from '../src/common/prisma/prisma.service';
@@ -22,6 +24,8 @@ let prisma: PrismaService;
 let exams: ExamService;
 let questions: QuestionService;
 let scheduler: ExamSchedulerService;
+let redisClient: Redis;
+let resultsQueue: Queue;
 
 let teacher1: AuthUser; // assigned to CSE Part A
 let teacher2: AuthUser; // assigned to CSE Part B, NOT Part A
@@ -58,7 +62,9 @@ beforeAll(async () => {
   const access = new ExamAccessService(prisma, new AccessControlService());
   exams = new ExamService(prisma, audit, access);
   questions = new QuestionService(prisma, audit, access);
-  scheduler = new ExamSchedulerService(prisma, audit);
+  redisClient = new IORedis(process.env.REDIS_URL ?? 'redis://localhost:6379');
+  resultsQueue = new Queue('results', { connection: redisClient });
+  scheduler = new ExamSchedulerService(prisma, audit, resultsQueue);
 
   const t1 = await prisma.db.user.findFirstOrThrow({
     where: { username: 'teacher1' },
@@ -93,6 +99,8 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await resultsQueue?.close();
+  redisClient?.disconnect();
   await prisma?.onModuleDestroy();
 });
 

@@ -560,6 +560,9 @@ model ExamResult {
   finalScore Float
   percentage Float
   rank       Int?
+  // Per-question scores, so the overall mark sheet reads only ExamResult (never scans Answer):
+  // [{ questionPublicId, order, type, score, maxMarks }]
+  breakdown  Json?
   computedAt DateTime @default(now())
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt

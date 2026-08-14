@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { AttemptGradingService } from '../grading/attempt-grading.service';
 
 interface ExamSettings {
   negativeMarking?: boolean;
@@ -7,15 +8,18 @@ interface ExamSettings {
 }
 
 /**
- * MCQ auto-grading (§6.6, Step 5). Scores each MCQ Answer against the ExamQuestion SNAPSHOT
- * (snapshotCorrectOptionId), never the live bank. Written answers stay ungraded (manual, Phase 5).
- * Idempotent: safe to run more than once for the same attempt.
+ * MCQ auto-grading (§6.6). Scores each MCQ Answer against the ExamQuestion SNAPSHOT
+ * (snapshotCorrectOptionId), never the live bank, then hands off to the shared finalizer which
+ * writes the ExamResult rollup once every answer (MCQ + written) is graded. Idempotent.
  */
 @Injectable()
 export class GradingService {
   private readonly logger = new Logger(GradingService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly attemptGrading: AttemptGradingService,
+  ) {}
 
   async grade(attemptId: number): Promise<void> {
     const attempt = await this.prisma.db.examAttempt.findUnique({
@@ -24,7 +28,7 @@ export class GradingService {
         id: true,
         status: true,
         examId: true,
-        exam: { select: { settings: true, totalMarks: true } },
+        exam: { select: { settings: true } },
         answers: { select: { id: true, questionId: true, selectedOptionId: true } },
       },
     });
@@ -41,58 +45,30 @@ export class GradingService {
       },
     });
     const snap = new Map(eqs.map((e) => [e.questionId, e]));
-
     const settings = (attempt.exam.settings as ExamSettings | null) ?? {};
     const negativeValue = settings.negativeMarking ? (settings.negativeMarkValue ?? 0) : 0;
 
-    let mcqSum = 0;
-    const answerScores: { id: number; autoScore: number }[] = [];
+    const updates: { id: number; autoScore: number }[] = [];
     for (const ans of attempt.answers) {
       const eq = snap.get(ans.questionId);
       if (!eq || eq.snapshotType !== 'mcq') continue;
       const answered = ans.selectedOptionId != null;
       const correct = answered && ans.selectedOptionId === eq.snapshotCorrectOptionId;
-      // Correct -> full marks; wrong (and answered) -> negative penalty if enabled; blank -> 0.
       const score = correct ? (eq.snapshotMarks ?? 0) : answered ? -negativeValue : 0;
-      mcqSum += score;
-      answerScores.push({ id: ans.id, autoScore: score });
+      updates.push({ id: ans.id, autoScore: score });
+    }
+    if (updates.length > 0) {
+      await this.prisma.$transaction(
+        updates.map((u) =>
+          this.prisma.answer.update({
+            where: { id: u.id },
+            data: { autoScore: u.autoScore, isGraded: true },
+          }),
+        ),
+      );
     }
 
-    const hasWritten = eqs.some((e) => e.snapshotType === 'written');
-    const total = Math.max(0, mcqSum); // never negative overall
-
-    await this.prisma.$transaction(async (tx) => {
-      for (const a of answerScores) {
-        await tx.answer.update({
-          where: { id: a.id },
-          data: { autoScore: a.autoScore, isGraded: true },
-        });
-      }
-      if (hasWritten) {
-        // MCQs scored; written answers await a manual grade before the rollup is final.
-        await tx.examAttempt.update({
-          where: { id: attemptId },
-          data: { gradingStatus: 'awaiting_manual', totalScore: total },
-        });
-      } else {
-        await tx.examAttempt.update({
-          where: { id: attemptId },
-          data: { status: 'graded', gradingStatus: 'graded', totalScore: total },
-        });
-        const pct =
-          attempt.exam.totalMarks > 0
-            ? Math.min(100, Math.max(0, (total / attempt.exam.totalMarks) * 100))
-            : 0;
-        await tx.examResult.upsert({
-          where: { attemptId },
-          create: { attemptId, finalScore: total, percentage: pct },
-          update: { finalScore: total, percentage: pct, computedAt: new Date() },
-        });
-      }
-    });
-
-    this.logger.log(
-      `Graded attempt ${attemptId}: mcqScore=${total}${hasWritten ? ' (written awaiting manual)' : ' (final)'}`,
-    );
+    await this.attemptGrading.finalizeIfComplete(attemptId);
+    this.logger.log(`MCQ-graded attempt ${attemptId} (${updates.length} MCQ answers)`);
   }
 }

@@ -4,7 +4,11 @@ import { ConfigService } from '@nestjs/config';
 import { MulterModule } from '@nestjs/platform-express';
 import { join } from 'node:path';
 import type { Env } from '../../common/config/env.validation';
-import { QUEUE_EXAM_SCHEDULER, QUEUE_QUESTION_IMPORT } from '../../queue/queue.constants';
+import {
+  QUEUE_EXAM_SCHEDULER,
+  QUEUE_QUESTION_IMPORT,
+  QUEUE_RESULTS,
+} from '../../queue/queue.constants';
 import { ExamAccessService } from './exam-access.service';
 import { ExamController } from './exam.controller';
 import { ExamSchedulerProcessor } from './exam-scheduler.processor';
@@ -22,7 +26,11 @@ export class ExamModule {
     return {
       module: ExamModule,
       imports: [
-        BullModule.registerQueue({ name: QUEUE_QUESTION_IMPORT }, { name: QUEUE_EXAM_SCHEDULER }),
+        BullModule.registerQueue(
+          { name: QUEUE_QUESTION_IMPORT },
+          { name: QUEUE_EXAM_SCHEDULER },
+          { name: QUEUE_RESULTS },
+        ),
         MulterModule.registerAsync({
           inject: [ConfigService],
           useFactory: (config: ConfigService<Env, true>) => ({

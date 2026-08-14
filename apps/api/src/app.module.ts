@@ -17,8 +17,10 @@ import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
 import { AttemptModule } from './modules/attempt/attempt.module';
 import { ExamModule } from './modules/exam/exam.module';
+import { GradingModule } from './modules/grading/grading.module';
 import { ImportModule } from './modules/import/import.module';
 import { OrgModule } from './modules/org/org.module';
+import { ReportModule } from './modules/report/report.module';
 import { UsersModule } from './modules/users/users.module';
 import { QueueModule } from './queue/queue.module';
 
@@ -62,8 +64,10 @@ import { QueueModule } from './queue/queue.module';
     AuthModule,
     UsersModule,
     OrgModule,
+    GradingModule.register(),
     ExamModule.register(),
     AttemptModule.register(),
+    ReportModule.register(),
     ImportModule.register(),
     HealthModule,
   ],

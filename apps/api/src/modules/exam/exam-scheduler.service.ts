@@ -1,12 +1,15 @@
+import { InjectQueue } from '@nestjs/bullmq';
 import { Injectable, Logger } from '@nestjs/common';
 import type { ExamStatus } from '@prisma/client';
+import { Queue } from 'bullmq';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { QUEUE_RESULTS } from '../../queue/queue.constants';
 import { AuditService } from '../audit/audit.service';
 
 /**
  * Drives the time-based exam transitions: published→live at startAt, live→ended at endAt.
- * Called on a schedule (BullMQ repeatable job) and directly in tests. Idempotent and race-safe:
- * the status is guarded in the UPDATE, so a double-fire never double-transitions.
+ * When an exam ends, it enqueues the results-finalize job (rerank + maybe auto-publish results).
+ * Called on a schedule (BullMQ repeatable job) and directly in tests. Race-safe.
  */
 @Injectable()
 export class ExamSchedulerService {
@@ -15,6 +18,7 @@ export class ExamSchedulerService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    @InjectQueue(QUEUE_RESULTS) private readonly resultsQueue: Queue,
   ) {}
 
   async runSweep(now: Date = new Date()): Promise<{ toLive: number; toEnded: number }> {
@@ -42,15 +46,16 @@ export class ExamSchedulerService {
     to: ExamStatus,
     action: string,
   ): Promise<void> {
+    let transitioned = false;
     await this.prisma.$transaction(async (tx) => {
-      // Guarded update: only transitions if still in `from` (safe under concurrent sweeps).
       const res = await tx.exam.updateMany({
         where: { id: exam.id, status: from },
         data: { status: to },
       });
       if (res.count > 0) {
+        transitioned = true;
         await this.audit.recordTx(tx, {
-          actorUserId: null, // system actor
+          actorUserId: null,
           action,
           entity: 'Exam',
           entityId: exam.publicId,
@@ -59,5 +64,9 @@ export class ExamSchedulerService {
         });
       }
     });
+    // A newly-ended exam may already have all attempts graded (e.g. MCQ-only) — finalize results.
+    if (transitioned && to === 'ended') {
+      await this.resultsQueue.add('finalize-exam', { examId: exam.id });
+    }
   }
 }

@@ -20,6 +20,7 @@ import { AttemptFinalizeService } from '../src/modules/attempt/attempt-finalize.
 import { AttemptRedisService } from '../src/modules/attempt/attempt.redis';
 import { AttemptService } from '../src/modules/attempt/attempt.service';
 import { GradingService } from '../src/modules/attempt/grading.service';
+import { AttemptGradingService } from '../src/modules/grading/attempt-grading.service';
 import { PaperService } from '../src/modules/attempt/paper.service';
 import { ExamAccessService } from '../src/modules/exam/exam-access.service';
 import { ExamSchedulerService } from '../src/modules/exam/exam-scheduler.service';
@@ -29,6 +30,7 @@ import { QuestionService } from '../src/modules/exam/question.service';
 let prisma: PrismaService;
 let redisClient: Redis;
 let gradingQueue: Queue;
+let resultsQueue: Queue;
 let attempts: AttemptService;
 let finalize: AttemptFinalizeService;
 let grading: GradingService;
@@ -69,16 +71,17 @@ beforeAll(async () => {
   await prisma.onModuleInit();
   redisClient = new IORedis(process.env.REDIS_URL ?? 'redis://localhost:6379');
   gradingQueue = new Queue('grading', { connection: redisClient });
+  resultsQueue = new Queue('results', { connection: redisClient });
   const audit = new AuditService(prisma);
   const attemptRedis = new AttemptRedisService(redisClient);
   const paper = new PaperService(prisma, attemptRedis);
   const access = new ExamAccessService(prisma, new AccessControlService());
   attempts = new AttemptService(prisma, attemptRedis, paper, audit);
   finalize = new AttemptFinalizeService(prisma, attemptRedis, audit, gradingQueue);
-  grading = new GradingService(prisma);
+  grading = new GradingService(prisma, new AttemptGradingService(prisma, resultsQueue));
   exams = new ExamService(prisma, audit, access);
   questions = new QuestionService(prisma, audit, access);
-  scheduler = new ExamSchedulerService(prisma, audit);
+  scheduler = new ExamSchedulerService(prisma, audit, resultsQueue);
 
   const t1 = await prisma.db.user.findFirstOrThrow({
     where: { username: 'teacher1' },
@@ -115,6 +118,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await gradingQueue?.close();
+  await resultsQueue?.close();
   redisClient?.disconnect();
   await prisma?.onModuleDestroy();
 });
