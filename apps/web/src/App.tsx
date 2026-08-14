@@ -2,7 +2,6 @@ import {
   BarChart3,
   BookOpen,
   Building2,
-  FileCheck2,
   ListChecks,
   Loader2,
   ScrollText,
@@ -17,6 +16,9 @@ import { DashboardPage } from '@/features/dashboard/DashboardPage';
 import { DevShowcase } from '@/features/exam-taking/DevShowcase';
 import { ExamTakingPage } from '@/features/exam-taking/ExamTakingPage';
 import { MyExamsPage } from '@/features/student/MyExamsPage';
+import { ExamListPage } from '@/features/authoring/ExamListPage';
+import { ExamFormPage } from '@/features/authoring/ExamFormPage';
+import { ExamBuilderPage } from '@/features/authoring/ExamBuilderPage';
 import { GradingExamsPage } from '@/features/teacher/GradingExamsPage';
 import { GradingWorkspace } from '@/features/teacher/GradingWorkspace';
 import { ResultPage } from '@/features/student/ResultPage';
@@ -81,10 +83,10 @@ export function App() {
             />
           }
         />
-        <Route
-          path="/exams"
-          element={<PlaceholderPage title="Exams" phase={3} icon={FileCheck2} />}
-        />
+        <Route path="/exams" element={<ExamListPage />} />
+        <Route path="/exams/new" element={<ExamFormPage />} />
+        <Route path="/exams/:examPublicId/edit" element={<ExamFormPage />} />
+        <Route path="/exams/:examPublicId/build" element={<ExamBuilderPage />} />
         <Route
           path="/reports"
           element={<PlaceholderPage title="Reports" phase={5} icon={BarChart3} />}

@@ -40,6 +40,26 @@ export const examSelect = {
   createdBy: { select: { publicId: true, user: { select: { displayName: true } } } },
 } satisfies Prisma.ExamSelect;
 
+// Compact projection for the authoring exam list — adds course code, part name, and a question count.
+export const examListSelect = {
+  publicId: true,
+  title: true,
+  startAt: true,
+  endAt: true,
+  durationMinutes: true,
+  totalMarks: true,
+  status: true,
+  reviewNote: true,
+  offeringPart: {
+    select: {
+      coursePart: { select: { name: true } },
+      offering: { select: { course: { select: { code: true } } } },
+    },
+  },
+  createdBy: { select: { user: { select: { displayName: true } } } },
+  _count: { select: { examQuestions: true } },
+} satisfies Prisma.ExamSelect;
+
 // Shows the snapshot (what the exam actually serves once published) alongside the live link.
 export const examQuestionSelect = {
   publicId: true,

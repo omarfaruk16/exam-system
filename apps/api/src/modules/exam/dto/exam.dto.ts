@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  IsArray,
   IsBoolean,
   IsInt,
   IsISO8601,
@@ -43,6 +44,10 @@ export class AddExamQuestionDto {
   @IsString() questionPublicId!: string;
   @IsInt() @Min(0) order!: number;
   @IsOptional() @IsNumber() @Min(0) marksOverride?: number;
+}
+
+export class ReorderQuestionsDto {
+  @IsArray() @IsString({ each: true }) order!: string[];
 }
 
 export class ReviewNoteDto {

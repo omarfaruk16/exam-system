@@ -11,7 +11,7 @@ import { AuditService } from '../audit/audit.service';
 import type { AddExamQuestionDto, CreateExamDto, UpdateExamDto } from './dto/exam.dto';
 import { ExamAccessService } from './exam-access.service';
 import { ADMIN_EDITABLE_STATUSES, canTransition } from './exam-state';
-import { examQuestionSelect, examSelect } from './exam.select';
+import { examListSelect, examQuestionSelect, examSelect } from './exam.select';
 
 interface ExamHandle {
   id: number;
@@ -167,6 +167,69 @@ export class ExamService {
     });
   }
 
+  /** Every exam the current teacher owns (or, for an admin, every exam in their scope). */
+  async listExams(user: AuthUser) {
+    let where: Prisma.ExamWhereInput;
+    if (this.isAdmin(user)) {
+      // Admins see everything they can scope to; the ACL is enforced per-exam on open. A broad list
+      // is acceptable here because the detail/action endpoints already gate on department scope.
+      where = { deletedAt: null };
+    } else {
+      const teacher = await this.access.requireTeacher(user);
+      where = { deletedAt: null, createdByTeacherId: teacher.id };
+    }
+    const exams = await this.prisma.db.exam.findMany({
+      where,
+      select: examListSelect,
+      orderBy: [{ createdAt: 'desc' }],
+    });
+    return exams.map((e) => ({
+      publicId: e.publicId,
+      title: e.title,
+      courseCode: e.offeringPart.offering.course.code,
+      part: e.offeringPart.coursePart.name,
+      startAt: e.startAt.toISOString(),
+      endAt: e.endAt.toISOString(),
+      durationMinutes: e.durationMinutes,
+      totalMarks: e.totalMarks,
+      questionCount: e._count.examQuestions,
+      status: e.status,
+      reviewNote: e.reviewNote,
+      createdByName: e.createdBy.user.displayName,
+    }));
+  }
+
+  /** The offering parts the current teacher is assigned to — feeds the New Exam / bank pickers. */
+  async listMyOfferingParts(user: AuthUser) {
+    const teacher = await this.access.requireTeacher(user);
+    const parts = await this.prisma.db.offeringPart.findMany({
+      where: {
+        assignedTeacherId: teacher.id,
+        deletedAt: null,
+        offering: { deletedAt: null },
+      },
+      select: {
+        publicId: true,
+        coursePart: { select: { name: true } },
+        offering: {
+          select: {
+            course: { select: { code: true, name: true } },
+            term: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: [{ createdAt: 'desc' }],
+    });
+    return parts.map((p) => ({
+      publicId: p.publicId,
+      partName: p.coursePart.name,
+      courseCode: p.offering.course.code,
+      courseTitle: p.offering.course.name,
+      term: p.offering.term.name,
+      label: `${p.offering.course.code} · ${p.coursePart.name} · ${p.offering.term.name}`,
+    }));
+  }
+
   async getExam(user: AuthUser, publicId: string) {
     const exam = await this.loadExam(publicId);
     await this.assertReadAccess(user, exam);
@@ -230,9 +293,17 @@ export class ExamService {
 
   async remove(user: AuthUser, ip: string, publicId: string) {
     const exam = await this.loadExam(publicId);
-    this.access.assertAdminScope(user, exam);
-    if (!ADMIN_EDITABLE_STATUSES.includes(exam.status)) {
-      throw new BadRequestException(`An exam in ${exam.status} cannot be deleted`);
+    if (this.isAdmin(user)) {
+      this.access.assertAdminScope(user, exam);
+      if (!ADMIN_EDITABLE_STATUSES.includes(exam.status)) {
+        throw new BadRequestException(`An exam in ${exam.status} cannot be deleted`);
+      }
+    } else {
+      // A teacher may delete only their OWN exam, and only while it is still theirs to change.
+      await this.assertOwner(user, exam);
+      if (exam.status !== 'draft' && exam.status !== 'changes_requested') {
+        throw new BadRequestException('You can only delete a draft exam');
+      }
     }
     return this.prisma.$transaction(async (tx) => {
       await tx.exam.update({ where: { publicId }, data: { deletedAt: new Date() } });
@@ -316,6 +387,46 @@ export class ExamService {
         ip,
       });
       return { status: 'ok' as const };
+    });
+  }
+
+  /** Reorder the exam's questions. `order` is the full list of examQuestion publicIds, new order. */
+  async reorderQuestions(user: AuthUser, ip: string, examPublicId: string, order: string[]) {
+    const exam = await this.loadExam(examPublicId);
+    await this.assertOwner(user, exam);
+    if (exam.status !== 'draft') {
+      throw new BadRequestException('Questions can only be reordered while the exam is a draft');
+    }
+    const existing = await this.prisma.db.examQuestion.findMany({
+      where: { examId: exam.id },
+      select: { publicId: true },
+    });
+    const existingIds = new Set(existing.map((e) => e.publicId));
+    if (order.length !== existingIds.size || !order.every((id) => existingIds.has(id))) {
+      throw new BadRequestException('The reorder list must contain exactly this exam’s questions');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      // No (examId, order) unique constraint — a single pass of 1-based positions is enough.
+      await Promise.all(
+        order.map((publicId, i) =>
+          tx.examQuestion.update({ where: { publicId }, data: { order: i + 1 } }),
+        ),
+      );
+      await this.audit.recordTx(tx, {
+        actorUserId: user.id,
+        action: 'exam.reorder_questions',
+        entity: 'Exam',
+        entityId: examPublicId,
+        after: { order },
+        ip,
+      });
+    });
+
+    return this.prisma.db.examQuestion.findMany({
+      where: { exam: { publicId: examPublicId } },
+      select: examQuestionSelect,
+      orderBy: { order: 'asc' },
     });
   }
 

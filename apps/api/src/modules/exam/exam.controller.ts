@@ -2,7 +2,13 @@ import { Body, Controller, Delete, Get, HttpCode, Ip, Param, Patch, Post } from 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import type { AuthUser } from '../../common/types/auth';
-import { AddExamQuestionDto, CreateExamDto, ReviewNoteDto, UpdateExamDto } from './dto/exam.dto';
+import {
+  AddExamQuestionDto,
+  CreateExamDto,
+  ReorderQuestionsDto,
+  ReviewNoteDto,
+  UpdateExamDto,
+} from './dto/exam.dto';
 import { ExamService } from './exam.service';
 
 @Controller('exams')
@@ -10,6 +16,19 @@ export class ExamController {
   constructor(private readonly exams: ExamService) {}
 
   // ── authoring (teacher) ──
+  @Roles('teacher', 'admin', 'super_admin')
+  @Get()
+  list(@CurrentUser() u: AuthUser) {
+    return this.exams.listExams(u);
+  }
+
+  // Two-segment path so it is never captured by the `:publicId` route below.
+  @Roles('teacher')
+  @Get('my/offering-parts')
+  myOfferingParts(@CurrentUser() u: AuthUser) {
+    return this.exams.listMyOfferingParts(u);
+  }
+
   @Roles('teacher')
   @Post()
   create(@CurrentUser() u: AuthUser, @Ip() ip: string, @Body() dto: CreateExamDto) {
@@ -48,6 +67,17 @@ export class ExamController {
     @Body() dto: AddExamQuestionDto,
   ) {
     return this.exams.addQuestion(u, ip, id, dto);
+  }
+
+  @Roles('teacher')
+  @Patch(':publicId/questions/reorder')
+  reorderQuestions(
+    @CurrentUser() u: AuthUser,
+    @Ip() ip: string,
+    @Param('publicId') id: string,
+    @Body() dto: ReorderQuestionsDto,
+  ) {
+    return this.exams.reorderQuestions(u, ip, id, dto.order);
   }
 
   @Roles('teacher')
@@ -115,7 +145,7 @@ export class ExamController {
     return this.exams.publish(u, ip, id);
   }
 
-  @Roles('admin', 'super_admin')
+  @Roles('teacher', 'admin', 'super_admin')
   @Delete(':publicId')
   remove(@CurrentUser() u: AuthUser, @Ip() ip: string, @Param('publicId') id: string) {
     return this.exams.remove(u, ip, id);
