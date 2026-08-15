@@ -278,3 +278,36 @@ concatenation.
 ### Backups
 
 See [`docs/backup-restore.md`](./backup-restore.md) — scripts, schedule, and a verified restore test.
+
+### Login customization
+
+The login page is fully standalone (no shell). Its background and logo are swappable without a rebuild:
+
+- **Campus background** — drop a photo at `apps/web/public/university-bg.jpg` (served at
+  `/university-bg.jpg`). Until then a CSS gradient shows. A build-time override is also available via
+  `VITE_UNIVERSITY_BG_IMAGE`. A pure-CSS dot-grid overlay (~0.55 opacity) subdues the image.
+- **Logo** — drop `apps/web/public/university-logo.png` (served at `/university-logo.png`). If absent,
+  the institution name (`VITE_INSTITUTION_NAME`) is shown in the brand colour instead.
+
+External images are blocked by the CSP (`img-src 'self' data:`), so both assets must be same-origin
+files under `apps/web/public/` (or the running nginx web root).
+
+### Bulk import (Excel / CSV)
+
+Admins import four entity types from the **Organization → Bulk import** tab. Each accepts `.xlsx` or
+`.csv`, validates row-by-row in a BullMQ worker, imports valid rows, and produces a downloadable error
+report for the rest. Download a pre-filled template from each dialog (`GET /api/v1/imports/templates/{type}`).
+
+| Entity      | Key columns                                                                                | Notes                                                         |
+| ----------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| Students    | studentId, firstName, lastName, email, batchId, phone                                      | target batch chosen in the UI                                 |
+| Teachers    | username, firstName, lastName, email, departmentCode (or departmentId), designation, phone | creates User+Teacher, role `teacher` scoped to the department |
+| Departments | name, code, facultyCode (or facultyId)                                                     | idempotent — existing code is **skipped**, not failed         |
+| Courses     | code, name, credit, semesterId (or semesterNumber + programCode)                           | idempotent — existing code is skipped                         |
+
+Endpoints: `POST /api/v1/imports/{students,teachers,departments,courses}`, `GET /api/v1/imports/:jobId`
+(status, shared across types), `GET /api/v1/imports/:jobId/errors` (error report).
+
+**Imported teacher password** — each teacher gets a temporary password of `<username>@Exam123` with
+`mustChangePassword = true`, so they are forced to set their own password on first login (and then
+enrol in 2FA). Change the scheme in `entity-import.processor.ts` if a different default is required.

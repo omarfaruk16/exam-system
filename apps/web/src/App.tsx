@@ -27,6 +27,7 @@ import { OrgLayout } from '@/features/org/OrgLayout';
 import { OrgStructurePage } from '@/features/org/OrgStructurePage';
 import { TermsPage } from '@/features/org/TermsPage';
 import { OfferingsPage } from '@/features/org/OfferingsPage';
+import { ImportsPage } from '@/features/org/ImportsPage';
 import { ReviewQueuePage } from '@/features/review/ReviewQueuePage';
 import { ReviewDetailPage } from '@/features/review/ReviewDetailPage';
 import { ReportsPage } from '@/features/reports/ReportsPage';
@@ -64,8 +65,10 @@ export function App() {
     );
   }
 
-  // Forced first-login password change gates everything else.
-  if (user.mustChangePassword) {
+  // Forced first-login password change gates everything else — but NEVER for students
+  // (imported student accounts keep mustChangePassword in the DB without being prompted).
+  const isStudent = user.roles.some((r) => r.role === 'student');
+  if (user.mustChangePassword && !isStudent) {
     return (
       <Routes>
         <Route path="/change-password" element={<ChangePasswordPage />} />
@@ -97,6 +100,7 @@ export function App() {
           <Route index element={<OrgStructurePage />} />
           <Route path="terms" element={<TermsPage />} />
           <Route path="offerings" element={<OfferingsPage />} />
+          <Route path="imports" element={<ImportsPage />} />
         </Route>
         <Route path="/review" element={<ReviewQueuePage />} />
         <Route path="/review/:examPublicId" element={<ReviewDetailPage />} />

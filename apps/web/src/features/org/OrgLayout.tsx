@@ -6,6 +6,7 @@ const ADMIN_TABS = [
   { to: '/org', label: 'Structure', end: true },
   { to: '/org/terms', label: 'Academic terms', end: false },
   { to: '/org/offerings', label: 'Course offerings', end: false },
+  { to: '/org/imports', label: 'Bulk import', end: false },
 ];
 
 export function OrgLayout() {

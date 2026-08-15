@@ -4,8 +4,9 @@ import { ConfigService } from '@nestjs/config';
 import { MulterModule } from '@nestjs/platform-express';
 import { join } from 'node:path';
 import type { Env } from '../../common/config/env.validation';
-import { QUEUE_STUDENT_IMPORT } from '../../queue/queue.constants';
+import { QUEUE_ENTITY_IMPORT, QUEUE_STUDENT_IMPORT } from '../../queue/queue.constants';
 import { AuthModule } from '../auth/auth.module';
+import { EntityImportProcessor } from './entity-import.processor';
 import { ImportController } from './import.controller';
 import { ImportService } from './import.service';
 import { StudentImportProcessor } from './student-import.processor';
@@ -24,6 +25,7 @@ export class ImportModule {
       imports: [
         AuthModule, // provides PasswordService for the import worker
         BullModule.registerQueue({ name: QUEUE_STUDENT_IMPORT }),
+        BullModule.registerQueue({ name: QUEUE_ENTITY_IMPORT }),
         MulterModule.registerAsync({
           inject: [ConfigService],
           useFactory: (config: ConfigService<Env, true>) => ({
@@ -33,7 +35,10 @@ export class ImportModule {
         }),
       ],
       controllers: [ImportController],
-      providers: [ImportService, ...(runEmbeddedWorker ? [StudentImportProcessor] : [])],
+      providers: [
+        ImportService,
+        ...(runEmbeddedWorker ? [StudentImportProcessor, EntityImportProcessor] : []),
+      ],
     };
   }
 }

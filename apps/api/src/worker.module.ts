@@ -20,9 +20,11 @@ import { AttemptGradingService } from './modules/grading/attempt-grading.service
 import { ResultsProcessor } from './modules/grading/results.processor';
 import { ResultsService } from './modules/grading/results.service';
 import { ReportProcessor } from './modules/report/report.processor';
+import { EntityImportProcessor } from './modules/import/entity-import.processor';
 import { StudentImportProcessor } from './modules/import/student-import.processor';
 import {
   QUEUE_ATTEMPT_SWEEP,
+  QUEUE_ENTITY_IMPORT,
   QUEUE_EXAM_SCHEDULER,
   QUEUE_GRADING,
   QUEUE_QUESTION_IMPORT,
@@ -48,6 +50,7 @@ import { QueueModule } from './queue/queue.module';
     AuthModule,
     BullModule.registerQueue(
       { name: QUEUE_STUDENT_IMPORT },
+      { name: QUEUE_ENTITY_IMPORT },
       { name: QUEUE_QUESTION_IMPORT },
       { name: QUEUE_EXAM_SCHEDULER },
       { name: QUEUE_GRADING },
@@ -58,6 +61,7 @@ import { QueueModule } from './queue/queue.module';
   ],
   providers: [
     StudentImportProcessor,
+    EntityImportProcessor,
     QuestionImportProcessor,
     ExamSchedulerService,
     ExamSchedulerProcessor,

@@ -1,6 +1,4 @@
 import type { PaperQuestion } from '@exam/types';
-import { Flag } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import type { AnswerValue } from './util';
@@ -8,48 +6,39 @@ import type { AnswerValue } from './util';
 interface Props {
   question: PaperQuestion;
   index: number;
-  total: number;
   value: AnswerValue | undefined;
-  flagged: boolean;
   disabled: boolean;
   onChange: (patch: Partial<AnswerValue>) => void;
-  onToggleFlag: () => void;
 }
 
-export function QuestionView({
-  question,
-  index,
-  total,
-  value,
-  flagged,
-  disabled,
-  onChange,
-  onToggleFlag,
-}: Props) {
+/** A single question, rendered in the vertical all-on-one-page list. Anchored as #question-{n}. */
+export function QuestionView({ question, index, value, disabled, onChange }: Props) {
   const written = question.type === 'written';
+  const number = index + 1;
   return (
-    <div className="bg-card rounded-xl border p-6 shadow-sm md:p-8">
-      <div className="mb-4 flex items-start justify-between gap-4">
-        <div>
-          <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
-            Question {index + 1} of {total} · {question.marks}{' '}
-            {question.marks === 1 ? 'mark' : 'marks'} · {written ? 'Written' : 'Multiple choice'}
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant={flagged ? 'secondary' : 'ghost'}
-          size="sm"
-          onClick={onToggleFlag}
-          aria-pressed={flagged}
-          className={cn(flagged && 'text-amber-700 dark:text-amber-300')}
+    <section
+      id={`question-${number}`}
+      aria-label={`Question ${number}`}
+      className="bg-card scroll-mt-24 rounded-xl border p-6 shadow-sm md:p-8"
+    >
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <h2 className="text-base font-semibold">Question {number}</h2>
+        <span
+          className={cn(
+            'rounded-full px-2 py-0.5 text-[10px] font-medium uppercase',
+            written
+              ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300'
+              : 'bg-blue-500/10 text-blue-700 dark:text-blue-300',
+          )}
         >
-          <Flag className={cn('size-4', flagged && 'fill-amber-400 text-amber-500')} />
-          {flagged ? 'Flagged' : 'Flag for review'}
-        </Button>
+          {written ? 'Written' : 'MCQ'}
+        </span>
+        <span className="text-muted-foreground text-xs">
+          {question.marks} {question.marks === 1 ? 'mark' : 'marks'}
+        </span>
       </div>
 
-      <p className="text-foreground mb-6 text-lg leading-relaxed md:text-xl">{question.text}</p>
+      <p className="text-foreground mb-6 text-lg leading-relaxed">{question.text}</p>
 
       {written ? (
         <div>
@@ -58,7 +47,7 @@ export function QuestionView({
             disabled={disabled}
             onChange={(e) => onChange({ writtenText: e.target.value })}
             placeholder="Type your answer here…"
-            aria-label={`Answer to question ${index + 1}`}
+            aria-label={`Answer to question ${number}`}
           />
           <p className="text-muted-foreground mt-2 text-xs">
             {(value?.writtenText ?? '').length.toLocaleString()} characters
@@ -66,7 +55,7 @@ export function QuestionView({
         </div>
       ) : (
         <fieldset disabled={disabled}>
-          <legend className="sr-only">Select one option</legend>
+          <legend className="sr-only">Select one option for question {number}</legend>
           <div className="space-y-3">
             {question.options?.map((opt, i) => {
               const selected = value?.selectedOptionId === opt.id;
@@ -103,6 +92,6 @@ export function QuestionView({
           </div>
         </fieldset>
       )}
-    </div>
+    </section>
   );
 }

@@ -24,9 +24,10 @@ import type { Env } from '../../common/config/env.validation';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { ImportService } from './import.service';
-import type { UploadedExcel } from './import.types';
+import { buildTemplate, isTemplateType } from './import-templates';
+import type { ImportEntity, UploadedExcel } from './import.types';
 
-@Controller('imports/students')
+@Controller('imports')
 @Roles('admin', 'super_admin')
 export class ImportController {
   constructor(
@@ -36,10 +37,24 @@ export class ImportController {
     private readonly config: ConfigService<Env, true>,
   ) {}
 
-  /** Upload an Excel roster for a batch. Returns immediately with a job id; work happens in a worker. */
-  @Post()
+  // ─────────────────────────── Templates ───────────────────────────
+  /** Download a pre-formatted .xlsx template with headers + one example row. */
+  @Get('templates/:type')
+  async template(@Param('type') type: string, @Res() res: Response): Promise<void> {
+    if (!isTemplateType(type)) throw new BadRequestException('Unknown template type');
+    const buffer = await buildTemplate(type);
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${type}-template.xlsx"`);
+    res.end(buffer);
+  }
+
+  // ─────────────────────────── Students (batch roster) ───────────────────────────
+  @Post('students')
   @UseInterceptors(FileInterceptor('file'))
-  async upload(
+  async uploadStudents(
     @UploadedFile() file: UploadedExcel | undefined,
     @Query('batch') batchPublicId: string,
     @CurrentUser() user: AuthUser,
@@ -48,9 +63,7 @@ export class ImportController {
     if (!file) throw new BadRequestException('No file uploaded (field name must be "file")');
     if (!batchPublicId) throw new BadRequestException('A "batch" query parameter is required');
 
-    const batch = await this.prisma.db.batch.findFirst({
-      where: { publicId: batchPublicId },
-    });
+    const batch = await this.prisma.db.batch.findFirst({ where: { publicId: batchPublicId } });
     if (!batch) throw new NotFoundException('Batch not found');
 
     const jobId = await this.importService.enqueueStudentImport({
@@ -59,7 +72,6 @@ export class ImportController {
       batchId: batch.id,
       uploadedByUserId: user.id,
     });
-
     await this.audit.record({
       actorUserId: user.id,
       action: 'import.students.enqueue',
@@ -68,16 +80,74 @@ export class ImportController {
       ip,
       after: { file: file.originalname, jobId },
     });
-
     return { jobId };
   }
 
+  // ─────────────────────────── Teachers / Departments / Courses ───────────────────────────
+  @Post('teachers')
+  @UseInterceptors(FileInterceptor('file'))
+  uploadTeachers(
+    @UploadedFile() file: UploadedExcel | undefined,
+    @CurrentUser() user: AuthUser,
+    @Ip() ip: string,
+  ): Promise<{ jobId: string }> {
+    return this.enqueueEntity('teachers', file, user, ip);
+  }
+
+  @Post('departments')
+  @UseInterceptors(FileInterceptor('file'))
+  uploadDepartments(
+    @UploadedFile() file: UploadedExcel | undefined,
+    @CurrentUser() user: AuthUser,
+    @Ip() ip: string,
+  ): Promise<{ jobId: string }> {
+    return this.enqueueEntity('departments', file, user, ip);
+  }
+
+  @Post('courses')
+  @UseInterceptors(FileInterceptor('file'))
+  uploadCourses(
+    @UploadedFile() file: UploadedExcel | undefined,
+    @CurrentUser() user: AuthUser,
+    @Ip() ip: string,
+  ): Promise<{ jobId: string }> {
+    return this.enqueueEntity('courses', file, user, ip);
+  }
+
+  private async enqueueEntity(
+    entity: ImportEntity,
+    file: UploadedExcel | undefined,
+    user: AuthUser,
+    ip: string,
+  ): Promise<{ jobId: string }> {
+    if (!file) throw new BadRequestException('No file uploaded (field name must be "file")');
+    const name = file.originalname.toLowerCase();
+    if (!name.endsWith('.xlsx') && !name.endsWith('.csv')) {
+      throw new BadRequestException('Only .xlsx or .csv files are accepted');
+    }
+    const jobId = await this.importService.enqueueEntityImport({
+      entity,
+      filePath: file.path,
+      originalName: file.originalname,
+      uploadedByUserId: user.id,
+    });
+    await this.audit.record({
+      actorUserId: user.id,
+      action: `import.${entity}.enqueue`,
+      entity: 'Import',
+      entityId: jobId,
+      ip,
+      after: { file: file.originalname, jobId },
+    });
+    return { jobId };
+  }
+
+  // ─────────────────────────── Status + errors (shared) ───────────────────────────
   @Get(':jobId')
   getState(@Param('jobId') jobId: string): Promise<ImportJobState> {
     return this.importService.getJobState(jobId);
   }
 
-  /** Download the error report (rejected rows) for a completed import, if any. */
   @Get(':jobId/errors')
   downloadErrors(@Param('jobId') jobId: string, @Res() res: Response): void {
     const safeId = jobId.replace(/[^A-Za-z0-9_-]/g, '');

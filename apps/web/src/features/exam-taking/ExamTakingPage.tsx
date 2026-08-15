@@ -1,15 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { StartAttemptResponse, SubmitResult } from '@exam/types';
-import {
-  AlertTriangle,
-  CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
-  Clock,
-  Loader2,
-  Lock,
-  RotateCcw,
-} from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, Loader2, Lock, RotateCcw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -23,7 +14,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ApiError } from '@/lib/api';
-import { cn } from '@/lib/utils';
 import { autosave, startExam, submitAttempt, type AnswerPayload } from './api';
 import { idbGetAll, idbPut } from './idb';
 import { QuestionNavigator } from './QuestionNavigator';
@@ -90,8 +80,7 @@ function ExamRunner({ data }: { data: StartAttemptResponse }) {
   }, []);
 
   const [answers, setAnswers] = useState<AnswerState>(initialAnswers);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [flagged, setFlagged] = useState<Set<string>>(new Set());
+  const [activeIndex, setActiveIndex] = useState(0);
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [locked, setLocked] = useState(false);
   const [timeUp, setTimeUp] = useState(false);
@@ -261,12 +250,47 @@ function ExamRunner({ data }: { data: StartAttemptResponse }) {
   const answeredCount = paper.questions.filter((q) =>
     isAnswered(answers[q.questionPublicId]),
   ).length;
+  const unanswered = total - answeredCount;
+
+  // Smooth-scroll to a question by its anchor id (no page navigation).
+  const scrollToQuestion = useCallback((index: number) => {
+    document
+      .getElementById(`question-${index + 1}`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+
+  // Scroll-spy: highlight the navigator button for the question nearest the top of the viewport.
+  useEffect(() => {
+    if (submitted) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (visible) {
+          const n = Number(visible.target.id.replace('question-', ''));
+          if (Number.isFinite(n)) setActiveIndex(n - 1);
+        }
+      },
+      { rootMargin: '-96px 0px -55% 0px', threshold: 0 },
+    );
+    for (let i = 1; i <= total; i++) {
+      const el = document.getElementById(`question-${i}`);
+      if (el) observer.observe(el);
+    }
+    return () => observer.disconnect();
+  }, [total, submitted]);
 
   if (submitted) {
-    return <SubmittedScreen result={submitted} answered={answeredCount} total={total} />;
+    return (
+      <SubmittedScreen
+        result={submitted}
+        title={paper.title}
+        answered={answeredCount}
+        total={total}
+      />
+    );
   }
-
-  const current = paper.questions[currentIndex]!;
 
   return (
     <div className="bg-muted/30 flex min-h-screen flex-col">
@@ -285,46 +309,23 @@ function ExamRunner({ data }: { data: StartAttemptResponse }) {
         </div>
       </header>
 
-      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 md:flex-row md:px-6">
-        <main className="min-w-0 flex-1">
-          <QuestionView
-            question={current}
-            index={currentIndex}
-            total={total}
-            value={answers[current.questionPublicId]}
-            flagged={flagged.has(current.questionPublicId)}
-            disabled={disabled}
-            onChange={(patch) => setAnswer(current.questionPublicId, patch)}
-            onToggleFlag={() =>
-              setFlagged((prev) => {
-                const next = new Set(prev);
-                if (next.has(current.questionPublicId)) next.delete(current.questionPublicId);
-                else next.add(current.questionPublicId);
-                return next;
-              })
-            }
-          />
-
-          <div className="mt-4 flex items-center justify-between gap-3">
-            <Button
-              variant="outline"
-              onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
-              disabled={currentIndex === 0}
-            >
-              <ChevronLeft /> Previous
+      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col-reverse gap-6 px-4 py-6 md:flex-row md:px-6">
+        {/* All questions on one scrollable page */}
+        <main className="min-w-0 flex-1 space-y-6">
+          {paper.questions.map((q, i) => (
+            <QuestionView
+              key={q.questionPublicId}
+              question={q}
+              index={i}
+              value={answers[q.questionPublicId]}
+              disabled={disabled}
+              onChange={(patch) => setAnswer(q.questionPublicId, patch)}
+            />
+          ))}
+          <div className="flex justify-end pt-2">
+            <Button size="lg" onClick={() => setShowSubmit(true)} disabled={disabled}>
+              Submit exam
             </Button>
-            {currentIndex < total - 1 ? (
-              <Button
-                variant="secondary"
-                onClick={() => setCurrentIndex((i) => Math.min(total - 1, i + 1))}
-              >
-                Next <ChevronRight />
-              </Button>
-            ) : (
-              <Button onClick={() => setShowSubmit(true)} disabled={disabled}>
-                Review &amp; submit
-              </Button>
-            )}
           </div>
         </main>
 
@@ -332,10 +333,9 @@ function ExamRunner({ data }: { data: StartAttemptResponse }) {
           <div className="bg-card rounded-xl border p-4 shadow-sm md:sticky md:top-20">
             <QuestionNavigator
               questions={paper.questions}
-              currentIndex={currentIndex}
+              activeIndex={activeIndex}
               answers={answers}
-              flagged={flagged}
-              onNavigate={setCurrentIndex}
+              onNavigate={scrollToQuestion}
             />
             <Button className="mt-4 w-full" onClick={() => setShowSubmit(true)} disabled={disabled}>
               Submit exam
@@ -346,37 +346,30 @@ function ExamRunner({ data }: { data: StartAttemptResponse }) {
 
       <AutosaveIndicator state={saveState} />
 
-      {/* Submit confirmation */}
+      {/* Submit confirmation (no pre-submit answer review) */}
       <Dialog open={showSubmit} onOpenChange={(o) => !submitting && setShowSubmit(o)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Submit exam?</DialogTitle>
             <DialogDescription>
-              Once submitted, your answers are final and cannot be changed.
+              You have answered {answeredCount} of {total} {total === 1 ? 'question' : 'questions'}.
+              {unanswered > 0
+                ? ` ${unanswered} ${unanswered === 1 ? 'question is' : 'questions are'} unanswered.`
+                : ' Every question is answered.'}
             </DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-3 gap-3 py-1 text-center">
-            <SummaryStat label="Answered" value={answeredCount} tone="success" />
-            <SummaryStat
-              label="Unanswered"
-              value={total - answeredCount}
-              tone={total - answeredCount ? 'warning' : 'muted'}
-            />
-            <SummaryStat label="Flagged" value={flagged.size} tone="muted" />
-          </div>
-          {total - answeredCount > 0 && (
+          {unanswered > 0 && (
             <p className="text-warning text-sm">
-              You have {total - answeredCount} unanswered{' '}
-              {total - answeredCount === 1 ? 'question' : 'questions'}.
+              Once submitted, your answers are final and cannot be changed.
             </p>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowSubmit(false)} disabled={submitting}>
-              Keep working
+              Cancel
             </Button>
             <Button onClick={doSubmit} disabled={submitting}>
               {submitting && <Loader2 className="size-4 animate-spin" />}
-              Submit now
+              Submit exam
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -448,31 +441,14 @@ function ExamRunner({ data }: { data: StartAttemptResponse }) {
   );
 }
 
-function SummaryStat({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone: 'success' | 'warning' | 'muted';
-}) {
-  const toneCls =
-    tone === 'success' ? 'text-success' : tone === 'warning' ? 'text-warning' : 'text-foreground';
-  return (
-    <div className="bg-muted/50 rounded-lg border p-3">
-      <div className={cn('text-2xl font-semibold tabular-nums', toneCls)}>{value}</div>
-      <div className="text-muted-foreground text-xs">{label}</div>
-    </div>
-  );
-}
-
 function SubmittedScreen({
   result,
+  title,
   answered,
   total,
 }: {
   result: SubmitResult;
+  title: string;
   answered: number;
   total: number;
 }) {
@@ -484,6 +460,7 @@ function SubmittedScreen({
           <CheckCircle2 className="text-success size-8" />
         </div>
         <h1 className="mt-4 text-xl font-semibold">Exam submitted</h1>
+        <p className="text-muted-foreground mt-1 text-sm">{title}</p>
         <p className="text-muted-foreground mt-1 text-sm">
           {result.autoSubmitted
             ? 'Your exam was submitted automatically when the time ended.'
@@ -491,7 +468,7 @@ function SubmittedScreen({
         </p>
         <dl className="bg-muted/40 mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-lg border text-left">
           <div className="bg-card p-3">
-            <dt className="text-muted-foreground text-xs">Answered</dt>
+            <dt className="text-muted-foreground text-xs">Questions answered</dt>
             <dd className="font-semibold tabular-nums">
               {answered} / {total}
             </dd>
@@ -503,6 +480,11 @@ function SubmittedScreen({
             </dd>
           </div>
         </dl>
+        {/* No answer breakdown here — results are released by the teacher and viewed from My Exams. */}
+        <p className="text-muted-foreground mt-6 text-sm">
+          Your results will be available once your teacher releases them. You can check back from{' '}
+          <span className="font-medium">My Exams</span>.
+        </p>
         <Button className="mt-6 w-full" onClick={() => navigate('/my-exams')}>
           Back to my exams
         </Button>
