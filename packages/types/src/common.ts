@@ -20,4 +20,6 @@ export interface ApiErrorBody {
   message: string | string[];
   requestId?: string;
   timestamp: string;
+  /** Present on 503 maintenance responses: ISO datetime the service expects to resume, or null. */
+  estimatedResume?: string | null;
 }

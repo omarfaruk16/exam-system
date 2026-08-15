@@ -2,7 +2,7 @@ import { AlertTriangle, CheckCircle2, Clock, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatCountdown } from './util';
 
-export type SaveState = 'saved' | 'saving' | 'error';
+export type SaveState = 'saved' | 'saving' | 'error' | 'paused';
 
 /** Persistent autosave status so students always know their answers are safe. */
 export function AutosaveIndicator({ state, fixed = true }: { state: SaveState; fixed?: boolean }) {
@@ -21,6 +21,11 @@ export function AutosaveIndicator({ state, fixed = true }: { state: SaveState; f
       icon: <AlertTriangle className="text-destructive size-4" />,
       text: 'Save failed — retrying',
       cls: 'text-destructive',
+    },
+    paused: {
+      icon: <AlertTriangle className="text-warning size-4" />,
+      text: 'Saving paused — too many requests',
+      cls: 'text-warning',
     },
   }[state];
   return (

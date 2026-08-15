@@ -31,6 +31,18 @@ export function useLogin() {
   });
 }
 
+/** Second step of the 2FA login: exchange the partial token + code for a full session. */
+export function useTwoFactorLogin() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { partialToken: string; code: string }) =>
+      api.post<LoginResult>('/auth/2fa/login', input),
+    onSuccess: (res) => {
+      if (res.status === 'ok') qc.setQueryData(sessionKey, res.user);
+    },
+  });
+}
+
 export function useLogout() {
   const qc = useQueryClient();
   return useMutation({

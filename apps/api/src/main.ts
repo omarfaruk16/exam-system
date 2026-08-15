@@ -1,6 +1,16 @@
+import * as Sentry from '@sentry/node';
 import { Logger, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+
+// Initialise Sentry as early as possible. Empty DSN = disabled (not an error).
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV ?? 'development',
+    tracesSampleRate: 0,
+  });
+}
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { RedisStore } from 'connect-redis';
 import session from 'express-session';
@@ -31,7 +41,28 @@ async function bootstrap(): Promise<void> {
   // Behind nginx in production: trust the first proxy for Secure cookies and req.ip.
   app.set('trust proxy', 1);
 
-  app.use(helmet({ contentSecurityPolicy: false }));
+  // Security headers (§Phase 6). The API returns JSON, but we set a strict CSP + the standard
+  // hardening headers here too so every response — proxied or direct — carries them.
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        useDefaults: false,
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          imgSrc: ["'self'", 'data:'],
+          connectSrc: ["'self'"],
+          baseUri: ["'self'"],
+          frameAncestors: ["'none'"],
+          objectSrc: ["'none'"],
+        },
+      },
+      hsts: { maxAge: 31_536_000, includeSubDomains: true },
+      frameguard: { action: 'deny' },
+      referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+    }),
+  );
 
   // Redis-backed, revocable sessions.
   const redis = app.get(RedisService).client;

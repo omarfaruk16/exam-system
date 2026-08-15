@@ -94,6 +94,14 @@ services:
       BRAND_PRIMARY: '#1E3A5F'
       STORAGE_DIR: /app/apps/api/storage
       LOG_LEVEL: info
+      # Phase 6 hardening knobs (overridable from the shell when running compose):
+      MAINTENANCE_MODE: ${MAINTENANCE_MODE:-false}
+      MAINTENANCE_RESUME: ${MAINTENANCE_RESUME:-}
+      DISABLE_THROTTLE: ${DISABLE_THROTTLE:-false}
+      LOGIN_THROTTLE_LIMIT: ${LOGIN_THROTTLE_LIMIT:-10}
+      LOGIN_THROTTLE_TTL_SECONDS: ${LOGIN_THROTTLE_TTL_SECONDS:-900}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      APP_VERSION: ${APP_VERSION:-phase-6}
     volumes:
       - apistorage:/app/apps/api/storage
     profiles: ['app', 'full']

@@ -120,6 +120,8 @@ function ExamRunner({ data }: { data: StartAttemptResponse }) {
   }, [answers]);
   const pendingRef = useRef<Set<string>>(new Set());
   const timerRef = useRef<number | null>(null);
+  // Exponential backoff for rate-limit (429) responses on autosave.
+  const backoffRef = useRef<number>(2000);
 
   const flush = useCallback(async (): Promise<void> => {
     if (timerRef.current) {
@@ -138,6 +140,7 @@ function ExamRunner({ data }: { data: StartAttemptResponse }) {
     setSaveState('saving');
     try {
       await autosave(attempt.publicId, sessionId, payload);
+      backoffRef.current = 2000; // reset backoff after a good save
       setSaveState(pendingRef.current.size > 0 ? 'saving' : 'saved');
     } catch (e) {
       if (e instanceof ApiError && e.status === 401 && e.body?.message === 'SESSION_SUPERSEDED') {
@@ -146,6 +149,15 @@ function ExamRunner({ data }: { data: StartAttemptResponse }) {
       }
       if (e instanceof ApiError && e.status === 409) {
         setTimeUp(true);
+        return;
+      }
+      // Rate limited: pause (not a hard error) and retry with exponential backoff.
+      if (e instanceof ApiError && e.status === 429) {
+        setSaveState('paused');
+        ids.forEach((id) => pendingRef.current.add(id));
+        const delay = backoffRef.current;
+        backoffRef.current = Math.min(delay * 2, 30_000);
+        timerRef.current = window.setTimeout(() => void flush(), delay);
         return;
       }
       setSaveState('error');

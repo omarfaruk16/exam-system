@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Headers, HttpCode, Ip, Param, Post } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import type { AuthUser } from '../../common/types/auth';
@@ -33,6 +34,8 @@ export class AttemptController {
   }
 
   @Roles('student')
+  // Autosave fires often; 120/min per student is generous but caps runaway clients.
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
   @Post('attempts/:attemptPublicId/answers')
   @HttpCode(200)
   autosave(

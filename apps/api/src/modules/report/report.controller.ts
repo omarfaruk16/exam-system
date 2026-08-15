@@ -1,4 +1,5 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Query, Res } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -11,6 +12,8 @@ export class ReportController {
   constructor(private readonly reports: ReportService) {}
 
   @Roles('teacher', 'admin', 'super_admin')
+  // Guards the PDF/Excel worker: 10 report generations per user per hour.
+  @Throttle({ default: { limit: 10, ttl: 3_600_000 } })
   @Post()
   @HttpCode(200)
   request(@CurrentUser() u: AuthUser, @Body() dto: RequestReportDto) {

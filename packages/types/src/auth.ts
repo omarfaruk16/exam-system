@@ -58,8 +58,18 @@ export interface SessionUser {
   status: 'active' | 'suspended';
   mustChangePassword: boolean;
   twoFactorEnabled: boolean;
+  /** Staff role that requires 2FA but has not enrolled yet — the SPA must force setup first. */
+  requiresTwoFactorSetup: boolean;
   roles: SessionRole[];
 }
 
-/** Result of POST /auth/login — either fully authenticated, or a 2FA challenge. */
-export type LoginResult = { status: 'ok'; user: SessionUser } | { status: 'totp_required' };
+/** Result of POST /auth/login — fully authenticated, or a 2FA challenge carrying a partial token. */
+export type LoginResult =
+  { status: 'ok'; user: SessionUser } | { status: 'two_factor_required'; partialToken: string };
+
+/** Payload shown on the 2FA setup screen. */
+export interface TwoFactorSetup {
+  otpauth: string;
+  qr: string;
+  secret: string;
+}

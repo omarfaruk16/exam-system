@@ -12,6 +12,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { ChangePasswordPage } from '@/features/auth/ChangePasswordPage';
 import { LoginPage } from '@/features/auth/LoginPage';
+import { TwoFactorSetupPage } from '@/features/auth/TwoFactorSetupPage';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
 import { DevShowcase } from '@/features/exam-taking/DevShowcase';
 import { ExamTakingPage } from '@/features/exam-taking/ExamTakingPage';
@@ -31,6 +32,8 @@ import { ReviewDetailPage } from '@/features/review/ReviewDetailPage';
 import { ReportsPage } from '@/features/reports/ReportsPage';
 import { NotFoundPage } from '@/features/misc/NotFoundPage';
 import { PlaceholderPage } from '@/features/misc/PlaceholderPage';
+import { MaintenancePage } from '@/features/misc/MaintenancePage';
+import { ApiError } from '@/lib/api';
 import { useSession } from '@/lib/session';
 
 function FullScreenLoader() {
@@ -42,9 +45,14 @@ function FullScreenLoader() {
 }
 
 export function App() {
-  const { data: user, isLoading } = useSession();
+  const { data: user, isLoading, error } = useSession();
 
   if (isLoading) return <FullScreenLoader />;
+
+  // API in maintenance mode — show the maintenance screen, no login form.
+  if (error instanceof ApiError && error.status === 503) {
+    return <MaintenancePage estimatedResume={error.body?.estimatedResume} />;
+  }
 
   // Unauthenticated: only the login screen.
   if (!user) {
@@ -62,6 +70,16 @@ export function App() {
       <Routes>
         <Route path="/change-password" element={<ChangePasswordPage />} />
         <Route path="*" element={<Navigate to="/change-password" replace />} />
+      </Routes>
+    );
+  }
+
+  // Staff who require 2FA but have not enrolled must set it up before anything else.
+  if (user.requiresTwoFactorSetup) {
+    return (
+      <Routes>
+        <Route path="/auth/2fa/setup" element={<TwoFactorSetupPage />} />
+        <Route path="*" element={<Navigate to="/auth/2fa/setup" replace />} />
       </Routes>
     );
   }

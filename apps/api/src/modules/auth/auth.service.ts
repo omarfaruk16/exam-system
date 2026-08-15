@@ -4,6 +4,7 @@ import type { SessionUser } from '@exam/types';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { AuthUser } from '../../common/types/auth';
 import { PasswordService } from './password.service';
+import { TwoFactorService } from './two-factor.service';
 
 const userWithRoles = {
   include: { roles: { include: { role: true } } },
@@ -16,6 +17,7 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly password: PasswordService,
+    private readonly twoFactor: TwoFactorService,
   ) {}
 
   /**
@@ -60,6 +62,35 @@ export class AuthService {
 
   async recordLogin(userId: number): Promise<void> {
     await this.prisma.user.update({ where: { id: userId }, data: { lastLoginAt: new Date() } });
+  }
+
+  /** The encrypted TOTP secret for a user, or null if 2FA is not enabled. */
+  async getTwoFactorSecret(userId: number): Promise<string | null> {
+    const u = await this.prisma.db.user.findFirst({
+      where: { id: userId },
+      select: { twoFactorSecret: true },
+    });
+    return u?.twoFactorSecret ?? null;
+  }
+
+  async enableTwoFactor(userId: number, encryptedSecret: string): Promise<void> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { twoFactorSecret: encryptedSecret, twoFactorEnabled: true },
+    });
+  }
+
+  async disableTwoFactor(userId: number): Promise<void> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { twoFactorSecret: null, twoFactorEnabled: false },
+    });
+  }
+
+  /** Resolve a user + roles by publicId (for admin 2FA reset). */
+  async findByPublicId(publicId: string): Promise<AuthUser | null> {
+    const user = await this.prisma.db.user.findFirst({ where: { publicId }, ...userWithRoles });
+    return user ? this.toAuthUser(user) : null;
   }
 
   toAuthUser(user: UserWithRoles): AuthUser {
@@ -117,6 +148,7 @@ export class AuthService {
       status: user.status,
       mustChangePassword: user.mustChangePassword,
       twoFactorEnabled: user.twoFactorEnabled,
+      requiresTwoFactorSetup: this.twoFactor.needsSetup(user),
       roles: user.roles.map((r) => ({
         role: r.role,
         scopeFaculty: r.scopeFacultyId !== null ? (fMap.get(r.scopeFacultyId) ?? null) : null,
