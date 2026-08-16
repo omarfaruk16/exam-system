@@ -13,24 +13,24 @@ const TEMPLATES: Record<TemplateType, TemplateSpec> = {
     example: ['2021099', 'Ayesha', 'Rahman', 'ayesha99@student.example.edu', 1, '01700000000'],
   },
   teachers: {
-    headers: [
-      'username',
-      'firstName',
-      'lastName',
-      'email',
-      'departmentCode',
-      'designation',
-      'phone',
+    headers: ['username', 'firstName', 'lastName', 'email', 'department', 'designation', 'phone'],
+    example: [
+      'jdoe',
+      'John',
+      'Doe',
+      'jdoe@example.edu',
+      'Computer Science & Engineering',
+      'Lecturer',
+      '01700000000',
     ],
-    example: ['jdoe', 'John', 'Doe', 'jdoe@example.edu', 'CSE', 'Lecturer', '01700000000'],
   },
   departments: {
-    headers: ['name', 'code', 'facultyCode'],
-    example: ['Software Engineering', 'SWE', 'SCI'],
+    headers: ['name', 'faculty'],
+    example: ['Software Engineering', 'Faculty of Science'],
   },
   courses: {
-    headers: ['code', 'name', 'credit', 'semesterId', 'semesterNumber', 'programCode'],
-    example: ['CSE-2101', 'Data Structures', 3, '', 2, 'BSc in Computer Science & Engineering'],
+    headers: ['code', 'name', 'credit', 'semesterId', 'semesterNumber', 'program'],
+    example: ['CSE-2101', 'Data Structures', 3, '', 2, 'Honours'],
   },
 };
 

@@ -33,21 +33,24 @@ export class AttemptService {
     private readonly audit: AuditService,
   ) {}
 
-  private async requireStudent(user: AuthUser): Promise<{ id: number; batchId: number }> {
+  private async requireStudent(
+    user: AuthUser,
+  ): Promise<{ id: number; currentSemesterId: number | null }> {
     const student = await this.prisma.db.student.findFirst({
       where: { userId: user.id },
-      select: { id: true, batchId: true },
+      select: { id: true, batch: { select: { currentSemesterId: true } } },
     });
     if (!student) throw new ForbiddenException('Only a student can take an exam');
-    return student;
+    return { id: student.id, currentSemesterId: student.batch.currentSemesterId };
   }
 
-  /** The student's visible exams (their batch's offerings), with any existing attempt. */
+  /** The student's visible exams — those in their batch's current semester — with any attempt. */
   async listMyExams(user: AuthUser) {
     const student = await this.requireStudent(user);
+    if (student.currentSemesterId === null) return [];
     const exams = await this.prisma.db.exam.findMany({
       where: {
-        offeringPart: { offering: { batchId: student.batchId } },
+        coursePart: { course: { semesterId: student.currentSemesterId } },
         status: { in: ['published', 'live', 'ended', 'grading', 'results_published'] },
       },
       select: {
@@ -59,10 +62,10 @@ export class AttemptService {
         totalMarks: true,
         status: true,
         settings: true,
-        offeringPart: {
+        coursePart: {
           select: {
-            coursePart: { select: { name: true } },
-            offering: { select: { course: { select: { code: true } } } },
+            name: true,
+            course: { select: { code: true } },
           },
         },
         attempts: {
@@ -85,8 +88,8 @@ export class AttemptService {
       return {
         examPublicId: e.publicId,
         title: e.title,
-        courseCode: e.offeringPart.offering.course.code,
-        part: e.offeringPart.coursePart.name,
+        courseCode: e.coursePart.course.code,
+        part: e.coursePart.name,
         startAt: e.startAt.toISOString(),
         endAt: e.endAt.toISOString(),
         durationMinutes: e.durationMinutes,
@@ -121,12 +124,12 @@ export class AttemptService {
         status: true,
         endAt: true,
         settings: true,
-        offeringPart: { select: { offering: { select: { batchId: true } } } },
+        coursePart: { select: { course: { select: { semesterId: true } } } },
       },
     });
     if (!exam) throw new NotFoundException('Exam not found');
     if (exam.status !== 'live') throw new ForbiddenException('This exam is not currently open');
-    if (student.batchId !== exam.offeringPart.offering.batchId) {
+    if (student.currentSemesterId !== exam.coursePart.course.semesterId) {
       throw new ForbiddenException('You are not enrolled in this exam');
     }
 

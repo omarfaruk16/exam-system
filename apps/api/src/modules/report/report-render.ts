@@ -62,7 +62,7 @@ export async function writeOverallPdf(data: OverallData, path: string): Promise<
     .fontSize(10)
     .fillColor('#555')
     .text(
-      `${data.exam.courseCode} · ${data.exam.batchName} · ${data.exam.termName} · Total ${data.exam.totalMarks}`,
+      `${data.exam.courseCode} · ${data.exam.partName} · Semester ${data.exam.semesterNumber} · Total ${data.exam.totalMarks}`,
     );
   doc.moveDown().fillColor('#000');
 

@@ -1,8 +1,11 @@
-import { Body, Controller, Delete, Get, Ip, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Ip, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import type { AuthUser } from '../../common/types/auth';
 import {
+  AssignBatchSemesterDto,
+  AssignTeacherDto,
+  ChangeStudentBatchDto,
   CreateBatchDto,
   CreateCourseDto,
   CreateCoursePartDto,
@@ -19,7 +22,7 @@ import {
 } from './dto/structure.dto';
 import { StructureService } from './structure.service';
 
-/** Organizational structure CRUD — an admin function (§6.2). */
+/** Academic structure management — an administrator function. */
 @Controller('org')
 @Roles('super_admin', 'admin')
 export class StructureController {
@@ -214,5 +217,48 @@ export class StructureController {
     @Param('publicId') id: string,
   ) {
     return this.svc.removeCoursePart(this.ctx(u, ip), id);
+  }
+
+  // Assign the teacher of a part — department heads may do this within their department.
+  @Roles('super_admin', 'admin', 'department_head')
+  @Put('course-parts/:publicId/teacher')
+  assignTeacher(
+    @CurrentUser() u: AuthUser,
+    @Ip() ip: string,
+    @Param('publicId') id: string,
+    @Body() dto: AssignTeacherDto,
+  ) {
+    return this.svc.assignTeacher(this.ctx(u, ip), id, dto);
+  }
+
+  // Teachers of a department (for the assign-teacher selector).
+  @Roles('super_admin', 'admin', 'department_head')
+  @Get('teachers')
+  listTeachers(@CurrentUser() u: AuthUser, @Query('department') department: string) {
+    return this.svc.listTeachers(u, department);
+  }
+
+  // Assign the semester a batch currently sits in (advance it as the batch progresses).
+  @Put('batches/:publicId/semester')
+  assignBatchSemester(
+    @CurrentUser() u: AuthUser,
+    @Ip() ip: string,
+    @Param('publicId') id: string,
+    @Body() dto: AssignBatchSemesterDto,
+  ) {
+    return this.svc.assignBatchSemester(this.ctx(u, ip), id, dto);
+  }
+
+  // Students
+  @Get('students') listStudents(@Query('batch') batch?: string) {
+    return this.svc.listStudents(batch);
+  }
+  @Put('students/:publicId/batch') changeStudentBatch(
+    @CurrentUser() u: AuthUser,
+    @Ip() ip: string,
+    @Param('publicId') id: string,
+    @Body() dto: ChangeStudentBatchDto,
+  ) {
+    return this.svc.changeStudentBatch(this.ctx(u, ip), id, dto);
   }
 }

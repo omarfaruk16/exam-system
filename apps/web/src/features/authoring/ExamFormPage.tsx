@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 import {
   createExam,
   fetchExam,
-  fetchMyOfferingParts,
+  fetchMyParts,
   updateExam,
   type ExamMetadataInput,
 } from './authoringApi';
@@ -24,7 +24,7 @@ import { SettingToggle } from './SettingToggle';
 
 const schema = z
   .object({
-    offeringPartPublicId: z.string().min(1, 'Choose a course part'),
+    coursePartPublicId: z.string().min(1, 'Choose a course part'),
     title: z.string().trim().min(2, 'Title is required').max(200, 'Title is too long'),
     instructions: z.string().max(5000).optional(),
     startAt: z.string().min(1, 'Start time is required'),
@@ -50,7 +50,7 @@ export function ExamFormPage() {
 
   const partsQuery = useQuery({
     queryKey: ['my-offering-parts'],
-    queryFn: fetchMyOfferingParts,
+    queryFn: fetchMyParts,
     enabled: !isEdit,
   });
   const examQuery = useQuery({
@@ -102,7 +102,7 @@ function ExamForm({
     resolver: zodResolver(schema),
     defaultValues: defaults
       ? {
-          offeringPartPublicId: defaults.offeringPart.publicId,
+          coursePartPublicId: defaults.coursePart.publicId,
           title: defaults.title,
           instructions: defaults.instructions ?? '',
           startAt: isoToLocalInput(defaults.startAt),
@@ -111,7 +111,7 @@ function ExamForm({
           ...defaults.settings,
         }
       : {
-          offeringPartPublicId: '',
+          coursePartPublicId: '',
           title: '',
           instructions: '',
           startAt: '',
@@ -149,7 +149,7 @@ function ExamForm({
       if (isEdit && examPublicId) {
         return updateExam(examPublicId, body);
       }
-      return createExam({ ...body, offeringPartPublicId: values.offeringPartPublicId });
+      return createExam({ ...body, coursePartPublicId: values.coursePartPublicId });
     },
     onSuccess: async (exam) => {
       toast.success(isEdit ? 'Exam updated' : 'Draft created');
@@ -180,12 +180,12 @@ function ExamForm({
       <form onSubmit={handleSubmit((v) => mutation.mutate(v))} className="space-y-6">
         <Card className="space-y-5 p-6">
           {!isEdit && (
-            <Field label="Course part" error={errors.offeringPartPublicId?.message} htmlFor="part">
+            <Field label="Course part" error={errors.coursePartPublicId?.message} htmlFor="part">
               <select
                 id="part"
-                {...register('offeringPartPublicId')}
+                {...register('coursePartPublicId')}
                 className="border-input bg-card focus-visible:ring-ring aria-[invalid=true]:border-destructive flex h-10 w-full rounded-md border px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2"
-                aria-invalid={errors.offeringPartPublicId ? 'true' : 'false'}
+                aria-invalid={errors.coursePartPublicId ? 'true' : 'false'}
               >
                 <option value="">Select a course part…</option>
                 {parts.map((p) => (

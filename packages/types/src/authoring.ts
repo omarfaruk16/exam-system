@@ -39,9 +39,10 @@ export interface ExamDetail {
   settings: ExamSettings;
   reviewNote: string | null;
   publishedAt: string | null;
-  offeringPart: {
+  coursePart: {
     publicId: string;
-    coursePart: { publicId: string; name: string };
+    name: string;
+    course: { publicId: string; code: string; name: string };
   };
   createdBy: { publicId: string; user: { displayName: string } };
 }
@@ -85,12 +86,12 @@ export interface ReportJobStatus {
   message?: string;
 }
 
-/** A question bank for an offering part. */
+/** A question bank for a course part. */
 export interface QuestionBankSummary {
   publicId: string;
   name: string;
   createdAt: string;
-  offeringPart: { publicId: string };
+  coursePart: { publicId: string };
 }
 
 export interface BankQuestionOption {
@@ -112,12 +113,11 @@ export interface BankQuestion {
   options: BankQuestionOption[];
 }
 
-/** An offering part the current teacher is assigned to — for the New Exam / bank pickers. */
-export interface OfferingPartOption {
+/** A course part the current teacher is assigned to — for the New Exam / bank pickers. */
+export interface PartOption {
   publicId: string;
   partName: string;
   courseCode: string;
   courseTitle: string;
-  term: string;
   label: string;
 }

@@ -40,7 +40,7 @@ export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 /** A scope target exposed to the client — never a raw autoincrement id. */
 export interface SessionScopeRef {
   publicId: string;
-  code: string;
+  name: string;
 }
 
 export interface SessionRole {

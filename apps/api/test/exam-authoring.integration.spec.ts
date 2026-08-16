@@ -30,7 +30,7 @@ let resultsQueue: Queue;
 let teacher1: AuthUser; // assigned to CSE Part A
 let teacher2: AuthUser; // assigned to CSE Part B, NOT Part A
 let admin: AuthUser;
-let cseOfferingPartAPublicId: string;
+let csePartAPublicId: string;
 
 function principal(over: Partial<AuthUser> & Pick<AuthUser, 'id' | 'roles'>): AuthUser {
   return {
@@ -91,11 +91,11 @@ beforeAll(async () => {
     roles: [{ role: 'admin', scopeFacultyId: null, scopeDepartmentId: null }],
   });
 
-  const partA = await prisma.db.offeringPart.findFirstOrThrow({
-    where: { offering: { course: { code: 'CSE-1101' } }, coursePart: { name: 'Part A' } },
+  const partA = await prisma.db.coursePart.findFirstOrThrow({
+    where: { course: { code: 'CSE-1101' }, name: 'Part A' },
     select: { publicId: true },
   });
-  cseOfferingPartAPublicId = partA.publicId;
+  csePartAPublicId = partA.publicId;
 });
 
 afterAll(async () => {
@@ -107,7 +107,7 @@ afterAll(async () => {
 async function buildDraftExamWithQuestion(startAt: Date, endAt: Date) {
   // A dedicated bank + one MCQ so the exam is publishable.
   const bank = await questions.createBank(teacher1, 'test', {
-    offeringPartPublicId: cseOfferingPartAPublicId,
+    coursePartPublicId: csePartAPublicId,
     name: `Test Bank ${Date.now()}-${Math.random()}`,
   });
   const q = await questions.createQuestion(teacher1, 'test', {
@@ -121,7 +121,7 @@ async function buildDraftExamWithQuestion(startAt: Date, endAt: Date) {
     ],
   });
   const exam = await exams.createExam(teacher1, 'test', {
-    offeringPartPublicId: cseOfferingPartAPublicId,
+    coursePartPublicId: csePartAPublicId,
     title: `Test Exam ${Date.now()}-${Math.random()}`,
     startAt: startAt.toISOString(),
     endAt: endAt.toISOString(),
@@ -136,41 +136,29 @@ async function buildDraftExamWithQuestion(startAt: Date, endAt: Date) {
 }
 
 describe('Phase 3 — exam authoring guards & lifecycle', () => {
-  it('(a) teacher cannot create an exam against a soft-deleted offering part', async () => {
-    // Create a throwaway offering part in CSE, assign teacher1, then soft-delete it.
-    const cse = await prisma.db.department.findFirstOrThrow({
-      where: { code: 'CSE' },
-      select: { id: true },
-    });
+  it('(a) teacher cannot create an exam against a soft-deleted course part', async () => {
+    // A fresh course part assigned to teacher1 that we can safely soft-delete.
     const t1 = await prisma.db.teacher.findFirstOrThrow({
       where: { user: { username: 'teacher1' } },
       select: { id: true },
     });
-    const offering = await prisma.db.courseOffering.findFirstOrThrow({
-      where: { course: { code: 'CSE-1101' } },
-      select: { id: true },
-    });
-    // A fresh course part + offering part we can safely soft-delete.
     const course = await prisma.db.course.findFirstOrThrow({
       where: { code: 'CSE-1101' },
       select: { id: true },
     });
     const cp = await prisma.coursePart.create({
-      data: { courseId: course.id, name: `Tmp ${Date.now()}`, marksWeight: 0 },
-    });
-    const op = await prisma.offeringPart.create({
       data: {
-        offeringId: offering.id,
-        coursePartId: cp.id,
+        courseId: course.id,
+        name: `Tmp ${Date.now()}`,
+        marksWeight: 0,
         assignedTeacherId: t1.id,
         deletedAt: new Date(),
       },
     });
-    void cse;
 
     await expect(
       exams.createExam(teacher1, 'test', {
-        offeringPartPublicId: op.publicId,
+        coursePartPublicId: cp.publicId,
         title: 'Should fail',
         startAt: new Date(Date.now() + 3_600_000).toISOString(),
         endAt: new Date(Date.now() + 7_200_000).toISOString(),
@@ -180,7 +168,6 @@ describe('Phase 3 — exam authoring guards & lifecycle', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
 
     // cleanup
-    await prisma.offeringPart.delete({ where: { id: op.id } });
     await prisma.coursePart.delete({ where: { id: cp.id } });
   });
 
@@ -188,7 +175,7 @@ describe('Phase 3 — exam authoring guards & lifecycle', () => {
     // teacher2 is NOT assigned to Part A.
     await expect(
       exams.createExam(teacher2, 'test', {
-        offeringPartPublicId: cseOfferingPartAPublicId,
+        coursePartPublicId: csePartAPublicId,
         title: 'Not yours',
         startAt: new Date(Date.now() + 3_600_000).toISOString(),
         endAt: new Date(Date.now() + 7_200_000).toISOString(),

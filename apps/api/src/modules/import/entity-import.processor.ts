@@ -16,7 +16,7 @@ import { validateCourseRow, validateDepartmentRow, validateTeacherRow } from './
 import type { EntityImportJobData } from './import.types';
 
 /**
- * Generic BullMQ worker for bulk teacher/department/course imports (§6.1, extended in pre-phase6).
+ * Generic BullMQ worker for bulk teacher/department/course imports.
  * Same contract as the student import: valid rows import, rejected rows land in an error report,
  * progress is reported via jobId. Never runs on the request thread.
  */
@@ -79,13 +79,13 @@ export class EntityImportProcessor extends WorkerHost {
     for (let i = 0; i < parsed.length; i++) {
       const row = parsed[i]!;
       try {
-        const dept = await this.resolveDepartment(row.departmentId, row.departmentCode);
+        const dept = await this.resolveDepartment(row.departmentName);
         if (!dept) {
           skipped++;
           errors.push({
             row: row.rowNumber,
-            field: 'departmentCode',
-            value: row.departmentCode ?? '',
+            field: 'department',
+            value: row.departmentName,
             message: 'Department not found',
           });
           continue;
@@ -147,20 +147,20 @@ export class EntityImportProcessor extends WorkerHost {
     for (let i = 0; i < parsed.length; i++) {
       const row = parsed[i]!;
       try {
-        const faculty = await this.resolveFaculty(row.facultyId, row.facultyCode);
+        const faculty = await this.resolveFaculty(row.facultyName);
         if (!faculty) {
           skipped++;
           errors.push({
             row: row.rowNumber,
-            field: 'facultyCode',
-            value: row.facultyCode ?? '',
+            field: 'faculty',
+            value: row.facultyName,
             message: 'Faculty not found',
           });
           continue;
         }
-        // Idempotent: skip (not an error) if the code already exists in this faculty.
+        // Idempotent: skip (not an error) if a department with this name exists in the faculty.
         const existing = await this.prisma.db.department.findFirst({
-          where: { facultyId: faculty.id, code: row.code },
+          where: { facultyId: faculty.id, name: row.name },
           select: { id: true },
         });
         if (existing) {
@@ -168,7 +168,7 @@ export class EntityImportProcessor extends WorkerHost {
           continue;
         }
         await this.prisma.db.department.create({
-          data: { facultyId: faculty.id, name: row.name, code: row.code },
+          data: { facultyId: faculty.id, name: row.name },
         });
         imported++;
       } catch (e) {
@@ -201,14 +201,14 @@ export class EntityImportProcessor extends WorkerHost {
         const semester = await this.resolveSemester(
           row.semesterId,
           row.semesterNumber,
-          row.programCode,
+          row.programName,
         );
         if (!semester) {
           skipped++;
           errors.push({
             row: row.rowNumber,
             field: 'semesterId',
-            message: 'Semester not found (check semesterId or semesterNumber + programCode)',
+            message: 'Semester not found (check semesterId or semesterNumber + program)',
           });
           continue;
         }
@@ -233,26 +233,21 @@ export class EntityImportProcessor extends WorkerHost {
   }
 
   // ─────────────────────────────── lookups ───────────────────────────────
-  private async resolveDepartment(id: number | null, code: string | null) {
-    if (id) return this.prisma.db.department.findFirst({ where: { id }, select: { id: true } });
-    if (code) return this.prisma.db.department.findFirst({ where: { code }, select: { id: true } });
-    return null;
+  private resolveDepartment(name: string) {
+    return this.prisma.db.department.findFirst({ where: { name }, select: { id: true } });
   }
-  private async resolveFaculty(id: number | null, code: string | null) {
-    if (id) return this.prisma.db.faculty.findFirst({ where: { id }, select: { id: true } });
-    if (code) return this.prisma.db.faculty.findFirst({ where: { code }, select: { id: true } });
-    return null;
+  private resolveFaculty(name: string) {
+    return this.prisma.db.faculty.findFirst({ where: { name }, select: { id: true } });
   }
   private async resolveSemester(
     id: number | null,
     number: number | null,
-    programCode: string | null,
+    programName: string | null,
   ) {
     if (id) return this.prisma.db.semester.findFirst({ where: { id }, select: { id: true } });
-    if (number && programCode) {
-      // Programs have no code column, so programCode is matched against the program name.
+    if (number && programName) {
       const program = await this.prisma.db.program.findFirst({
-        where: { name: programCode },
+        where: { name: programName },
         select: { id: true },
       });
       if (!program) return null;

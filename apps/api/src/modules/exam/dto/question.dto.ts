@@ -14,7 +14,7 @@ import {
 } from 'class-validator';
 
 export class CreateQuestionBankDto {
-  @IsString() offeringPartPublicId!: string;
+  @IsString() coursePartPublicId!: string;
   @IsString() @Length(1, 120) name!: string;
 }
 

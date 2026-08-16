@@ -140,19 +140,21 @@ beforeAll(async () => {
   });
   studentPublicId = stu.publicId;
 
-  const p = await prisma.db.offeringPart.findFirstOrThrow({
-    where: { offering: { course: { code: 'CSE-1101' } }, coursePart: { name: 'Part A' } },
-    select: {
-      id: true,
-      publicId: true,
-      assignedTeacherId: true,
-      offering: { select: { batchId: true } },
-    },
+  const p = await prisma.db.coursePart.findFirstOrThrow({
+    where: { course: { code: 'CSE-1101' }, name: 'Part A' },
+    select: { id: true, publicId: true, assignedTeacherId: true },
   });
   partA = p.publicId;
   partAId = p.id;
   teacher1Id = p.assignedTeacherId!;
-  cseBatchId = p.offering.batchId;
+  const batch = await prisma.db.batch.findFirstOrThrow({
+    where: {
+      name: '2021 Batch',
+      program: { department: { name: 'Computer Science & Engineering' } },
+    },
+    select: { id: true },
+  });
+  cseBatchId = batch.id;
 });
 
 afterAll(async () => {
@@ -176,7 +178,7 @@ async function publishLiveExam(
   settingsOverride: Partial<typeof baseSettings> = {},
 ) {
   const bank = await questions.createBank(teacher1, 't', {
-    offeringPartPublicId: partA,
+    coursePartPublicId: partA,
     name: `B ${rand()}`,
   });
   const mcq = await questions.createQuestion(teacher1, 't', {
@@ -200,7 +202,7 @@ async function publishLiveExam(
     });
   }
   const exam = await exams.createExam(teacher1, 't', {
-    offeringPartPublicId: partA,
+    coursePartPublicId: partA,
     title: `E ${rand()}`,
     startAt: new Date(Date.now() - 60_000).toISOString(),
     endAt: new Date(Date.now() + 3_600_000).toISOString(),
@@ -327,7 +329,7 @@ describe('Phase 5a — ranking', () => {
   it('(c) dense rank handles ties', async () => {
     const exam = await prisma.exam.create({
       data: {
-        offeringPartId: partAId,
+        coursePartId: partAId,
         createdByTeacherId: teacher1Id,
         title: `Rank ${rand()}`,
         startAt: new Date(Date.now() - 60_000),

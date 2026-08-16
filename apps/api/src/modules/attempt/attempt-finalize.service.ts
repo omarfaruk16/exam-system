@@ -33,7 +33,7 @@ const LOCK_TTL_MS = 15_000;
 const IDEM_TTL_SEC = 24 * 60 * 60;
 
 /**
- * The single finalize path (§6.5, Step 4). Both manual submit and auto-submit go through here.
+ * The single finalize path. Both manual submit and auto-submit go through here.
  * Idempotency key → cached result; Redis lock on attemptId → one submit at a time; status re-checked
  * inside the lock. Late manual submits are flagged autoSubmitted, never rejected.
  */

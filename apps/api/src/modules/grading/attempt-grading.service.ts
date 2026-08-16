@@ -7,7 +7,7 @@ import { QUEUE_RESULTS } from '../../queue/queue.constants';
 
 /**
  * Finalizes an attempt's grade once every answer is scored (MCQ auto + written manual). Shared by
- * the MCQ grader (Phase 4) and the written-grading path. Writes the ExamResult rollup + per-question
+ * the MCQ grader and the written-grading path. Writes the ExamResult rollup + per-question
  * breakdown and, when complete, enqueues the exam finalize job (rerank + auto results_published).
  */
 @Injectable()

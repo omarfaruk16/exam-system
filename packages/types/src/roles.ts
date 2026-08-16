@@ -20,7 +20,7 @@ export const ROLE_LABELS: Record<RoleName, string> = {
   student: 'Student',
 };
 
-/** Roles that can alter marks and therefore require TOTP 2FA (see §5 of the brief). */
+/** Roles that can alter marks and therefore require TOTP 2FA. */
 export const TWO_FACTOR_REQUIRED_ROLES: readonly RoleName[] = [
   'super_admin',
   'admin',

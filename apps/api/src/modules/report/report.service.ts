@@ -26,19 +26,15 @@ const examScopeSelect = {
   id: true,
   publicId: true,
   status: true,
-  offeringPart: {
+  coursePart: {
     select: {
       assignedTeacherId: true,
-      offering: {
+      course: {
         select: {
-          course: {
+          semester: {
             select: {
-              semester: {
-                select: {
-                  program: {
-                    select: { departmentId: true, department: { select: { facultyId: true } } },
-                  },
-                },
+              program: {
+                select: { departmentId: true, department: { select: { facultyId: true } } },
               },
             },
           },
@@ -65,7 +61,7 @@ export class ReportService {
   }
 
   private async assertReportAccess(user: AuthUser, exam: ExamScope): Promise<void> {
-    const program = exam.offeringPart.offering.course.semester.program;
+    const program = exam.coursePart.course.semester.program;
     if (this.isAdmin(user)) {
       this.access.assertAdminScope(user, {
         departmentId: program.departmentId,
@@ -74,7 +70,7 @@ export class ReportService {
       return;
     }
     const teacher = await this.access.requireTeacher(user);
-    if (exam.offeringPart.assignedTeacherId !== teacher.id) {
+    if (exam.coursePart.assignedTeacherId !== teacher.id) {
       throw new ForbiddenException('You are not assigned to this exam');
     }
   }

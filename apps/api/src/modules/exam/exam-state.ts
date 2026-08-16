@@ -1,6 +1,6 @@
 import type { ExamStatus } from '@prisma/client';
 
-/** The one true set of allowed exam status transitions (§6.3). Anything else is rejected. */
+/** The one true set of allowed exam status transitions. Anything else is rejected. */
 export const EXAM_TRANSITIONS: Record<ExamStatus, ExamStatus[]> = {
   draft: ['in_review'],
   in_review: ['approved', 'changes_requested', 'rejected'],

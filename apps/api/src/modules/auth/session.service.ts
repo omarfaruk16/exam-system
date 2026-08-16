@@ -8,7 +8,7 @@ import {
 
 /**
  * Tracks which session ids belong to each user so we can:
- *  - enforce a single active session for students (§5),
+ *  - enforce a single active session for students,
  *  - revoke sessions on suspension / password change / forced logout.
  * Session bodies themselves live in Redis under `${SESSION_KEY_PREFIX}${sid}` (connect-redis).
  */

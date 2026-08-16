@@ -3,7 +3,7 @@ import type { RoleName } from '@exam/types';
 import type { AuthUser } from '../types/auth';
 
 /**
- * Central scope-aware authorization helper (the "ScopeGuard" logic from §5, applied at the
+ * Central scope-aware authorization helper (applied at the
  * service layer where the resource's faculty/department is known). Guards handle role gating;
  * this handles the *scope* question: "is this user allowed to touch data in THIS department?"
  */

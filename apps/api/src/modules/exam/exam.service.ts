@@ -18,7 +18,7 @@ interface ExamHandle {
   publicId: string;
   status: ExamStatus;
   createdByTeacherId: number;
-  offeringPartPublicId: string;
+  coursePartPublicId: string;
   departmentId: number;
   facultyId: number;
 }
@@ -39,21 +39,17 @@ export class ExamService {
         publicId: true,
         status: true,
         createdByTeacherId: true,
-        offeringPart: {
+        coursePart: {
           select: {
             publicId: true,
-            offering: {
+            course: {
               select: {
-                course: {
+                semester: {
                   select: {
-                    semester: {
+                    program: {
                       select: {
-                        program: {
-                          select: {
-                            departmentId: true,
-                            department: { select: { facultyId: true } },
-                          },
-                        },
+                        departmentId: true,
+                        department: { select: { facultyId: true } },
                       },
                     },
                   },
@@ -65,13 +61,13 @@ export class ExamService {
       },
     });
     if (!exam) throw new NotFoundException('Exam not found');
-    const program = exam.offeringPart.offering.course.semester.program;
+    const program = exam.coursePart.course.semester.program;
     return {
       id: exam.id,
       publicId: exam.publicId,
       status: exam.status,
       createdByTeacherId: exam.createdByTeacherId,
-      offeringPartPublicId: exam.offeringPart.publicId,
+      coursePartPublicId: exam.coursePart.publicId,
       departmentId: program.departmentId,
       facultyId: program.department.facultyId,
     };
@@ -133,8 +129,8 @@ export class ExamService {
 
   // ─────────────────────────────── CRUD ───────────────────────────────
   async createExam(user: AuthUser, ip: string, dto: CreateExamDto) {
-    // Guards BOTH the soft-deleted offering part/offering (400) AND teacher assignment (403).
-    const ctx = await this.access.requireAuthorablePart(user, dto.offeringPartPublicId);
+    // Guards BOTH a soft-deleted course part (400) AND teacher assignment (403).
+    const ctx = await this.access.requireAuthorablePart(user, dto.coursePartPublicId);
     const startAt = new Date(dto.startAt);
     const endAt = new Date(dto.endAt);
     if (endAt <= startAt) throw new BadRequestException('endAt must be after startAt');
@@ -142,7 +138,7 @@ export class ExamService {
     return this.prisma.$transaction(async (tx) => {
       const exam = await tx.exam.create({
         data: {
-          offeringPartId: ctx.offeringPartId,
+          coursePartId: ctx.coursePartId,
           createdByTeacherId: ctx.teacherId,
           title: dto.title,
           instructions: dto.instructions ?? null,
@@ -181,9 +177,7 @@ export class ExamService {
         .map((r) => r.scopeDepartmentId as number);
       where = {
         deletedAt: null,
-        offeringPart: {
-          offering: { course: { semester: { program: { departmentId: { in: deptIds } } } } },
-        },
+        coursePart: { course: { semester: { program: { departmentId: { in: deptIds } } } } },
       };
     } else {
       const teacher = await this.access.requireTeacher(user);
@@ -197,8 +191,8 @@ export class ExamService {
     return exams.map((e) => ({
       publicId: e.publicId,
       title: e.title,
-      courseCode: e.offeringPart.offering.course.code,
-      part: e.offeringPart.coursePart.name,
+      courseCode: e.coursePart.course.code,
+      part: e.coursePart.name,
       startAt: e.startAt.toISOString(),
       endAt: e.endAt.toISOString(),
       durationMinutes: e.durationMinutes,
@@ -211,34 +205,24 @@ export class ExamService {
     }));
   }
 
-  /** The offering parts the current teacher is assigned to — feeds the New Exam / bank pickers. */
-  async listMyOfferingParts(user: AuthUser) {
+  /** The course parts the current teacher is assigned to — feeds the New Exam / bank pickers. */
+  async listMyParts(user: AuthUser) {
     const teacher = await this.access.requireTeacher(user);
-    const parts = await this.prisma.db.offeringPart.findMany({
-      where: {
-        assignedTeacherId: teacher.id,
-        deletedAt: null,
-        offering: { deletedAt: null },
-      },
+    const parts = await this.prisma.db.coursePart.findMany({
+      where: { assignedTeacherId: teacher.id, deletedAt: null },
       select: {
         publicId: true,
-        coursePart: { select: { name: true } },
-        offering: {
-          select: {
-            course: { select: { code: true, name: true } },
-            term: { select: { name: true } },
-          },
-        },
+        name: true,
+        course: { select: { code: true, name: true } },
       },
       orderBy: [{ createdAt: 'desc' }],
     });
     return parts.map((p) => ({
       publicId: p.publicId,
-      partName: p.coursePart.name,
-      courseCode: p.offering.course.code,
-      courseTitle: p.offering.course.name,
-      term: p.offering.term.name,
-      label: `${p.offering.course.code} · ${p.coursePart.name} · ${p.offering.term.name}`,
+      partName: p.name,
+      courseCode: p.course.code,
+      courseTitle: p.course.name,
+      label: `${p.course.code} · ${p.course.name} · ${p.name}`,
     }));
   }
 
@@ -271,20 +255,18 @@ export class ExamService {
     await this.assertOwner(user, exam);
   }
 
-  /** Enrolled students for this exam's offering batch — feeds the individual mark-sheet selector. */
+  /** Students who can sit this exam — those in a batch currently assigned to the exam's semester.
+   *  Feeds the individual mark-sheet selector. */
   async getRoster(user: AuthUser, publicId: string) {
     const exam = await this.loadExam(publicId);
     await this.assertReadAccess(user, exam);
     const full = await this.prisma.db.exam.findFirstOrThrow({
       where: { publicId },
-      select: {
-        offeringPart: {
-          select: { offering: { select: { batchId: true } } },
-        },
-      },
+      select: { coursePart: { select: { course: { select: { semesterId: true } } } } },
     });
+    const semesterId = full.coursePart.course.semesterId;
     const students = await this.prisma.db.student.findMany({
-      where: { batchId: full.offeringPart.offering.batchId },
+      where: { batch: { currentSemesterId: semesterId } },
       select: {
         publicId: true,
         studentId: true,
@@ -374,11 +356,11 @@ export class ExamService {
     }
     const q = await this.prisma.db.question.findFirst({
       where: { publicId: dto.questionPublicId },
-      select: { id: true, bank: { select: { offeringPart: { select: { publicId: true } } } } },
+      select: { id: true, bank: { select: { coursePart: { select: { publicId: true } } } } },
     });
     if (!q) throw new NotFoundException('Question not found');
-    if (q.bank.offeringPart.publicId !== exam.offeringPartPublicId) {
-      throw new BadRequestException('Question is not from this offering part');
+    if (q.bank.coursePart.publicId !== exam.coursePartPublicId) {
+      throw new BadRequestException('Question is not from this course part');
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -525,8 +507,8 @@ export class ExamService {
     const exam = await this.loadExam(publicId);
     this.access.assertAdminScope(user, exam);
     this.assertTransition(exam.status, 'published');
-    // Re-check the offering part/offering are still live at publish time (integrity guard).
-    await this.access.loadActiveOfferingPart(exam.offeringPartPublicId);
+    // Re-check the course part is still live at publish time (integrity guard).
+    await this.access.loadActiveCoursePart(exam.coursePartPublicId);
 
     const eqs = await this.prisma.db.examQuestion.findMany({
       where: { exam: { publicId } },

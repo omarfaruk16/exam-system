@@ -1,18 +1,15 @@
 import {
-  createBatch,
   createCourse,
   createCoursePart,
   createDepartment,
   createProgram,
   createSemester,
-  deleteBatch,
   deleteCourse,
   deleteCoursePart,
   deleteDepartment,
   deleteFaculty,
   deleteProgram,
   deleteSemester,
-  updateBatch,
   updateCourse,
   updateCoursePart,
   updateDepartment,
@@ -32,7 +29,7 @@ export const DEGREE_TYPES = ['bachelor', 'masters', 'mphil', 'phd', 'diploma'];
 /** A child level that can be created under a given node, plus its create form fields. */
 export interface AddChildDef {
   level: OrgLevel;
-  label: string; // "Add Department"
+  label: string;
   fields: FieldDef[];
   create: (parentPublicId: string, body: Record<string, unknown>) => Promise<unknown>;
 }
@@ -48,10 +45,7 @@ export interface LevelConfig {
 const DEPT: AddChildDef = {
   level: 'department',
   label: 'Add Department',
-  fields: [
-    { key: 'name', label: 'Name', kind: 'text' },
-    { key: 'code', label: 'Code', kind: 'text' },
-  ],
+  fields: [{ key: 'name', label: 'Name', kind: 'text' }],
   create: (parent, b) =>
     createDepartment({ facultyPublicId: parent, ...b } as Parameters<typeof createDepartment>[0]),
 };
@@ -66,17 +60,6 @@ const PROGRAM: AddChildDef = {
   ],
   create: (parent, b) =>
     createProgram({ departmentPublicId: parent, ...b } as Parameters<typeof createProgram>[0]),
-};
-
-const BATCH: AddChildDef = {
-  level: 'batch',
-  label: 'Add Batch',
-  fields: [
-    { key: 'name', label: 'Name', kind: 'text' },
-    { key: 'admissionYear', label: 'Admission year', kind: 'number' },
-  ],
-  create: (parent, b) =>
-    createBatch({ programPublicId: parent, ...b } as Parameters<typeof createBatch>[0]),
 };
 
 const SEMESTER: AddChildDef = {
@@ -112,20 +95,14 @@ const PART: AddChildDef = {
 
 export const LEVEL_CONFIG: Record<OrgLevel, LevelConfig> = {
   faculty: {
-    fields: [
-      { key: 'name', label: 'Name', kind: 'text' },
-      { key: 'code', label: 'Code', kind: 'text' },
-    ],
+    fields: [{ key: 'name', label: 'Name', kind: 'text' }],
     editable: true,
     update: (id, b) => updateFaculty(id, b as never),
     remove: deleteFaculty,
     addChildren: [DEPT],
   },
   department: {
-    fields: [
-      { key: 'name', label: 'Name', kind: 'text' },
-      { key: 'code', label: 'Code', kind: 'text' },
-    ],
+    fields: [{ key: 'name', label: 'Name', kind: 'text' }],
     editable: true,
     update: (id, b) => updateDepartment(id, b as never),
     remove: deleteDepartment,
@@ -140,17 +117,7 @@ export const LEVEL_CONFIG: Record<OrgLevel, LevelConfig> = {
     editable: true,
     update: (id, b) => updateProgram(id, b as never),
     remove: deleteProgram,
-    addChildren: [BATCH, SEMESTER],
-  },
-  batch: {
-    fields: [
-      { key: 'name', label: 'Name', kind: 'text' },
-      { key: 'admissionYear', label: 'Admission year', kind: 'number' },
-    ],
-    editable: true,
-    update: (id, b) => updateBatch(id, b as never),
-    remove: deleteBatch,
-    addChildren: [],
+    addChildren: [SEMESTER],
   },
   semester: {
     // No update route for semesters — number is fixed once created.
@@ -190,18 +157,13 @@ export function childCountOf(n: OrgNode): { count: number; label: string } {
     case 'department':
       return { count: n.raw._count.programs, label: 'program' };
     case 'program':
-      return {
-        count: n.raw._count.batches + n.raw._count.semesters,
-        label: 'batch/semester',
-      };
-    case 'batch':
-      return { count: n.raw._count.students, label: 'student' };
+      return { count: n.raw._count.semesters, label: 'semester' };
     case 'semester':
       return { count: n.raw._count.courses, label: 'course' };
     case 'course':
       return { count: n.raw._count.parts, label: 'part' };
     case 'part':
-      return { count: 0, label: '' };
+      return { count: n.raw._count.exams, label: 'exam' };
   }
 }
 

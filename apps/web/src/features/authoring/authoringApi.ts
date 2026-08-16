@@ -4,7 +4,7 @@ import type {
   ExamListItem,
   ExamQuestionItem,
   ExamSettings,
-  OfferingPartOption,
+  PartOption,
   QuestionBankSummary,
 } from '@exam/types';
 import { api } from '@/lib/api';
@@ -17,7 +17,7 @@ export const fetchExam = (publicId: string) => api.get<ExamDetail>(`/exams/${pub
 export const fetchExamQuestions = (publicId: string) =>
   api.get<ExamQuestionItem[]>(`/exams/${publicId}/questions`);
 
-export const fetchMyOfferingParts = () => api.get<OfferingPartOption[]>('/exams/my/offering-parts');
+export const fetchMyParts = () => api.get<PartOption[]>('/exams/my/parts');
 
 export interface ExamMetadataInput {
   title: string;
@@ -28,7 +28,7 @@ export interface ExamMetadataInput {
   settings: ExamSettings;
 }
 
-export const createExam = (input: ExamMetadataInput & { offeringPartPublicId: string }) =>
+export const createExam = (input: ExamMetadataInput & { coursePartPublicId: string }) =>
   api.post<ExamDetail>('/exams', input);
 
 export const updateExam = (publicId: string, input: ExamMetadataInput) =>
@@ -53,13 +53,11 @@ export const reorderExamQuestions = (examPublicId: string, order: string[]) =>
   api.patch<ExamQuestionItem[]>(`/exams/${examPublicId}/questions/reorder`, { order });
 
 // ── Question banks ──
-export const fetchBanks = (offeringPartPublicId: string) =>
-  api.get<QuestionBankSummary[]>(
-    `/question-banks?offeringPart=${encodeURIComponent(offeringPartPublicId)}`,
-  );
+export const fetchBanks = (coursePartPublicId: string) =>
+  api.get<QuestionBankSummary[]>(`/question-banks?part=${encodeURIComponent(coursePartPublicId)}`);
 
-export const createBank = (offeringPartPublicId: string, name: string) =>
-  api.post<QuestionBankSummary>('/question-banks', { offeringPartPublicId, name });
+export const createBank = (coursePartPublicId: string, name: string) =>
+  api.post<QuestionBankSummary>('/question-banks', { coursePartPublicId, name });
 
 export const fetchBankQuestions = (bankPublicId: string) =>
   api.get<BankQuestion[]>(`/questions?bank=${encodeURIComponent(bankPublicId)}`);

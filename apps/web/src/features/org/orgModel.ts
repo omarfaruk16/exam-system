@@ -1,14 +1,5 @@
-import type {
-  Batch,
-  Course,
-  CoursePart,
-  Department,
-  Faculty,
-  Program,
-  Semester,
-} from '@exam/types';
+import type { Course, CoursePart, Department, Faculty, Program, Semester } from '@exam/types';
 import {
-  fetchBatches,
   fetchCourseParts,
   fetchCourses,
   fetchDepartments,
@@ -16,14 +7,13 @@ import {
   fetchSemesters,
 } from './orgApi';
 
-export type OrgLevel =
-  'faculty' | 'department' | 'program' | 'batch' | 'semester' | 'course' | 'part';
+// The structure tree. Batches are a separate axis (assigned to semesters), managed elsewhere.
+export type OrgLevel = 'faculty' | 'department' | 'program' | 'semester' | 'course' | 'part';
 
 export type OrgNode =
   | { level: 'faculty'; publicId: string; raw: Faculty }
   | { level: 'department'; publicId: string; raw: Department }
   | { level: 'program'; publicId: string; raw: Program }
-  | { level: 'batch'; publicId: string; raw: Batch }
   | { level: 'semester'; publicId: string; raw: Semester }
   | { level: 'course'; publicId: string; raw: Course }
   | { level: 'part'; publicId: string; raw: CoursePart };
@@ -32,7 +22,6 @@ export const LEVEL_LABEL: Record<OrgLevel, string> = {
   faculty: 'Faculty',
   department: 'Department',
   program: 'Program',
-  batch: 'Batch',
   semester: 'Semester',
   course: 'Course',
   part: 'Course part',
@@ -42,12 +31,10 @@ export const LEVEL_LABEL: Record<OrgLevel, string> = {
 export function nodeName(n: OrgNode): string {
   switch (n.level) {
     case 'faculty':
-      return `${n.raw.name} (${n.raw.code})`;
-    case 'department':
-      return `${n.raw.name} (${n.raw.code})`;
-    case 'program':
       return n.raw.name;
-    case 'batch':
+    case 'department':
+      return n.raw.name;
+    case 'program':
       return n.raw.name;
     case 'semester':
       return `Semester ${n.raw.number}`;
@@ -65,19 +52,14 @@ export function nodeBadge(n: OrgNode): string | null {
       return plural(n.raw._count.departments, 'department');
     case 'department':
       return plural(n.raw._count.programs, 'program');
-    case 'program': {
-      const b = n.raw._count.batches;
-      const s = n.raw._count.semesters;
-      return `${plural(b, 'batch', 'batches')} · ${plural(s, 'semester')}`;
-    }
-    case 'batch':
-      return plural(n.raw._count.students, 'student');
+    case 'program':
+      return plural(n.raw._count.semesters, 'semester');
     case 'semester':
       return plural(n.raw._count.courses, 'course');
     case 'course':
       return plural(n.raw._count.parts, 'part');
     case 'part':
-      return null;
+      return n.raw.assignedTeacher ? n.raw.assignedTeacher.user.displayName : 'No teacher';
   }
 }
 
@@ -89,12 +71,11 @@ export function nodeExpandable(n: OrgNode): boolean {
     case 'department':
       return n.raw._count.programs > 0;
     case 'program':
-      return n.raw._count.batches + n.raw._count.semesters > 0;
+      return n.raw._count.semesters > 0;
     case 'semester':
       return n.raw._count.courses > 0;
     case 'course':
       return n.raw._count.parts > 0;
-    case 'batch':
     case 'part':
       return false;
   }
@@ -112,14 +93,8 @@ export async function loadChildren(n: OrgNode): Promise<OrgNode[]> {
       return rows.map((raw) => ({ level: 'program', publicId: raw.publicId, raw }));
     }
     case 'program': {
-      const [batches, semesters] = await Promise.all([
-        fetchBatches(n.publicId),
-        fetchSemesters(n.publicId),
-      ]);
-      return [
-        ...batches.map((raw): OrgNode => ({ level: 'batch', publicId: raw.publicId, raw })),
-        ...semesters.map((raw): OrgNode => ({ level: 'semester', publicId: raw.publicId, raw })),
-      ];
+      const rows = await fetchSemesters(n.publicId);
+      return rows.map((raw) => ({ level: 'semester', publicId: raw.publicId, raw }));
     }
     case 'semester': {
       const rows = await fetchCourses(n.publicId);
@@ -129,7 +104,6 @@ export async function loadChildren(n: OrgNode): Promise<OrgNode[]> {
       const rows = await fetchCourseParts(n.publicId);
       return rows.map((raw) => ({ level: 'part', publicId: raw.publicId, raw }));
     }
-    case 'batch':
     case 'part':
       return [];
   }

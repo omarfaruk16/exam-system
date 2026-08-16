@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 
 /**
  * Soft-delete is enforced globally here, not by remembering to add `deletedAt: null` in every
- * query (§4: "No exam data is ever hard-deleted"). The set of soft-deletable models is derived
+ * query ("No exam data is ever hard-deleted"). The set of soft-deletable models is derived
  * from the schema at runtime (any model with a `deletedAt` field), so it can never drift.
  *
  * Behaviour on the extended client (PrismaService.db):

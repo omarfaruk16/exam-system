@@ -89,11 +89,10 @@ export function OrgStructurePage() {
 
 function AddFacultyForm({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [name, setName] = useState('');
-  const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const create = useMutation({
-    mutationFn: () => createFaculty({ name: name.trim(), code: code.trim() }),
+    mutationFn: () => createFaculty({ name: name.trim() }),
     onSuccess: () => {
       toast.success('Faculty created');
       onCreated();
@@ -119,17 +118,6 @@ function AddFacultyForm({ onClose, onCreated }: { onClose: () => void; onCreated
           id="fac-name"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="mt-1 h-9"
-        />
-      </div>
-      <div>
-        <Label htmlFor="fac-code" className="text-xs">
-          Code
-        </Label>
-        <Input
-          id="fac-code"
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
           className="mt-1 h-9"
         />
       </div>

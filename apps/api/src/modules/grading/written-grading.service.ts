@@ -15,19 +15,15 @@ import type { GradeAnswerDto } from './dto/grade.dto';
 const examScopeSelect = {
   id: true,
   publicId: true,
-  offeringPart: {
+  coursePart: {
     select: {
       assignedTeacherId: true,
-      offering: {
+      course: {
         select: {
-          course: {
+          semester: {
             select: {
-              semester: {
-                select: {
-                  program: {
-                    select: { departmentId: true, department: { select: { facultyId: true } } },
-                  },
-                },
+              program: {
+                select: { departmentId: true, department: { select: { facultyId: true } } },
               },
             },
           },
@@ -52,9 +48,9 @@ export class WrittenGradingService {
     return user.roles.some((r) => r.role === 'admin' || r.role === 'super_admin');
   }
 
-  /** Only the teacher assigned to the OfferingPart (or an admin, scoped) may grade this exam. */
+  /** Only the teacher assigned to the course part (or an admin, scoped) may grade this exam. */
   private async assertGrader(user: AuthUser, exam: ExamScope): Promise<void> {
-    const program = exam.offeringPart.offering.course.semester.program;
+    const program = exam.coursePart.course.semester.program;
     if (this.isAdmin(user)) {
       this.access.assertAdminScope(user, {
         departmentId: program.departmentId,
@@ -63,7 +59,7 @@ export class WrittenGradingService {
       return;
     }
     const teacher = await this.access.requireTeacher(user);
-    if (exam.offeringPart.assignedTeacherId !== teacher.id) {
+    if (exam.coursePart.assignedTeacherId !== teacher.id) {
       throw new ForbiddenException('You are not assigned to this exam');
     }
   }
@@ -73,7 +69,7 @@ export class WrittenGradingService {
     const teacher = this.isAdmin(user) ? null : await this.access.requireTeacher(user);
     const exams = await this.prisma.db.exam.findMany({
       where: {
-        ...(teacher ? { offeringPart: { assignedTeacherId: teacher.id } } : {}),
+        ...(teacher ? { coursePart: { assignedTeacherId: teacher.id } } : {}),
         status: { in: ['live', 'ended', 'grading', 'results_published'] },
         examQuestions: { some: { snapshotType: 'written' } },
       },
@@ -82,10 +78,10 @@ export class WrittenGradingService {
         publicId: true,
         title: true,
         status: true,
-        offeringPart: {
+        coursePart: {
           select: {
-            coursePart: { select: { name: true } },
-            offering: { select: { course: { select: { code: true } } } },
+            name: true,
+            course: { select: { code: true } },
           },
         },
       },
@@ -104,8 +100,8 @@ export class WrittenGradingService {
       out.push({
         examPublicId: e.publicId,
         title: e.title,
-        courseCode: e.offeringPart.offering.course.code,
-        part: e.offeringPart.coursePart.name,
+        courseCode: e.coursePart.course.code,
+        part: e.coursePart.name,
         status: e.status,
         pendingCount,
       });

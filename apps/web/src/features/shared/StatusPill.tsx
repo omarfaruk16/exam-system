@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
 
-// Muted tint background + dark-family text (§8: never black text on a color).
+// Muted tint background + dark-family text (: never black text on a color).
 const STYLE: Record<string, string> = {
   draft: 'bg-slate-500/10 text-slate-700 dark:bg-slate-400/10 dark:text-slate-300',
   in_review: 'bg-amber-500/15 text-amber-800 dark:bg-amber-400/10 dark:text-amber-300',

@@ -18,51 +18,47 @@ export interface NavItem {
   label: string;
   path: string;
   icon: LucideIcon;
-  /** Phase the section becomes functional — used to label placeholders during the build. */
-  phase: number;
 }
 
-const HOME: NavItem = { label: 'Dashboard', path: '/', icon: LayoutDashboard, phase: 1 };
+const HOME: NavItem = { label: 'Dashboard', path: '/', icon: LayoutDashboard };
 
 const BY_ROLE: Record<RoleName, NavItem[]> = {
   super_admin: [
     HOME,
-    { label: 'Organization', path: '/org', icon: Building2, phase: 2 },
-    { label: 'Students', path: '/students', icon: Upload, phase: 2 },
-    { label: 'Exams', path: '/exams', icon: FileCheck2, phase: 3 },
-    { label: 'Review', path: '/review', icon: ClipboardCheck, phase: 5 },
-    { label: 'Reports', path: '/reports', icon: BarChart3, phase: 5 },
-    { label: 'Users', path: '/users', icon: Users, phase: 2 },
-    { label: 'Audit Log', path: '/audit', icon: ScrollText, phase: 2 },
+    { label: 'Organization', path: '/org', icon: Building2 },
+    { label: 'Students', path: '/students', icon: Upload },
+    { label: 'Exams', path: '/exams', icon: FileCheck2 },
+    { label: 'Review', path: '/review', icon: ClipboardCheck },
+    { label: 'Reports', path: '/reports', icon: BarChart3 },
+    { label: 'Users', path: '/users', icon: Users },
+    { label: 'Audit Log', path: '/audit', icon: ScrollText },
   ],
   admin: [
     HOME,
-    { label: 'Organization', path: '/org', icon: Building2, phase: 2 },
-    { label: 'Students', path: '/students', icon: Upload, phase: 2 },
-    { label: 'Exams', path: '/exams', icon: FileCheck2, phase: 3 },
-    { label: 'Review', path: '/review', icon: ClipboardCheck, phase: 5 },
-    { label: 'Reports', path: '/reports', icon: BarChart3, phase: 5 },
-    { label: 'Audit Log', path: '/audit', icon: ScrollText, phase: 2 },
+    { label: 'Organization', path: '/org', icon: Building2 },
+    { label: 'Students', path: '/students', icon: Upload },
+    { label: 'Exams', path: '/exams', icon: FileCheck2 },
+    { label: 'Review', path: '/review', icon: ClipboardCheck },
+    { label: 'Reports', path: '/reports', icon: BarChart3 },
+    { label: 'Audit Log', path: '/audit', icon: ScrollText },
   ],
   department_head: [
     HOME,
-    // Structure/terms are admin-only; a department head lands on the offerings view.
-    { label: 'Offerings', path: '/org/offerings', icon: Building2, phase: 2 },
-    { label: 'Review', path: '/review', icon: ClipboardCheck, phase: 5 },
-    { label: 'Reports', path: '/reports', icon: BarChart3, phase: 5 },
+    { label: 'Review', path: '/review', icon: ClipboardCheck },
+    { label: 'Reports', path: '/reports', icon: BarChart3 },
   ],
   teacher: [
     HOME,
-    { label: 'My Courses', path: '/courses', icon: BookOpen, phase: 2 },
-    { label: 'Exams', path: '/exams', icon: FileCheck2, phase: 3 },
-    { label: 'Question Bank', path: '/questions', icon: ListChecks, phase: 3 },
-    { label: 'Grading', path: '/grading', icon: ClipboardCheck, phase: 5 },
-    { label: 'Reports', path: '/reports', icon: BarChart3, phase: 5 },
+    { label: 'My Courses', path: '/courses', icon: BookOpen },
+    { label: 'Exams', path: '/exams', icon: FileCheck2 },
+    { label: 'Question Bank', path: '/questions', icon: ListChecks },
+    { label: 'Grading', path: '/grading', icon: ClipboardCheck },
+    { label: 'Reports', path: '/reports', icon: BarChart3 },
   ],
   student: [
     HOME,
-    { label: 'My Exams', path: '/my-exams', icon: GraduationCap, phase: 4 },
-    { label: 'Results', path: '/results', icon: BarChart3, phase: 5 },
+    { label: 'My Exams', path: '/my-exams', icon: GraduationCap },
+    { label: 'Results', path: '/results', icon: BarChart3 },
   ],
 };
 

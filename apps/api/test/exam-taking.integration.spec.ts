@@ -109,8 +109,8 @@ beforeAll(async () => {
   });
 
   partA = (
-    await prisma.db.offeringPart.findFirstOrThrow({
-      where: { offering: { course: { code: 'CSE-1101' } }, coursePart: { name: 'Part A' } },
+    await prisma.db.coursePart.findFirstOrThrow({
+      where: { course: { code: 'CSE-1101' }, name: 'Part A' },
       select: { publicId: true },
     })
   ).publicId;
@@ -127,7 +127,7 @@ const rand = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 async function publishLiveMcqExam(settingsOverride: Partial<typeof baseSettings> = {}) {
   const bank = await questions.createBank(teacher1, 't', {
-    offeringPartPublicId: partA,
+    coursePartPublicId: partA,
     name: `B ${rand()}`,
   });
   const q = await questions.createQuestion(teacher1, 't', {
@@ -141,7 +141,7 @@ async function publishLiveMcqExam(settingsOverride: Partial<typeof baseSettings>
     ],
   });
   const exam = await exams.createExam(teacher1, 't', {
-    offeringPartPublicId: partA,
+    coursePartPublicId: partA,
     title: `E ${rand()}`,
     startAt: new Date(Date.now() - 60_000).toISOString(),
     endAt: new Date(Date.now() + 3_600_000).toISOString(),

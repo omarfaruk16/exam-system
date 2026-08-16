@@ -14,8 +14,8 @@ export interface OverallData {
   exam: {
     title: string;
     courseCode: string;
-    batchName: string;
-    termName: string;
+    partName: string;
+    semesterNumber: number;
     totalMarks: number;
   };
   questions: { questionPublicId: string; order: number; maxMarks: number; label: string }[];
@@ -64,13 +64,14 @@ export class ReportDataService {
       select: {
         title: true,
         totalMarks: true,
-        offeringPart: {
+        coursePart: {
           select: {
-            offering: {
+            name: true,
+            course: {
               select: {
-                course: { select: { code: true } },
-                batch: { select: { id: true, name: true } },
-                term: { select: { name: true } },
+                code: true,
+                semesterId: true,
+                semester: { select: { number: true } },
               },
             },
           },
@@ -90,7 +91,7 @@ export class ReportDataService {
     }));
 
     const students = await this.prisma.db.student.findMany({
-      where: { batchId: exam.offeringPart.offering.batch.id },
+      where: { batch: { currentSemesterId: exam.coursePart.course.semesterId } },
       select: { studentId: true, user: { select: { displayName: true } } },
       orderBy: { studentId: 'asc' },
     });
@@ -128,9 +129,9 @@ export class ReportDataService {
     return {
       exam: {
         title: exam.title,
-        courseCode: exam.offeringPart.offering.course.code,
-        batchName: exam.offeringPart.offering.batch.name,
-        termName: exam.offeringPart.offering.term.name,
+        courseCode: exam.coursePart.course.code,
+        partName: exam.coursePart.name,
+        semesterNumber: exam.coursePart.course.semester.number,
         totalMarks: exam.totalMarks,
       },
       questions,
@@ -152,7 +153,7 @@ export class ReportDataService {
         title: true,
         totalMarks: true,
         settings: true,
-        offeringPart: { select: { offering: { select: { course: { select: { code: true } } } } } },
+        coursePart: { select: { course: { select: { code: true } } } },
       },
     });
     const settings = (exam.settings as ExamSettings | null) ?? {};
@@ -218,7 +219,7 @@ export class ReportDataService {
     return {
       exam: {
         title: exam.title,
-        courseCode: exam.offeringPart.offering.course.code,
+        courseCode: exam.coursePart.course.code,
         totalMarks: exam.totalMarks,
       },
       student: { studentId: student.studentId, name: student.user.displayName },

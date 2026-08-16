@@ -6,7 +6,7 @@ import { QUEUE_ATTEMPT_SWEEP } from '../../queue/queue.constants';
 import { AttemptFinalizeService } from './attempt-finalize.service';
 
 /**
- * Auto-submit safety net (§6.5). A repeatable job finds in-progress attempts whose deadline has
+ * Auto-submit safety net. A repeatable job finds in-progress attempts whose deadline has
  * passed and finalizes them through the SAME idempotent path (auto=true) — not a separate one.
  * (Restart-safe; recomputes the deadline from the DB, independent of the Redis key.)
  */

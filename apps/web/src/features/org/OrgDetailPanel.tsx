@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { UserCog } from 'lucide-react';
 import { LEVEL_LABEL, loadChildren, nodeName, type OrgNode } from './orgModel';
 import {
   childCountOf,
@@ -23,6 +24,8 @@ import {
   type AddChildDef,
   type FieldDef,
 } from './orgLevelConfig';
+import { assignTeacher } from './orgApi';
+import { TeacherSelector } from './TeacherSelector';
 
 export function OrgDetailPanel({
   node,
@@ -115,6 +118,9 @@ export function OrgDetailPanel({
           />
         )}
       </Card>
+
+      {/* Assigned teacher (course parts only) */}
+      {node.level === 'part' && <PartTeacherCard node={node} onSaved={invalidateTree} />}
 
       {/* Children + add */}
       {(cfg.addChildren.length > 0 || count > 0) && (
@@ -390,6 +396,54 @@ function FieldInput({
         />
       )}
     </div>
+  );
+}
+
+function PartTeacherCard({
+  node,
+  onSaved,
+}: {
+  node: Extract<OrgNode, { level: 'part' }>;
+  onSaved: () => Promise<unknown>;
+}) {
+  const [assigning, setAssigning] = useState(false);
+  const part = node.raw;
+  const departmentPublicId = part.course.semester.program.department.publicId;
+
+  const assign = useMutation({
+    mutationFn: (teacherPublicId: string | null) => assignTeacher(node.publicId, teacherPublicId),
+    onSuccess: async () => {
+      toast.success('Teacher assignment updated');
+      await onSaved();
+      setAssigning(false);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not assign teacher'),
+  });
+
+  return (
+    <Card className="p-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-semibold">Assigned teacher</h3>
+          <p className="text-muted-foreground mt-0.5 text-sm">
+            {part.assignedTeacher
+              ? `${part.assignedTeacher.user.displayName}${part.assignedTeacher.designation ? ` · ${part.assignedTeacher.designation}` : ''}`
+              : 'No teacher assigned'}
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => setAssigning((v) => !v)}>
+          <UserCog className="size-4" /> {part.assignedTeacher ? 'Change' : 'Assign'}
+        </Button>
+      </div>
+      {assigning && (
+        <TeacherSelector
+          departmentPublicId={departmentPublicId}
+          currentTeacherPublicId={part.assignedTeacher?.publicId ?? null}
+          pending={assign.isPending}
+          onPick={(teacherPublicId) => assign.mutate(teacherPublicId)}
+        />
+      )}
+    </Card>
   );
 }
 

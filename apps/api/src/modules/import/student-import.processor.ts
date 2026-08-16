@@ -36,7 +36,7 @@ function generateTempPassword(): string {
 }
 
 /**
- * BullMQ worker for the bulk student import (§6.1). Never runs on the request thread.
+ * BullMQ worker for the bulk student import. Never runs on the request thread.
  * Valid rows are imported; malformed rows are rejected into a downloadable error report.
  * Temp passwords are generated when absent (mustChangePassword=true); delivery of credentials
  * via emailed reset links is added in a later phase — plaintext passwords are never persisted.

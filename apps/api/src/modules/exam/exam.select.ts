@@ -4,7 +4,7 @@ export const questionBankSelect = {
   publicId: true,
   name: true,
   createdAt: true,
-  offeringPart: { select: { publicId: true } },
+  coursePart: { select: { publicId: true } },
 } satisfies Prisma.QuestionBankSelect;
 
 // Authoring-facing question view — includes isCorrect (teacher/admin only; never used for students).
@@ -34,8 +34,12 @@ export const examSelect = {
   settings: true,
   reviewNote: true,
   publishedAt: true,
-  offeringPart: {
-    select: { publicId: true, coursePart: { select: { publicId: true, name: true } } },
+  coursePart: {
+    select: {
+      publicId: true,
+      name: true,
+      course: { select: { publicId: true, code: true, name: true } },
+    },
   },
   createdBy: { select: { publicId: true, user: { select: { displayName: true } } } },
 } satisfies Prisma.ExamSelect;
@@ -51,10 +55,10 @@ export const examListSelect = {
   status: true,
   reviewNote: true,
   updatedAt: true,
-  offeringPart: {
+  coursePart: {
     select: {
-      coursePart: { select: { name: true } },
-      offering: { select: { course: { select: { code: true } } } },
+      name: true,
+      course: { select: { code: true } },
     },
   },
   createdBy: { select: { user: { select: { displayName: true } } } },

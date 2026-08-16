@@ -1,14 +1,16 @@
-// University Examination System — Prisma schema
-// Phase 1: users / roles / organizational hierarchy / audit.
-// Exam, question, attempt, grading, result and report models are added in later phases.
+// University Examination System — data model.
 //
-// Conventions (see docs/README.md → Data model):
+// Conventions:
 //   - Int autoincrement `id` for joins; `publicId` (uuid) for anything exposed in a URL.
-//   - createdAt / updatedAt everywhere; deletedAt where the row is academic (soft delete only).
+//   - createdAt / updatedAt everywhere; deletedAt where a row is academic (soft delete only).
 //   - Every foreign key is indexed. Composite indexes on hot paths.
-//   - CHECK constraints (marks >= 0, semester 1..8, ...) are added in the migration SQL.
-//   - ExamAttempt / Answer / AuditLog are the high-growth tables — structured so monthly
-//     range partitioning on createdAt can be added later without a schema rewrite.
+//   - CHECK constraints (marks >= 0, semester number 1..12, ...) live in the migration SQL.
+//
+// Academic hierarchy:
+//   Faculty → Department → Program → Semester → Course → Course Part → Exam
+//   A teacher is assigned to a Course Part; exams and question banks belong to the part.
+//   A Batch of students is assigned to a Semester (advanced as the batch progresses); the
+//   students of that batch then see every course and exam of that semester.
 
 generator client {
   provider      = "prisma-client-js"
@@ -44,13 +46,13 @@ enum DegreeType {
   diploma
 }
 
-// ───────────────────────── Organizational hierarchy ─────────────────────────
+// ───────────────────────── Academic hierarchy ─────────────────────────
 
+// A faculty groups related departments. It has a name only.
 model Faculty {
   id        Int       @id @default(autoincrement())
   publicId  String    @unique @default(uuid())
   name      String
-  code      String    @unique
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
@@ -61,12 +63,12 @@ model Faculty {
   @@index([deletedAt])
 }
 
+// A department belongs to a faculty. It has a name only.
 model Department {
   id        Int       @id @default(autoincrement())
   publicId  String    @unique @default(uuid())
   facultyId Int
   name      String
-  code      String
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
@@ -76,11 +78,12 @@ model Department {
   teachers    Teacher[]
   scopedRoles UserRole[] @relation("DepartmentScope")
 
-  @@unique([facultyId, code])
+  @@unique([facultyId, name])
   @@index([facultyId])
   @@index([deletedAt])
 }
 
+// A program inside a department (e.g. Honours, Masters).
 model Program {
   id            Int        @id @default(autoincrement())
   publicId      String     @unique @default(uuid())
@@ -100,25 +103,7 @@ model Program {
   @@index([deletedAt])
 }
 
-model Batch {
-  id            Int       @id @default(autoincrement())
-  publicId      String    @unique @default(uuid())
-  programId     Int
-  name          String
-  admissionYear Int
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  deletedAt     DateTime?
-
-  program   Program          @relation(fields: [programId], references: [id])
-  students  Student[]
-  offerings CourseOffering[]
-
-  @@unique([programId, name])
-  @@index([programId])
-  @@index([deletedAt])
-}
-
+// A semester inside a program. Courses hang off it; batches are assigned to it.
 model Semester {
   id        Int       @id @default(autoincrement())
   publicId  String    @unique @default(uuid())
@@ -130,11 +115,36 @@ model Semester {
 
   program Program  @relation(fields: [programId], references: [id])
   courses Course[]
+  batches Batch[]  @relation("BatchCurrentSemester")
 
   @@unique([programId, number])
   @@index([programId])
 }
 
+// A cohort of students in one program. `currentSemesterId` is where the batch sits now;
+// admins advance it as the batch progresses. Students of the batch see that semester's work.
+model Batch {
+  id                Int       @id @default(autoincrement())
+  publicId          String    @unique @default(uuid())
+  programId         Int
+  currentSemesterId Int?
+  name              String
+  year              Int
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
+
+  program         Program   @relation(fields: [programId], references: [id])
+  currentSemester Semester? @relation("BatchCurrentSemester", fields: [currentSemesterId], references: [id])
+  students        Student[]
+
+  @@unique([programId, name])
+  @@index([programId])
+  @@index([currentSemesterId])
+  @@index([deletedAt])
+}
+
+// A course inside a semester.
 model Course {
   id         Int       @id @default(autoincrement())
   publicId   String    @unique @default(uuid())
@@ -146,90 +156,36 @@ model Course {
   updatedAt  DateTime  @updatedAt
   deletedAt  DateTime?
 
-  semester  Semester         @relation(fields: [semesterId], references: [id])
-  parts     CoursePart[]
-  offerings CourseOffering[]
+  semester Semester     @relation(fields: [semesterId], references: [id])
+  parts    CoursePart[]
 
   @@unique([semesterId, code])
   @@index([semesterId])
   @@index([deletedAt])
 }
 
+// A part of a course (e.g. Part A, Part B). A single teacher is assigned; exams and
+// question banks belong to the part. Reassigning a teacher just updates assignedTeacherId.
 model CoursePart {
-  id          Int       @id @default(autoincrement())
-  publicId    String    @unique @default(uuid())
-  courseId    Int
-  name        String
-  marksWeight Float
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
-
-  course        Course         @relation(fields: [courseId], references: [id])
-  offeringParts OfferingPart[]
-
-  @@index([courseId])
-}
-
-model AcademicTerm {
-  id        Int       @id @default(autoincrement())
-  publicId  String    @unique @default(uuid())
-  name      String    @unique
-  startDate DateTime
-  endDate   DateTime
-  isActive  Boolean   @default(false)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-
-  offerings CourseOffering[]
-
-  @@index([deletedAt])
-}
-
-// A concrete class: one course, taught to one batch, in one term.
-model CourseOffering {
-  id        Int       @id @default(autoincrement())
-  publicId  String    @unique @default(uuid())
-  courseId  Int
-  batchId   Int
-  termId    Int
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-
-  course Course         @relation(fields: [courseId], references: [id])
-  batch  Batch          @relation(fields: [batchId], references: [id])
-  term   AcademicTerm   @relation(fields: [termId], references: [id])
-  parts  OfferingPart[]
-
-  @@unique([courseId, batchId, termId])
-  @@index([batchId])
-  @@index([termId])
-  @@index([deletedAt])
-}
-
-// The reassignable teacher link. Exams attach here (added in phase 3).
-// Reassigning a teacher just updates assignedTeacherId (and writes an audit entry).
-model OfferingPart {
   id                Int       @id @default(autoincrement())
   publicId          String    @unique @default(uuid())
-  offeringId        Int
-  coursePartId      Int
+  courseId          Int
   assignedTeacherId Int?
+  name              String
+  marksWeight       Float
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
   deletedAt         DateTime?
 
-  offering        CourseOffering @relation(fields: [offeringId], references: [id])
-  coursePart      CoursePart     @relation(fields: [coursePartId], references: [id])
+  course          Course         @relation(fields: [courseId], references: [id])
   assignedTeacher Teacher?       @relation(fields: [assignedTeacherId], references: [id])
   questionBanks   QuestionBank[]
   exams           Exam[]
 
-  @@unique([offeringId, coursePartId])
+  @@unique([courseId, name])
+  @@index([courseId])
   @@index([assignedTeacherId])
-  @@index([offeringId])
+  @@index([deletedAt])
 }
 
 // ───────────────────────────── People & access ─────────────────────────────
@@ -260,17 +216,19 @@ model User {
 }
 
 model Student {
-  id        Int       @id @default(autoincrement())
-  publicId  String    @unique @default(uuid())
-  userId    Int       @unique
-  studentId String    @unique
-  batchId   Int
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  id                 Int       @id @default(autoincrement())
+  publicId           String    @unique @default(uuid())
+  userId             Int       @unique
+  studentId          String    @unique
+  registrationNumber String?   @unique
+  rollNumber         String?
+  batchId            Int
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  deletedAt          DateTime?
 
-  user     User           @relation(fields: [userId], references: [id])
-  batch    Batch          @relation(fields: [batchId], references: [id])
+  user     User          @relation(fields: [userId], references: [id])
+  batch    Batch         @relation(fields: [batchId], references: [id])
   attempts ExamAttempt[]
 
   @@index([batchId])
@@ -288,7 +246,7 @@ model Teacher {
 
   user          User           @relation(fields: [userId], references: [id])
   department    Department     @relation(fields: [departmentId], references: [id])
-  offeringParts OfferingPart[]
+  courseParts   CoursePart[]
   createdBanks  QuestionBank[]
   createdExams  Exam[]
   gradedAnswers Answer[]
@@ -305,7 +263,7 @@ model Role {
 }
 
 // Scoped RBAC: a role assignment may carry a faculty and/or department scope.
-// Guards check both the role AND the scope (see src/common/guards).
+// Guards check both the role AND the scope.
 model UserRole {
   id                Int      @id @default(autoincrement())
   userId            Int
@@ -325,9 +283,7 @@ model UserRole {
 }
 
 // ─────────────────────────────── Audit ───────────────────────────────
-// Append-only: the AuditService only ever inserts. No update/delete paths exist in code,
-// and in production the DB role is granted INSERT/SELECT only on this table.
-// High-growth: plan monthly range partitioning on createdAt (see docs/README.md → Scaling).
+// Append-only: the AuditService only ever inserts.
 model AuditLog {
   id          BigInt   @id @default(autoincrement())
   actorUserId Int?
@@ -347,14 +303,14 @@ model AuditLog {
   @@index([createdAt])
 }
 
-// ─────────────────────────── Exam & questions (Phase 3) ───────────────────────────
+// ─────────────────────────── Exams & questions ───────────────────────────
 
 enum QuestionType {
   mcq
   written
 }
 
-// Strict lifecycle state machine — transitions enforced server-side (see exam-state.ts).
+// Strict lifecycle state machine — transitions enforced server-side.
 enum ExamStatus {
   draft
   in_review
@@ -369,22 +325,22 @@ enum ExamStatus {
   archived
 }
 
-// A reusable bank of questions scoped to one OfferingPart (the teacher's assigned part).
+// A reusable bank of questions scoped to one course part (the teacher's assigned part).
 model QuestionBank {
   id                 Int       @id @default(autoincrement())
   publicId           String    @unique @default(uuid())
-  offeringPartId     Int
+  coursePartId       Int
   name               String
   createdByTeacherId Int?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
   deletedAt          DateTime?
 
-  offeringPart OfferingPart @relation(fields: [offeringPartId], references: [id])
-  createdBy    Teacher?     @relation(fields: [createdByTeacherId], references: [id])
-  questions    Question[]
+  coursePart CoursePart @relation(fields: [coursePartId], references: [id])
+  createdBy  Teacher?   @relation(fields: [createdByTeacherId], references: [id])
+  questions  Question[]
 
-  @@index([offeringPartId])
+  @@index([coursePartId])
   @@index([deletedAt])
 }
 
@@ -395,8 +351,8 @@ model Question {
   type        QuestionType
   text        String
   marks       Float
-  explanation String? // MCQ: shown per exam settings
-  modelAnswer String? // written: reference answer for graders
+  explanation String?
+  modelAnswer String?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   deletedAt   DateTime?
@@ -425,10 +381,12 @@ model QuestionOption {
   @@index([questionId])
 }
 
+// An exam belongs to a course part. Students see it when their batch's current semester
+// is the semester of the part's course.
 model Exam {
   id                 Int        @id @default(autoincrement())
   publicId           String     @unique @default(uuid())
-  offeringPartId     Int
+  coursePartId       Int
   createdByTeacherId Int
   title              String
   instructions       String?
@@ -438,18 +396,18 @@ model Exam {
   totalMarks         Float      @default(0)
   status             ExamStatus @default(draft)
   settings           Json
-  reviewNote         String? // admin note for changes_requested / rejected
+  reviewNote         String?
   publishedAt        DateTime?
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
   deletedAt          DateTime?
 
-  offeringPart  OfferingPart   @relation(fields: [offeringPartId], references: [id])
+  coursePart    CoursePart     @relation(fields: [coursePartId], references: [id])
   createdBy     Teacher        @relation(fields: [createdByTeacherId], references: [id])
   examQuestions ExamQuestion[]
   attempts      ExamAttempt[]
 
-  @@index([offeringPartId, status])
+  @@index([coursePartId, status])
   @@index([status])
   @@index([deletedAt])
 }
@@ -464,14 +422,13 @@ model ExamQuestion {
   order         Int
   marksOverride Float?
 
-  snapshotAt          DateTime?
-  snapshotType        QuestionType?
-  snapshotText        String?
-  snapshotMarks       Float?
-  snapshotExplanation String?
-  snapshotModelAnswer String?
-  snapshotOptions     Json? // MCQ: [{ id, text, order }] — id is the original option's publicId
-  // The correct option's id (from the snapshot). MCQ scoring compares against THIS, never the bank.
+  snapshotAt              DateTime?
+  snapshotType            QuestionType?
+  snapshotText            String?
+  snapshotMarks           Float?
+  snapshotExplanation     String?
+  snapshotModelAnswer     String?
+  snapshotOptions         Json?
   snapshotCorrectOptionId String?
 
   createdAt DateTime @default(now())
@@ -484,7 +441,7 @@ model ExamQuestion {
   @@index([examId])
 }
 
-// ───────────────────────── Attempts, answers, results (Phase 4) ─────────────────────────
+// ───────────────────────── Attempts, answers, results ─────────────────────────
 
 enum AttemptStatus {
   in_progress
@@ -499,7 +456,7 @@ enum GradingStatus {
   graded
 }
 
-// One row per (student, exam). The UNIQUE (examId, studentId) is the DB backstop against
+// One row per (student, exam). UNIQUE (examId, studentId) is the DB backstop against
 // duplicate attempts — concurrent starts collide here, they cannot both create an attempt.
 model ExamAttempt {
   id            Int           @id @default(autoincrement())
@@ -526,14 +483,13 @@ model ExamAttempt {
   @@index([createdAt])
 }
 
-// One row per (attempt, question). UNIQUE (attemptId, questionId) backstops duplicate answers;
-// autosave UPSERTs onto it (never select-then-insert).
+// One row per (attempt, question). Autosave UPSERTs onto UNIQUE (attemptId, questionId).
 model Answer {
   id                Int      @id @default(autoincrement())
   publicId          String   @unique @default(uuid())
   attemptId         Int
   questionId        Int
-  selectedOptionId  String? // MCQ: chosen snapshot option id (a QuestionOption publicId)
+  selectedOptionId  String?
   writtenText       String?
   autoScore         Float?
   manualScore       Float?
@@ -560,8 +516,6 @@ model ExamResult {
   finalScore Float
   percentage Float
   rank       Int?
-  // Per-question scores, so the overall mark sheet reads only ExamResult (never scans Answer):
-  // [{ questionPublicId, order, type, score, maxMarks }]
   breakdown  Json?
   computedAt DateTime @default(now())
   createdAt  DateTime @default(now())

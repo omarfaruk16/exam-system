@@ -8,7 +8,7 @@ interface ExamSettings {
 }
 
 /**
- * MCQ auto-grading (§6.6). Scores each MCQ Answer against the ExamQuestion SNAPSHOT
+ * MCQ auto-grading. Scores each MCQ Answer against the ExamQuestion SNAPSHOT
  * (snapshotCorrectOptionId), never the live bank, then hands off to the shared finalizer which
  * writes the ExamResult rollup once every answer (MCQ + written) is graded. Idempotent.
  */

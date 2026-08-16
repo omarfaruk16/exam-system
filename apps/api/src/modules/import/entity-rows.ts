@@ -13,8 +13,7 @@ export interface ParsedTeacherRow {
   username: string;
   name: string;
   email: string | null;
-  departmentCode: string | null;
-  departmentId: number | null;
+  departmentName: string;
   designation: string | null;
   phone: string | null;
 }
@@ -29,8 +28,7 @@ export function validateTeacherRow(
   const name =
     pick(cells, 'name', 'fullname', 'full name') || [firstName, lastName].filter(Boolean).join(' ');
   const email = pick(cells, 'email', 'e-mail');
-  const departmentCode = pick(cells, 'departmentcode', 'department code', 'dept', 'department');
-  const departmentIdRaw = pick(cells, 'departmentid', 'department id');
+  const departmentName = pick(cells, 'department', 'departmentname', 'department name', 'dept');
   const designation = pick(cells, 'designation', 'title');
   const phone = pick(cells, 'phone', 'mobile', 'contact');
 
@@ -51,25 +49,8 @@ export function validateTeacherRow(
   if (!EMAIL_RE.test(email)) {
     return { error: { row, field: 'email', value: email, message: 'Invalid email address' } };
   }
-  if (!departmentCode && !departmentIdRaw) {
-    return {
-      error: {
-        row,
-        field: 'departmentCode',
-        message: 'departmentCode or departmentId is required',
-      },
-    };
-  }
-  const departmentId = departmentIdRaw ? Number(departmentIdRaw) : null;
-  if (departmentIdRaw && !Number.isInteger(departmentId)) {
-    return {
-      error: {
-        row,
-        field: 'departmentId',
-        value: departmentIdRaw,
-        message: 'departmentId must be a number',
-      },
-    };
+  if (!departmentName) {
+    return { error: { row, field: 'department', message: 'Department name is required' } };
   }
 
   return {
@@ -78,8 +59,7 @@ export function validateTeacherRow(
       username,
       name,
       email,
-      departmentCode: departmentCode || null,
-      departmentId,
+      departmentName,
       designation: designation || null,
       phone: phone || null,
     },
@@ -90,9 +70,7 @@ export function validateTeacherRow(
 export interface ParsedDepartmentRow {
   rowNumber: number;
   name: string;
-  code: string;
-  facultyCode: string | null;
-  facultyId: number | null;
+  facultyName: string;
 }
 
 export function validateDepartmentRow(
@@ -100,40 +78,13 @@ export function validateDepartmentRow(
   row: number,
 ): Result<ParsedDepartmentRow> {
   const name = pick(cells, 'name', 'department', 'department name');
-  const code = pick(cells, 'code', 'department code');
-  const facultyCode = pick(cells, 'facultycode', 'faculty code', 'faculty');
-  const facultyIdRaw = pick(cells, 'facultyid', 'faculty id');
+  const facultyName = pick(cells, 'faculty', 'facultyname', 'faculty name');
 
   if (!name) return { error: { row, field: 'name', message: 'Name is required' } };
-  if (!code) return { error: { row, field: 'code', message: 'Code is required' } };
-  if (!CODE_RE.test(code)) {
-    return {
-      error: {
-        row,
-        field: 'code',
-        value: code,
-        message: 'Code: letters, digits, . _ - (1–30 chars)',
-      },
-    };
-  }
-  if (!facultyCode && !facultyIdRaw) {
-    return {
-      error: { row, field: 'facultyCode', message: 'facultyCode or facultyId is required' },
-    };
-  }
-  const facultyId = facultyIdRaw ? Number(facultyIdRaw) : null;
-  if (facultyIdRaw && !Number.isInteger(facultyId)) {
-    return {
-      error: {
-        row,
-        field: 'facultyId',
-        value: facultyIdRaw,
-        message: 'facultyId must be a number',
-      },
-    };
-  }
+  if (!facultyName)
+    return { error: { row, field: 'faculty', message: 'Faculty name is required' } };
 
-  return { value: { rowNumber: row, name, code, facultyCode: facultyCode || null, facultyId } };
+  return { value: { rowNumber: row, name, facultyName } };
 }
 
 // ─────────────────────────────── Courses ───────────────────────────────
@@ -144,7 +95,7 @@ export interface ParsedCourseRow {
   credit: number;
   semesterId: number | null;
   semesterNumber: number | null;
-  programCode: string | null;
+  programName: string | null;
 }
 
 export function validateCourseRow(
@@ -156,7 +107,7 @@ export function validateCourseRow(
   const creditRaw = pick(cells, 'credit', 'credits', 'credithours', 'credit hours');
   const semesterIdRaw = pick(cells, 'semesterid', 'semester id');
   const semesterNumberRaw = pick(cells, 'semesternumber', 'semester number', 'semester');
-  const programCode = pick(cells, 'programcode', 'program code', 'program');
+  const programName = pick(cells, 'program', 'programname', 'program name');
 
   if (!code) return { error: { row, field: 'code', message: 'Code is required' } };
   if (!CODE_RE.test(code)) {
@@ -184,12 +135,12 @@ export function validateCourseRow(
 
   const semesterId = semesterIdRaw ? Number(semesterIdRaw) : null;
   const semesterNumber = semesterNumberRaw ? Number(semesterNumberRaw) : null;
-  if (!semesterIdRaw && !(semesterNumberRaw && programCode)) {
+  if (!semesterIdRaw && !(semesterNumberRaw && programName)) {
     return {
       error: {
         row,
         field: 'semesterId',
-        message: 'Provide semesterId, or both semesterNumber and programCode',
+        message: 'Provide semesterId, or both semesterNumber and program',
       },
     };
   }
@@ -222,7 +173,7 @@ export function validateCourseRow(
       credit,
       semesterId,
       semesterNumber,
-      programCode: programCode || null,
+      programName: programName || null,
     },
   };
 }

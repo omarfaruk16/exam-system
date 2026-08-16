@@ -8,8 +8,8 @@ import { AccessControlService } from '../../common/access/access-control.service
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { AuthUser } from '../../common/types/auth';
 
-export interface OfferingPartContext {
-  offeringPartId: number;
+export interface CoursePartContext {
+  coursePartId: number;
   departmentId: number;
   facultyId: number;
   assignedTeacherId: number | null;
@@ -33,28 +33,22 @@ export class ExamAccessService {
   }
 
   /**
-   * Loads an offering part with its integrity + scope info. Uses the BASE client so soft-deleted
-   * rows are visible — we must be able to *detect* and reject them (the Phase-2 cascade gap must
-   * not become an exam integrity hole). Rejects with 400 if the part or its offering is removed.
+   * Loads a course part with its integrity + scope info. Uses the BASE client so a soft-deleted
+   * part is still visible — we must be able to detect and reject it rather than silently 404.
    */
-  async loadActiveOfferingPart(offeringPartPublicId: string): Promise<OfferingPartContext> {
-    const op = await this.prisma.offeringPart.findUnique({
-      where: { publicId: offeringPartPublicId },
+  async loadActiveCoursePart(coursePartPublicId: string): Promise<CoursePartContext> {
+    const cp = await this.prisma.coursePart.findUnique({
+      where: { publicId: coursePartPublicId },
       select: {
         id: true,
         deletedAt: true,
         assignedTeacherId: true,
-        offering: {
+        course: {
           select: {
-            deletedAt: true,
-            course: {
+            semester: {
               select: {
-                semester: {
-                  select: {
-                    program: {
-                      select: { departmentId: true, department: { select: { facultyId: true } } },
-                    },
-                  },
+                program: {
+                  select: { departmentId: true, department: { select: { facultyId: true } } },
                 },
               },
             },
@@ -62,31 +56,28 @@ export class ExamAccessService {
         },
       },
     });
-    if (!op) throw new NotFoundException('Offering part not found');
-    if (op.deletedAt) throw new BadRequestException('This offering part has been removed');
-    if (op.offering.deletedAt)
-      throw new BadRequestException('This course offering has been removed');
+    if (!cp) throw new NotFoundException('Course part not found');
+    if (cp.deletedAt) throw new BadRequestException('This course part has been removed');
 
     return {
-      offeringPartId: op.id,
-      departmentId: op.offering.course.semester.program.departmentId,
-      facultyId: op.offering.course.semester.program.department.facultyId,
-      assignedTeacherId: op.assignedTeacherId,
+      coursePartId: cp.id,
+      departmentId: cp.course.semester.program.departmentId,
+      facultyId: cp.course.semester.program.department.facultyId,
+      assignedTeacherId: cp.assignedTeacherId,
     };
   }
 
   /**
-   * Authoring guard: the offering part must be active AND assigned to the requesting teacher.
-   * Returns the teacher id and the part context.
+   * Authoring guard: the course part must be active AND assigned to the requesting teacher.
    */
   async requireAuthorablePart(
     user: AuthUser,
-    offeringPartPublicId: string,
-  ): Promise<OfferingPartContext & { teacherId: number }> {
-    const ctx = await this.loadActiveOfferingPart(offeringPartPublicId);
+    coursePartPublicId: string,
+  ): Promise<CoursePartContext & { teacherId: number }> {
+    const ctx = await this.loadActiveCoursePart(coursePartPublicId);
     const teacher = await this.requireTeacher(user);
     if (ctx.assignedTeacherId !== teacher.id) {
-      throw new ForbiddenException('You are not assigned to this offering part');
+      throw new ForbiddenException('You are not assigned to this course part');
     }
     return { ...ctx, teacherId: teacher.id };
   }

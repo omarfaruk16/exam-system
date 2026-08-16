@@ -1,14 +1,12 @@
 import type {
-  AcademicTerm,
   Batch,
   Course,
-  CourseOffering,
   CoursePart,
   Department,
   Faculty,
-  OfferingPart,
   Program,
   Semester,
+  StudentRow,
   TeacherOption,
 } from '@exam/types';
 import { api } from '@/lib/api';
@@ -36,9 +34,8 @@ export const fetchCourseParts = (course?: string) =>
   api.get<CoursePart[]>(`/org/course-parts${qs({ course })}`);
 
 // Create
-export const createFaculty = (b: { name: string; code: string }) =>
-  api.post<Faculty>('/org/faculties', b);
-export const createDepartment = (b: { facultyPublicId: string; name: string; code: string }) =>
+export const createFaculty = (b: { name: string }) => api.post<Faculty>('/org/faculties', b);
+export const createDepartment = (b: { facultyPublicId: string; name: string }) =>
   api.post<Department>('/org/departments', b);
 export const createProgram = (b: {
   departmentPublicId: string;
@@ -46,7 +43,7 @@ export const createProgram = (b: {
   degreeType: string;
   durationYears: number;
 }) => api.post<Program>('/org/programs', b);
-export const createBatch = (b: { programPublicId: string; name: string; admissionYear: number }) =>
+export const createBatch = (b: { programPublicId: string; name: string; year: number }) =>
   api.post<Batch>('/org/batches', b);
 export const createSemester = (b: { programPublicId: string; number: number }) =>
   api.post<Semester>('/org/semesters', b);
@@ -63,15 +60,15 @@ export const createCoursePart = (b: {
 }) => api.post<CoursePart>('/org/course-parts', b);
 
 // Update
-export const updateFaculty = (id: string, b: { name?: string; code?: string }) =>
+export const updateFaculty = (id: string, b: { name?: string }) =>
   api.patch<Faculty>(`/org/faculties/${id}`, b);
-export const updateDepartment = (id: string, b: { name?: string; code?: string }) =>
+export const updateDepartment = (id: string, b: { name?: string }) =>
   api.patch<Department>(`/org/departments/${id}`, b);
 export const updateProgram = (
   id: string,
   b: { name?: string; degreeType?: string; durationYears?: number },
 ) => api.patch<Program>(`/org/programs/${id}`, b);
-export const updateBatch = (id: string, b: { name?: string; admissionYear?: number }) =>
+export const updateBatch = (id: string, b: { name?: string; year?: number }) =>
   api.patch<Batch>(`/org/batches/${id}`, b);
 export const updateCourse = (id: string, b: { code?: string; name?: string; credit?: number }) =>
   api.patch<Course>(`/org/courses/${id}`, b);
@@ -87,33 +84,18 @@ export const deleteSemester = (id: string) => api.del(`/org/semesters/${id}`);
 export const deleteCourse = (id: string) => api.del(`/org/courses/${id}`);
 export const deleteCoursePart = (id: string) => api.del(`/org/course-parts/${id}`);
 
-// ── Terms ──
-export const fetchTerms = () => api.get<AcademicTerm[]>('/org/terms');
-export const createTerm = (b: {
-  name: string;
-  startDate: string;
-  endDate: string;
-  isActive?: boolean;
-}) => api.post<AcademicTerm>('/org/terms', b);
-export const updateTerm = (
-  id: string,
-  b: { name?: string; startDate?: string; endDate?: string; isActive?: boolean },
-) => api.patch<AcademicTerm>(`/org/terms/${id}`, b);
-export const deleteTerm = (id: string) => api.del(`/org/terms/${id}`);
-
-// ── Offerings ──
-export const fetchOfferings = () => api.get<CourseOffering[]>('/org/offerings');
-export const createOffering = (b: {
-  coursePublicId: string;
-  batchPublicId: string;
-  termPublicId: string;
-}) => api.post<CourseOffering>('/org/offerings', b);
-export const deleteOffering = (id: string) => api.del(`/org/offerings/${id}`);
-export const fetchOfferingParts = (offeringId: string) =>
-  api.get<OfferingPart[]>(`/org/offerings/${offeringId}/parts`);
-export const assignTeacher = (offeringPartId: string, teacherPublicId: string | null) =>
-  api.put<OfferingPart>(`/org/offering-parts/${offeringPartId}/teacher`, { teacherPublicId });
-
-// ── Teachers ──
+// ── Teacher assignment (on a course part) ──
 export const fetchTeachers = (department: string) =>
   api.get<TeacherOption[]>(`/org/teachers${qs({ department })}`);
+export const assignTeacher = (coursePartId: string, teacherPublicId: string | null) =>
+  api.put<CoursePart>(`/org/course-parts/${coursePartId}/teacher`, { teacherPublicId });
+
+// ── Batch → semester assignment ──
+export const assignBatchSemester = (batchId: string, semesterPublicId: string | null) =>
+  api.put<Batch>(`/org/batches/${batchId}/semester`, { semesterPublicId });
+
+// ── Students ──
+export const fetchStudents = (batch?: string) =>
+  api.get<StudentRow[]>(`/org/students${qs({ batch })}`);
+export const changeStudentBatch = (studentId: string, batchPublicId: string) =>
+  api.put<StudentRow>(`/org/students/${studentId}/batch`, { batchPublicId });

@@ -122,7 +122,10 @@ export function ReviewDetailPage() {
             )}
           </div>
           <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-            <Detail label="Course part" value={exam.offeringPart.coursePart.name} />
+            <Detail
+              label="Course part"
+              value={`${exam.coursePart.course.code} · ${exam.coursePart.name}`}
+            />
             <Detail label="Duration" value={`${exam.durationMinutes} min`} />
             <Detail label="Starts" value={fmt(exam.startAt)} />
             <Detail label="Ends" value={fmt(exam.endAt)} />

@@ -14,12 +14,12 @@ type Filter = 'all' | 'mcq' | 'written';
 
 export function QuestionBankPanel({
   examPublicId,
-  offeringPartPublicId,
+  coursePartPublicId,
   addedQuestionIds,
   nextOrder,
 }: {
   examPublicId: string;
-  offeringPartPublicId: string;
+  coursePartPublicId: string;
   addedQuestionIds: Set<string>;
   nextOrder: number;
 }) {
@@ -29,8 +29,8 @@ export function QuestionBankPanel({
   const [search, setSearch] = useState('');
 
   const banksQuery = useQuery({
-    queryKey: ['banks', offeringPartPublicId],
-    queryFn: () => fetchBanks(offeringPartPublicId),
+    queryKey: ['banks', coursePartPublicId],
+    queryFn: () => fetchBanks(coursePartPublicId),
   });
 
   // Auto-select the first bank once banks load.
@@ -74,7 +74,7 @@ export function QuestionBankPanel({
         {banksQuery.isLoading ? (
           <div className="bg-muted mt-3 h-10 animate-pulse rounded-md" />
         ) : banks.length === 0 ? (
-          <NoBanks offeringPartPublicId={offeringPartPublicId} onCreated={(id) => setBankId(id)} />
+          <NoBanks coursePartPublicId={coursePartPublicId} onCreated={(id) => setBankId(id)} />
         ) : (
           <>
             {banks.length > 1 && (
@@ -208,18 +208,18 @@ function BankQuestionCard({
 }
 
 function NoBanks({
-  offeringPartPublicId,
+  coursePartPublicId,
   onCreated,
 }: {
-  offeringPartPublicId: string;
+  coursePartPublicId: string;
   onCreated: (bankId: string) => void;
 }) {
   const qc = useQueryClient();
   const [name, setName] = useState('Question bank');
   const create = useMutation({
-    mutationFn: () => createBank(offeringPartPublicId, name.trim() || 'Question bank'),
+    mutationFn: () => createBank(coursePartPublicId, name.trim() || 'Question bank'),
     onSuccess: async (bank) => {
-      await qc.invalidateQueries({ queryKey: ['banks', offeringPartPublicId] });
+      await qc.invalidateQueries({ queryKey: ['banks', coursePartPublicId] });
       onCreated(bank.publicId);
       toast.success('Question bank created');
     },

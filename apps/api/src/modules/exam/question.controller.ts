@@ -36,8 +36,8 @@ export class QuestionController {
 
   @Roles('teacher', 'admin', 'super_admin')
   @Get('question-banks')
-  listBanks(@CurrentUser() u: AuthUser, @Query('offeringPart') offeringPart: string) {
-    return this.questions.listBanks(u, offeringPart);
+  listBanks(@CurrentUser() u: AuthUser, @Query('part') part: string) {
+    return this.questions.listBanks(u, part);
   }
 
   @Roles('teacher')

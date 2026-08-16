@@ -55,7 +55,7 @@ export function ExamBuilderPage() {
             <h1 className="truncate text-2xl font-semibold tracking-tight">{exam.title}</h1>
             <StatusPill status={exam.status} />
           </div>
-          <p className="text-muted-foreground mt-1 text-sm">{exam.offeringPart.coursePart.name}</p>
+          <p className="text-muted-foreground mt-1 text-sm">{exam.coursePart.name}</p>
         </div>
         {!readOnly && (
           <Button
@@ -82,7 +82,7 @@ export function ExamBuilderPage() {
         <div className="grid gap-6 lg:grid-cols-[minmax(340px,380px)_1fr] lg:items-start">
           <QuestionBankPanel
             examPublicId={exam.publicId}
-            offeringPartPublicId={exam.offeringPart.publicId}
+            coursePartPublicId={exam.coursePart.publicId}
             addedQuestionIds={addedQuestionIds}
             nextOrder={examQuestions.length + 1}
           />

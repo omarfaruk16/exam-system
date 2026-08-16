@@ -1,9 +1,8 @@
 /**
- * Idempotent seed (safe to re-run). Builds a small but complete slice:
- * Faculty → Department → Program → Batch → Semester → Course → Part, an active term,
- * one concrete offering with two assigned teachers, and one user for every role.
- *
- * The sample exam (MCQ + written) is seeded in Phase 3, once those tables exist.
+ * Idempotent seed (safe to re-run). Builds a small but complete slice of the academic hierarchy:
+ *   Faculty → Department → Program → Semester → Course → Course Part (with an assigned teacher),
+ * plus batches assigned to a semester, students with registration/roll numbers, one user for
+ * every role, and a sample question bank + draft exam.
  */
 import { DegreeType, PrismaClient, type RoleName } from '@prisma/client';
 import * as argon2 from 'argon2';
@@ -64,6 +63,14 @@ async function setRoles(userId: number, roles: RoleAssignment[]): Promise<void> 
   }
 }
 
+/** Faculty has no unique business key, so find-or-create by name. */
+async function ensureFaculty(name: string) {
+  return (
+    (await prisma.faculty.findFirst({ where: { name } })) ??
+    (await prisma.faculty.create({ data: { name } }))
+  );
+}
+
 async function main(): Promise<void> {
   // 1. Roles
   const roleNames: RoleName[] = ['super_admin', 'admin', 'department_head', 'teacher', 'student'];
@@ -73,77 +80,80 @@ async function main(): Promise<void> {
   }
 
   // 2. Faculties
-  const sci = await prisma.faculty.upsert({
-    where: { code: 'SCI' },
-    update: { name: 'Faculty of Science' },
-    create: { name: 'Faculty of Science', code: 'SCI' },
-  });
-  const bus = await prisma.faculty.upsert({
-    where: { code: 'BUS' },
-    update: { name: 'Faculty of Business Studies' },
-    create: { name: 'Faculty of Business Studies', code: 'BUS' },
-  });
+  const sci = await ensureFaculty('Faculty of Science');
+  const bus = await ensureFaculty('Faculty of Business Studies');
 
-  // 3. Departments
+  // 3. Departments (unique per faculty by name)
   const cse = await prisma.department.upsert({
-    where: { facultyId_code: { facultyId: sci.id, code: 'CSE' } },
-    update: { name: 'Computer Science & Engineering' },
-    create: { facultyId: sci.id, name: 'Computer Science & Engineering', code: 'CSE' },
+    where: { facultyId_name: { facultyId: sci.id, name: 'Computer Science & Engineering' } },
+    update: {},
+    create: { facultyId: sci.id, name: 'Computer Science & Engineering' },
   });
   const phy = await prisma.department.upsert({
-    where: { facultyId_code: { facultyId: sci.id, code: 'PHY' } },
+    where: { facultyId_name: { facultyId: sci.id, name: 'Physics' } },
     update: {},
-    create: { facultyId: sci.id, name: 'Physics', code: 'PHY' },
+    create: { facultyId: sci.id, name: 'Physics' },
   });
   const mgt = await prisma.department.upsert({
-    where: { facultyId_code: { facultyId: bus.id, code: 'MGT' } },
+    where: { facultyId_name: { facultyId: bus.id, name: 'Management' } },
     update: {},
-    create: { facultyId: bus.id, name: 'Management', code: 'MGT' },
+    create: { facultyId: bus.id, name: 'Management' },
   });
 
   // 4. Programs
-  const cseBsc =
-    (await prisma.program.findFirst({
-      where: { departmentId: cse.id, name: 'BSc in Computer Science & Engineering' },
-    })) ??
+  const cseHons =
+    (await prisma.program.findFirst({ where: { departmentId: cse.id, name: 'Honours' } })) ??
     (await prisma.program.create({
       data: {
         departmentId: cse.id,
-        name: 'BSc in Computer Science & Engineering',
+        name: 'Honours',
         degreeType: DegreeType.bachelor,
         durationYears: 4,
       },
     }));
   const bba =
-    (await prisma.program.findFirst({
-      where: { departmentId: mgt.id, name: 'Bachelor of Business Administration' },
-    })) ??
+    (await prisma.program.findFirst({ where: { departmentId: mgt.id, name: 'BBA' } })) ??
     (await prisma.program.create({
       data: {
         departmentId: mgt.id,
-        name: 'Bachelor of Business Administration',
+        name: 'BBA',
         degreeType: DegreeType.bachelor,
         durationYears: 4,
       },
     }));
 
-  // 5. Batches
+  // 5. Semesters
+  const cseSem1 = await prisma.semester.upsert({
+    where: { programId_number: { programId: cseHons.id, number: 1 } },
+    update: {},
+    create: { programId: cseHons.id, number: 1 },
+  });
+  await prisma.semester.upsert({
+    where: { programId_number: { programId: cseHons.id, number: 2 } },
+    update: {},
+    create: { programId: cseHons.id, number: 2 },
+  });
+  await prisma.semester.upsert({
+    where: { programId_number: { programId: bba.id, number: 1 } },
+    update: {},
+    create: { programId: bba.id, number: 1 },
+  });
+
+  // 6. Batches — the CSE 2021 batch currently sits in semester 1.
   const cseBatch = await prisma.batch.upsert({
-    where: { programId_name: { programId: cseBsc.id, name: '2021 Batch' } },
-    update: { admissionYear: 2021 },
-    create: { programId: cseBsc.id, name: '2021 Batch', admissionYear: 2021 },
+    where: { programId_name: { programId: cseHons.id, name: '2021 Batch' } },
+    update: { year: 2021, currentSemesterId: cseSem1.id },
+    create: {
+      programId: cseHons.id,
+      name: '2021 Batch',
+      year: 2021,
+      currentSemesterId: cseSem1.id,
+    },
   });
   await prisma.batch.upsert({
     where: { programId_name: { programId: bba.id, name: '2022 Batch' } },
-    update: { admissionYear: 2022 },
-    create: { programId: bba.id, name: '2022 Batch', admissionYear: 2022 },
-  });
-
-  // 6. Semester
-  const cseSem1 = await prisma.semester.upsert({
-    where: { programId_number: { programId: cseBsc.id, number: 1 } },
-    update: {},
-    create: { programId: cseBsc.id, number: 1 },
+    update: { year: 2022 },
+    create: { programId: bba.id, name: '2022 Batch', year: 2022 },
   });
 
   // 7. Course
@@ -153,31 +163,7 @@ async function main(): Promise<void> {
     create: { semesterId: cseSem1.id, code: 'CSE-1101', name: 'Structured Programming', credit: 3 },
   });
 
-  // 8. Course parts
-  const partA =
-    (await prisma.coursePart.findFirst({ where: { courseId: course.id, name: 'Part A' } })) ??
-    (await prisma.coursePart.create({
-      data: { courseId: course.id, name: 'Part A', marksWeight: 60 },
-    }));
-  const partB =
-    (await prisma.coursePart.findFirst({ where: { courseId: course.id, name: 'Part B' } })) ??
-    (await prisma.coursePart.create({
-      data: { courseId: course.id, name: 'Part B', marksWeight: 40 },
-    }));
-
-  // 9. Academic term (active)
-  const term = await prisma.academicTerm.upsert({
-    where: { name: 'Spring 2026' },
-    update: { isActive: true },
-    create: {
-      name: 'Spring 2026',
-      startDate: new Date('2026-01-15'),
-      endDate: new Date('2026-06-15'),
-      isActive: true,
-    },
-  });
-
-  // 10. Staff users
+  // 8. Staff users
   const superAdmin = await upsertUser({
     username: 'superadmin',
     email: 'superadmin@ru.ac.bd',
@@ -236,58 +222,60 @@ async function main(): Promise<void> {
     { name: 'teacher' },
   ]);
 
-  // 11. Concrete offering + teacher assignments
-  const offering = await prisma.courseOffering.upsert({
-    where: {
-      courseId_batchId_termId: { courseId: course.id, batchId: cseBatch.id, termId: term.id },
+  // 9. Course parts, each with its assigned teacher.
+  const partA = await prisma.coursePart.upsert({
+    where: { courseId_name: { courseId: course.id, name: 'Part A' } },
+    update: { marksWeight: 60, assignedTeacherId: teacher1.id },
+    create: {
+      courseId: course.id,
+      name: 'Part A',
+      marksWeight: 60,
+      assignedTeacherId: teacher1.id,
     },
-    update: {},
-    create: { courseId: course.id, batchId: cseBatch.id, termId: term.id },
   });
-  const cseOfferingPartA = await prisma.offeringPart.upsert({
-    where: { offeringId_coursePartId: { offeringId: offering.id, coursePartId: partA.id } },
-    update: { assignedTeacherId: teacher1.id },
-    create: { offeringId: offering.id, coursePartId: partA.id, assignedTeacherId: teacher1.id },
-  });
-  await prisma.offeringPart.upsert({
-    where: { offeringId_coursePartId: { offeringId: offering.id, coursePartId: partB.id } },
-    update: { assignedTeacherId: teacher2.id },
-    create: { offeringId: offering.id, coursePartId: partB.id, assignedTeacherId: teacher2.id },
+  await prisma.coursePart.upsert({
+    where: { courseId_name: { courseId: course.id, name: 'Part B' } },
+    update: { marksWeight: 40, assignedTeacherId: teacher2.id },
+    create: {
+      courseId: course.id,
+      name: 'Part B',
+      marksWeight: 40,
+      assignedTeacherId: teacher2.id,
+    },
   });
 
-  // 11b. Physics subtree (second department under the same faculty) so cross-department
-  //      scoping can be tested for real: cse.head must NOT reach these Physics entities.
+  // 10. Physics subtree (second department under the same faculty) so cross-department scoping
+  //     can be tested for real: cse.head must NOT reach these Physics entities.
   const phyProgram =
-    (await prisma.program.findFirst({ where: { departmentId: phy.id, name: 'BSc in Physics' } })) ??
+    (await prisma.program.findFirst({ where: { departmentId: phy.id, name: 'Honours' } })) ??
     (await prisma.program.create({
       data: {
         departmentId: phy.id,
-        name: 'BSc in Physics',
+        name: 'Honours',
         degreeType: DegreeType.bachelor,
         durationYears: 4,
       },
     }));
-  const phyBatch = await prisma.batch.upsert({
-    where: { programId_name: { programId: phyProgram.id, name: '2021 Batch' } },
-    update: { admissionYear: 2021 },
-    create: { programId: phyProgram.id, name: '2021 Batch', admissionYear: 2021 },
-  });
   const phySem1 = await prisma.semester.upsert({
     where: { programId_number: { programId: phyProgram.id, number: 1 } },
     update: {},
     create: { programId: phyProgram.id, number: 1 },
+  });
+  await prisma.batch.upsert({
+    where: { programId_name: { programId: phyProgram.id, name: '2021 Batch' } },
+    update: { year: 2021, currentSemesterId: phySem1.id },
+    create: {
+      programId: phyProgram.id,
+      name: '2021 Batch',
+      year: 2021,
+      currentSemesterId: phySem1.id,
+    },
   });
   const phyCourse = await prisma.course.upsert({
     where: { semesterId_code: { semesterId: phySem1.id, code: 'PHY-1101' } },
     update: { name: 'Mechanics', credit: 3 },
     create: { semesterId: phySem1.id, code: 'PHY-1101', name: 'Mechanics', credit: 3 },
   });
-  const phyPartA =
-    (await prisma.coursePart.findFirst({ where: { courseId: phyCourse.id, name: 'Part A' } })) ??
-    (await prisma.coursePart.create({
-      data: { courseId: phyCourse.id, name: 'Part A', marksWeight: 100 },
-    }));
-
   const phyTeacherUser = await upsertUser({
     username: 'phy.teacher',
     email: 'phy.teacher@ru.ac.bd',
@@ -300,29 +288,40 @@ async function main(): Promise<void> {
     create: { userId: phyTeacherUser.id, departmentId: phy.id, designation: 'Assistant Professor' },
   });
   await setRoles(phyTeacherUser.id, [{ name: 'teacher' }]);
-
-  const phyOffering = await prisma.courseOffering.upsert({
-    where: {
-      courseId_batchId_termId: { courseId: phyCourse.id, batchId: phyBatch.id, termId: term.id },
-    },
-    update: {},
-    create: { courseId: phyCourse.id, batchId: phyBatch.id, termId: term.id },
-  });
-  await prisma.offeringPart.upsert({
-    where: { offeringId_coursePartId: { offeringId: phyOffering.id, coursePartId: phyPartA.id } },
-    update: { assignedTeacherId: phyTeacher.id },
+  await prisma.coursePart.upsert({
+    where: { courseId_name: { courseId: phyCourse.id, name: 'Part A' } },
+    update: { marksWeight: 100, assignedTeacherId: phyTeacher.id },
     create: {
-      offeringId: phyOffering.id,
-      coursePartId: phyPartA.id,
+      courseId: phyCourse.id,
+      name: 'Part A',
+      marksWeight: 100,
       assignedTeacherId: phyTeacher.id,
     },
   });
 
-  // 12. Students in the CSE 2021 batch
+  // 11. Students in the CSE 2021 batch, with registration + roll numbers.
   const students = [
-    { studentId: '2021001', name: 'Ayesha Siddiqua', email: 'ayesha@student.ru.ac.bd' },
-    { studentId: '2021002', name: 'Tanvir Hasan', email: 'tanvir@student.ru.ac.bd' },
-    { studentId: '2021003', name: 'Mitu Rani Das', email: 'mitu@student.ru.ac.bd' },
+    {
+      studentId: '2021001',
+      reg: 'RU-2021-CSE-001',
+      roll: '01',
+      name: 'Ayesha Siddiqua',
+      email: 'ayesha@student.ru.ac.bd',
+    },
+    {
+      studentId: '2021002',
+      reg: 'RU-2021-CSE-002',
+      roll: '02',
+      name: 'Tanvir Hasan',
+      email: 'tanvir@student.ru.ac.bd',
+    },
+    {
+      studentId: '2021003',
+      reg: 'RU-2021-CSE-003',
+      roll: '03',
+      name: 'Mitu Rani Das',
+      email: 'mitu@student.ru.ac.bd',
+    },
   ];
   for (const s of students) {
     const u = await upsertUser({
@@ -333,23 +332,30 @@ async function main(): Promise<void> {
     });
     await prisma.student.upsert({
       where: { userId: u.id },
-      update: { batchId: cseBatch.id, studentId: s.studentId },
-      create: { userId: u.id, studentId: s.studentId, batchId: cseBatch.id },
+      update: {
+        batchId: cseBatch.id,
+        studentId: s.studentId,
+        registrationNumber: s.reg,
+        rollNumber: s.roll,
+      },
+      create: {
+        userId: u.id,
+        studentId: s.studentId,
+        registrationNumber: s.reg,
+        rollNumber: s.roll,
+        batchId: cseBatch.id,
+      },
     });
     await setRoles(u.id, [{ name: 'student' }]);
   }
 
-  // 13. Sample question bank + a draft exam (MCQ + written) for CSE Part A, owned by teacher1.
+  // 12. Sample question bank + a draft exam (MCQ + written) for CSE Part A, owned by teacher1.
   const bank =
     (await prisma.questionBank.findFirst({
-      where: { offeringPartId: cseOfferingPartA.id, name: 'CSE-1101 Bank' },
+      where: { coursePartId: partA.id, name: 'CSE-1101 Bank' },
     })) ??
     (await prisma.questionBank.create({
-      data: {
-        offeringPartId: cseOfferingPartA.id,
-        name: 'CSE-1101 Bank',
-        createdByTeacherId: teacher1.id,
-      },
+      data: { coursePartId: partA.id, name: 'CSE-1101 Bank', createdByTeacherId: teacher1.id },
     }));
 
   async function ensureMcq(
@@ -404,11 +410,11 @@ async function main(): Promise<void> {
 
   const sampleExam =
     (await prisma.exam.findFirst({
-      where: { offeringPartId: cseOfferingPartA.id, title: 'CSE-1101 Midterm (Sample)' },
+      where: { coursePartId: partA.id, title: 'CSE-1101 Midterm (Sample)' },
     })) ??
     (await prisma.exam.create({
       data: {
-        offeringPartId: cseOfferingPartA.id,
+        coursePartId: partA.id,
         createdByTeacherId: teacher1.id,
         title: 'CSE-1101 Midterm (Sample)',
         instructions:
@@ -451,10 +457,9 @@ async function main(): Promise<void> {
   │ Teacher           │ teacher1      │ ${STAFF_PW}   │
   │ Teacher           │ teacher2      │ ${STAFF_PW}   │
   │ Student           │ 2021001       │ ${STUDENT_PW} │
-  │ Student           │ 2021002       │ ${STUDENT_PW} │
-  │ Student           │ 2021003       │ ${STUDENT_PW} │
   └───────────────────┴───────────────┴───────────────┘
-  Offering: CSE-1101 Structured Programming · CSE 2021 Batch · Spring 2026
+  CSE Honours → Semester 1 → CSE-1101 (Part A: Dr. Kabir Ahmed, Part B: Nusrat Jahan)
+  CSE 2021 Batch is assigned to Semester 1.
 `);
 }
 

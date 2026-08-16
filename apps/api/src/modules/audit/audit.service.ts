@@ -14,7 +14,7 @@ export interface AuditEntry {
 }
 
 /**
- * Append-only audit trail (§4). Only ever inserts — there is no update/delete path in code, and
+ * Append-only audit trail. Only ever inserts — there is no update/delete path in code, and
  * in production the DB role is granted INSERT/SELECT only on "AuditLog".
  */
 @Injectable()

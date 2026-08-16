@@ -57,7 +57,7 @@ function readSheet(ws: ExcelJS.Worksheet): Record<string, unknown>[] {
   return rows.map((x) => ({ ...x.data }));
 }
 
-/** Excel question import (§6.4): MCQ + Written sheets, row-level validation, error report. */
+/** Excel question import: MCQ + Written sheets, row-level validation, error report. */
 @Processor(QUEUE_QUESTION_IMPORT, { concurrency: 1 })
 export class QuestionImportProcessor extends WorkerHost {
   private readonly logger = new Logger(QuestionImportProcessor.name);

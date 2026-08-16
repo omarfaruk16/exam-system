@@ -25,8 +25,7 @@ import { GradingWorkspace } from '@/features/teacher/GradingWorkspace';
 import { ResultPage } from '@/features/student/ResultPage';
 import { OrgLayout } from '@/features/org/OrgLayout';
 import { OrgStructurePage } from '@/features/org/OrgStructurePage';
-import { TermsPage } from '@/features/org/TermsPage';
-import { OfferingsPage } from '@/features/org/OfferingsPage';
+import { BatchesPage } from '@/features/org/BatchesPage';
 import { ImportsPage } from '@/features/org/ImportsPage';
 import { ReviewQueuePage } from '@/features/review/ReviewQueuePage';
 import { ReviewDetailPage } from '@/features/review/ReviewDetailPage';
@@ -98,8 +97,7 @@ export function App() {
         <Route path="/" element={<DashboardPage user={user} />} />
         <Route path="/org" element={<OrgLayout />}>
           <Route index element={<OrgStructurePage />} />
-          <Route path="terms" element={<TermsPage />} />
-          <Route path="offerings" element={<OfferingsPage />} />
+          <Route path="batches" element={<BatchesPage />} />
           <Route path="imports" element={<ImportsPage />} />
         </Route>
         <Route path="/review" element={<ReviewQueuePage />} />
@@ -109,9 +107,9 @@ export function App() {
           element={
             <PlaceholderPage
               title="Students"
-              phase={2}
+
               icon={Upload}
-              description="Bulk student import from Excel. The import API and worker are ready; the admin UI ships with the organization module in Phase 2."
+              description="Bulk student import from Excel. The import API and worker are ready; the admin UI ships with the organization module."
             />
           }
         />
@@ -120,35 +118,23 @@ export function App() {
         <Route path="/exams/:examPublicId/edit" element={<ExamFormPage />} />
         <Route path="/exams/:examPublicId/build" element={<ExamBuilderPage />} />
         <Route path="/reports" element={<ReportsPage />} />
-        <Route path="/users" element={<PlaceholderPage title="Users" phase={2} icon={Users} />} />
-        <Route
-          path="/audit"
-          element={<PlaceholderPage title="Audit Log" phase={2} icon={ScrollText} />}
-        />
+        <Route path="/users" element={<PlaceholderPage title="Users" icon={Users} />} />
+        <Route path="/audit" element={<PlaceholderPage title="Audit Log" icon={ScrollText} />} />
         <Route
           path="/department"
-          element={<PlaceholderPage title="Department" phase={2} icon={Building2} />}
+          element={<PlaceholderPage title="Department" icon={Building2} />}
         />
-        <Route
-          path="/teachers"
-          element={<PlaceholderPage title="Teachers" phase={2} icon={Users} />}
-        />
-        <Route
-          path="/courses"
-          element={<PlaceholderPage title="My Courses" phase={2} icon={BookOpen} />}
-        />
+        <Route path="/teachers" element={<PlaceholderPage title="Teachers" icon={Users} />} />
+        <Route path="/courses" element={<PlaceholderPage title="My Courses" icon={BookOpen} />} />
         <Route
           path="/questions"
-          element={<PlaceholderPage title="Question Bank" phase={3} icon={ListChecks} />}
+          element={<PlaceholderPage title="Question Bank" icon={ListChecks} />}
         />
         <Route path="/grading" element={<GradingExamsPage />} />
         <Route path="/grading/:examPublicId" element={<GradingWorkspace />} />
         <Route path="/my-exams" element={<MyExamsPage />} />
         <Route path="/results/:attemptPublicId" element={<ResultPage />} />
-        <Route
-          path="/results"
-          element={<PlaceholderPage title="Results" phase={5} icon={BarChart3} />}
-        />
+        <Route path="/results" element={<PlaceholderPage title="Results" icon={BarChart3} />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

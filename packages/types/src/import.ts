@@ -1,4 +1,4 @@
-/** Shared shapes for the bulk student Excel import (§6.1) and its progress reporting. */
+/** Shared shapes for the bulk student Excel import and its progress reporting. */
 
 export interface ImportRowError {
   /** 1-based row number in the uploaded sheet (matching what the user sees). */

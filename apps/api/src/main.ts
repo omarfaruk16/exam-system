@@ -41,7 +41,7 @@ async function bootstrap(): Promise<void> {
   // Behind nginx in production: trust the first proxy for Secure cookies and req.ip.
   app.set('trust proxy', 1);
 
-  // Security headers (§Phase 6). The API returns JSON, but we set a strict CSP + the standard
+  // Security headers. The API returns JSON, but we set a strict CSP + the standard
   // hardening headers here too so every response — proxied or direct — carries them.
   app.use(
     helmet({

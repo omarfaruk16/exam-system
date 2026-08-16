@@ -24,9 +24,9 @@ export class ExamController {
 
   // Two-segment path so it is never captured by the `:publicId` route below.
   @Roles('teacher')
-  @Get('my/offering-parts')
-  myOfferingParts(@CurrentUser() u: AuthUser) {
-    return this.exams.listMyOfferingParts(u);
+  @Get('my/parts')
+  myParts(@CurrentUser() u: AuthUser) {
+    return this.exams.listMyParts(u);
   }
 
   @Roles('teacher')

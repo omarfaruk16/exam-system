@@ -1,9 +1,8 @@
-/** Admin org-management surfaces: structure tree, terms, offerings, teacher assignment. */
+/** Admin org-management surfaces: structure tree, teacher assignment, batches, students. */
 
 export interface Faculty {
   publicId: string;
   name: string;
-  code: string;
   createdAt: string;
   updatedAt: string;
   _count: { departments: number };
@@ -12,10 +11,9 @@ export interface Faculty {
 export interface Department {
   publicId: string;
   name: string;
-  code: string;
   createdAt: string;
   updatedAt: string;
-  faculty: { publicId: string; code: string; name: string };
+  faculty: { publicId: string; name: string };
   _count: { programs: number };
 }
 
@@ -24,23 +22,16 @@ export interface Program {
   name: string;
   degreeType: string;
   durationYears: number;
-  department: { publicId: string; code: string; name: string };
+  department: { publicId: string; name: string };
   _count: { batches: number; semesters: number };
-}
-
-export interface Batch {
-  publicId: string;
-  name: string;
-  admissionYear: number;
-  program: { publicId: string; name: string };
-  _count: { students: number };
 }
 
 export interface Semester {
   publicId: string;
   number: number;
   program: { publicId: string; name: string };
-  _count: { courses: number };
+  /** courses in this semester; batches currently assigned to it */
+  _count: { courses: number; batches: number };
 }
 
 export interface Course {
@@ -52,42 +43,42 @@ export interface Course {
   _count: { parts: number };
 }
 
+export interface AssignedTeacher {
+  publicId: string;
+  designation: string | null;
+  user: { publicId: string; displayName: string };
+}
+
 export interface CoursePart {
   publicId: string;
   name: string;
   marksWeight: number;
-  course: { publicId: string; code: string };
-}
-
-export interface AcademicTerm {
-  publicId: string;
-  name: string;
-  startDate: string;
-  endDate: string;
-  isActive: boolean;
-}
-
-export interface CourseOffering {
-  publicId: string;
   course: {
     publicId: string;
     code: string;
     name: string;
     semester: { program: { department: { publicId: string; name: string } } };
   };
-  batch: { publicId: string; name: string };
-  term: { publicId: string; name: string };
+  assignedTeacher: AssignedTeacher | null;
+  _count: { exams: number };
 }
 
-export interface OfferingPart {
+export interface Batch {
   publicId: string;
-  coursePart: { publicId: string; name: string; marksWeight: number };
-  offering: { publicId: string };
-  assignedTeacher: {
-    publicId: string;
-    designation: string | null;
-    user: { publicId: string; displayName: string };
-  } | null;
+  name: string;
+  year: number;
+  program: { publicId: string; name: string };
+  currentSemester: { publicId: string; number: number } | null;
+  _count: { students: number };
+}
+
+export interface StudentRow {
+  publicId: string;
+  studentId: string;
+  registrationNumber: string | null;
+  rollNumber: string | null;
+  user: { displayName: string; email: string | null };
+  batch: { publicId: string; name: string };
 }
 
 export interface TeacherOption {

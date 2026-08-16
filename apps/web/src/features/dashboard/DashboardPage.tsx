@@ -56,7 +56,6 @@ export function DashboardPage({ user }: { user: SessionUser }) {
                   <div className="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-md">
                     <item.icon className="size-5" />
                   </div>
-                  <Badge variant="neutral">Phase {item.phase}</Badge>
                 </div>
                 <h3 className="mt-4 font-medium">{item.label}</h3>
                 <p className="text-muted-foreground mt-1 text-sm">

@@ -22,7 +22,7 @@ export class ExamSettingsDto {
 }
 
 export class CreateExamDto {
-  @IsString() offeringPartPublicId!: string;
+  @IsString() coursePartPublicId!: string;
   @IsString() @Length(2, 200) title!: string;
   @IsOptional() @IsString() @Length(0, 5000) instructions?: string;
   @IsISO8601() startAt!: string;

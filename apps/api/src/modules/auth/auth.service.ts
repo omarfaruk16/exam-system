@@ -39,7 +39,7 @@ export class AuthService {
 
     if (!user) {
       // Still verify against a dummy hash to keep timing roughly constant would be ideal;
-      // for now we simply reject. (Timing hardening tracked for phase 6.)
+      // for now we simply reject. (Timing hardening is a possible future refinement.)
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -47,7 +47,6 @@ export class AuthService {
     if (!ok) throw new UnauthorizedException('Invalid credentials');
     if (user.status !== 'active') throw new ForbiddenException('Account is suspended');
 
-    // TOTP verification for 2FA-required roles is added in phase 6.
     return this.toAuthUser(user);
   }
 
@@ -127,18 +126,18 @@ export class AuthService {
       facultyIds.length
         ? this.prisma.db.faculty.findMany({
             where: { id: { in: facultyIds } },
-            select: { id: true, publicId: true, code: true },
+            select: { id: true, publicId: true, name: true },
           })
         : Promise.resolve([]),
       departmentIds.length
         ? this.prisma.db.department.findMany({
             where: { id: { in: departmentIds } },
-            select: { id: true, publicId: true, code: true },
+            select: { id: true, publicId: true, name: true },
           })
         : Promise.resolve([]),
     ]);
-    const fMap = new Map(faculties.map((f) => [f.id, { publicId: f.publicId, code: f.code }]));
-    const dMap = new Map(departments.map((d) => [d.id, { publicId: d.publicId, code: d.code }]));
+    const fMap = new Map(faculties.map((f) => [f.id, { publicId: f.publicId, name: f.name }]));
+    const dMap = new Map(departments.map((d) => [d.id, { publicId: d.publicId, name: d.name }]));
 
     return {
       publicId: user.publicId,
