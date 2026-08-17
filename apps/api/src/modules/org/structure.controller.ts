@@ -1,4 +1,17 @@
-import { Body, Controller, Delete, Get, Ip, Param, Patch, Post, Put, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Ip,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+  Res,
+} from '@nestjs/common';
+import type { Response } from 'express';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import type { AuthUser } from '../../common/types/auth';
@@ -13,12 +26,16 @@ import {
   CreateFacultyDto,
   CreateProgramDto,
   CreateSemesterDto,
+  CreateStudentManualDto,
+  CreateTeacherManualDto,
   UpdateBatchDto,
   UpdateCourseDto,
   UpdateCoursePartDto,
   UpdateDepartmentDto,
   UpdateFacultyDto,
   UpdateProgramDto,
+  UpdateStudentDto,
+  UpdateTeacherDto,
 } from './dto/structure.dto';
 import { StructureService } from './structure.service';
 
@@ -120,7 +137,9 @@ export class StructureController {
   }
 
   // Batches
-  @Get('batches') listBatches(@Query('program') program?: string) {
+  @Roles('super_admin', 'admin', 'department_head')
+  @Get('batches')
+  listBatches(@Query('program') program?: string) {
     return this.svc.listBatches(program);
   }
   @Post('batches') createBatch(
@@ -231,10 +250,42 @@ export class StructureController {
     return this.svc.assignTeacher(this.ctx(u, ip), id, dto);
   }
 
-  // Teachers of a department (for the assign-teacher selector).
-  @Roles('super_admin', 'admin', 'department_head')
+  // Teacher admin list and CRUD (admin only — class-level @Roles applies)
+  @Get('teachers/export')
+  exportTeachers(@Res({ passthrough: true }) res: Response) {
+    res.set({ 'Cache-Control': 'no-store' });
+    return this.svc.exportTeachers();
+  }
+
   @Get('teachers')
-  listTeachers(@CurrentUser() u: AuthUser, @Query('department') department: string) {
+  listTeachersAdmin(@Query('department') department?: string) {
+    return this.svc.listTeachersAdmin(department);
+  }
+
+  @Post('teachers')
+  createTeacher(@CurrentUser() u: AuthUser, @Ip() ip: string, @Body() dto: CreateTeacherManualDto) {
+    return this.svc.createTeacherManual(this.ctx(u, ip), dto);
+  }
+
+  @Patch('teachers/:publicId')
+  updateTeacher(
+    @CurrentUser() u: AuthUser,
+    @Ip() ip: string,
+    @Param('publicId') id: string,
+    @Body() dto: UpdateTeacherDto,
+  ) {
+    return this.svc.updateTeacher(this.ctx(u, ip), id, dto);
+  }
+
+  @Delete('teachers/:publicId')
+  deleteTeacher(@CurrentUser() u: AuthUser, @Ip() ip: string, @Param('publicId') id: string) {
+    return this.svc.deleteTeacher(this.ctx(u, ip), id);
+  }
+
+  // Teacher selector for assign-teacher dropdown — dept_head access allowed.
+  @Roles('super_admin', 'admin', 'department_head')
+  @Get('teachers/selector')
+  listTeachersSelector(@CurrentUser() u: AuthUser, @Query('department') department: string) {
     return this.svc.listTeachers(u, department);
   }
 
@@ -250,10 +301,45 @@ export class StructureController {
   }
 
   // Students
-  @Get('students') listStudents(@Query('batch') batch?: string) {
+  @Get('students/export')
+  exportStudents(
+    @Query('batch') batch: string | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    res.set({ 'Cache-Control': 'no-store' });
+    return this.svc.exportStudents(batch);
+  }
+
+  @Roles('super_admin', 'admin', 'department_head')
+  @Get('students')
+  listStudents(@Query('batch') batch?: string) {
     return this.svc.listStudents(batch);
   }
-  @Put('students/:publicId/batch') changeStudentBatch(
+
+  @Roles('super_admin', 'admin', 'department_head')
+  @Patch('students/:publicId')
+  updateStudent(
+    @CurrentUser() u: AuthUser,
+    @Ip() ip: string,
+    @Param('publicId') id: string,
+    @Body() dto: UpdateStudentDto,
+  ) {
+    return this.svc.updateStudent(this.ctx(u, ip), id, dto);
+  }
+
+  @Post('students')
+  createStudent(@CurrentUser() u: AuthUser, @Ip() ip: string, @Body() dto: CreateStudentManualDto) {
+    return this.svc.createStudentManual(this.ctx(u, ip), dto);
+  }
+
+  @Delete('students/:publicId')
+  deleteStudent(@CurrentUser() u: AuthUser, @Ip() ip: string, @Param('publicId') id: string) {
+    return this.svc.deleteStudent(this.ctx(u, ip), id);
+  }
+
+  @Roles('super_admin', 'admin', 'department_head')
+  @Put('students/:publicId/batch')
+  changeStudentBatch(
     @CurrentUser() u: AuthUser,
     @Ip() ip: string,
     @Param('publicId') id: string,

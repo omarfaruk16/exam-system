@@ -17,12 +17,14 @@ export function OrgTreeNode({
   node,
   depth,
   selectedId,
+  ancestors = [],
   onSelect,
 }: {
   node: OrgNode;
   depth: number;
   selectedId: string | null;
-  onSelect: (n: OrgNode) => void;
+  ancestors?: OrgNode[];
+  onSelect: (n: OrgNode, ancestors: OrgNode[]) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const expandable = nodeExpandable(node);
@@ -35,6 +37,7 @@ export function OrgTreeNode({
 
   const isSelected = selectedId === node.publicId;
   const badge = nodeBadge(node);
+  const childAncestors = [...ancestors, node];
 
   function onKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
     switch (e.key) {
@@ -57,7 +60,7 @@ export function OrgTreeNode({
       case 'Enter':
       case ' ':
         e.preventDefault();
-        onSelect(node);
+        onSelect(node, ancestors);
         break;
     }
   }
@@ -70,7 +73,7 @@ export function OrgTreeNode({
         aria-expanded={expandable ? expanded : undefined}
         tabIndex={0}
         onKeyDown={onKeyDown}
-        onClick={() => onSelect(node)}
+        onClick={() => onSelect(node, ancestors)}
         style={{ paddingLeft: `${depth * 14 + 8}px` }}
         className={cn(
           'flex cursor-pointer items-center gap-1.5 rounded-md py-1.5 pr-2 text-sm outline-none transition-colors',
@@ -129,6 +132,7 @@ export function OrgTreeNode({
                 node={child}
                 depth={depth + 1}
                 selectedId={selectedId}
+                ancestors={childAncestors}
                 onSelect={onSelect}
               />
             ))

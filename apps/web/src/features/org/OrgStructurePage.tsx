@@ -15,10 +15,17 @@ import { OrgTreeNode } from './OrgTreeNode';
 export function OrgStructurePage() {
   const qc = useQueryClient();
   const [selected, setSelected] = useState<OrgNode | null>(null);
+  // Full path to the selected node including itself (for breadcrumb display).
+  const [breadcrumb, setBreadcrumb] = useState<OrgNode[]>([]);
   const [adding, setAdding] = useState(false);
 
   const facultiesQuery = useQuery({ queryKey: ['org-faculties'], queryFn: fetchFaculties });
   const faculties = facultiesQuery.data ?? [];
+
+  function handleSelect(node: OrgNode, ancestors: OrgNode[]) {
+    setSelected(node);
+    setBreadcrumb([...ancestors, node]);
+  }
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(280px,340px)_1fr] lg:items-start">
@@ -56,7 +63,7 @@ export function OrgStructurePage() {
                 node={{ level: 'faculty', publicId: raw.publicId, raw }}
                 depth={0}
                 selectedId={selected?.publicId ?? null}
-                onSelect={setSelected}
+                onSelect={handleSelect}
               />
             ))}
           </ul>
@@ -68,8 +75,12 @@ export function OrgStructurePage() {
         {selected ? (
           <OrgDetailPanel
             node={selected}
-            onSelect={setSelected}
-            onDeleted={() => setSelected(null)}
+            breadcrumb={breadcrumb}
+            onSelect={(n, ancestors) => handleSelect(n, ancestors)}
+            onDeleted={() => {
+              setSelected(null);
+              setBreadcrumb([]);
+            }}
           />
         ) : (
           <Card className="flex flex-col items-center justify-center gap-3 py-20 text-center">

@@ -12,23 +12,9 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import type { Env } from '../../common/config/env.validation';
 import { PasswordService } from '../auth/password.service';
 import { QUEUE_STUDENT_IMPORT } from '../../queue/queue.constants';
+import { readImportRows } from './import-file';
 import { validateStudentRow, type ParsedStudentRow } from './student-row';
 import type { StudentImportJobData } from './import.types';
-
-/** Normalizes an exceljs cell (which may be a hyperlink/formula/richtext object) to plain text. */
-function cellText(v: ExcelJS.CellValue): string {
-  if (v === null || v === undefined) return '';
-  if (typeof v === 'object') {
-    if (v instanceof Date) return v.toISOString();
-    const o = v as unknown as Record<string, unknown>;
-    if (typeof o.text === 'string') return o.text;
-    if ('result' in o) return String(o.result ?? '');
-    if (Array.isArray(o.richText))
-      return o.richText.map((r) => (r as { text: string }).text).join('');
-    return String(v);
-  }
-  return String(v);
-}
 
 function generateTempPassword(): string {
   // ~14 chars, url-safe. Users are forced to change it on first login.
@@ -54,33 +40,16 @@ export class StudentImportProcessor extends WorkerHost {
   }
 
   async process(job: Job<StudentImportJobData>): Promise<ImportSummary> {
-    const { filePath, batchId } = job.data;
+    const { filePath, originalName, batchId } = job.data;
 
-    const wb = new ExcelJS.Workbook();
-    await wb.xlsx.readFile(filePath);
-    const ws = wb.worksheets[0];
-    if (!ws) throw new Error('Uploaded workbook has no worksheets');
-
-    const headers: string[] = [];
-    ws.getRow(1).eachCell((cell, col) => {
-      headers[col] = cellText(cell.value).trim().toLowerCase();
-    });
+    const rows = await readImportRows(filePath, originalName ?? filePath);
 
     const parsed: ParsedStudentRow[] = [];
     const errors: ImportRowError[] = [];
     const seen = new Set<string>();
 
-    for (let r = 2; r <= ws.rowCount; r++) {
-      const row = ws.getRow(r);
-      if (!row.hasValues) continue;
-
-      const raw: Record<string, unknown> = {};
-      row.eachCell((cell, col) => {
-        const h = headers[col];
-        if (h) raw[h] = cellText(cell.value);
-      });
-
-      const { value, error } = validateStudentRow(raw, r);
+    for (const { rowNumber, cells } of rows) {
+      const { value, error } = validateStudentRow(cells, rowNumber);
       if (error) {
         errors.push(error);
         continue;
@@ -89,7 +58,7 @@ export class StudentImportProcessor extends WorkerHost {
         const key = value.studentId.toLowerCase();
         if (seen.has(key)) {
           errors.push({
-            row: r,
+            row: rowNumber,
             field: 'studentId',
             value: value.studentId,
             message: 'Duplicate student ID within the file',
@@ -112,6 +81,27 @@ export class StudentImportProcessor extends WorkerHost {
       const row = parsed[i]!;
       const tempPassword = row.password ?? generateTempPassword();
       try {
+        // Free unique slots held by any prior soft-deleted record with the same studentId.
+        const staleUser = await this.prisma.user.findFirst({
+          where: { username: row.studentId, deletedAt: { not: null } },
+          select: { id: true },
+        });
+        if (staleUser) {
+          await this.prisma.user.update({
+            where: { id: staleUser.id },
+            data: { username: `${row.studentId}__del_${Date.now()}`, email: null },
+          });
+        }
+        const staleStudent = await this.prisma.student.findFirst({
+          where: { studentId: row.studentId, deletedAt: { not: null } },
+          select: { id: true },
+        });
+        if (staleStudent) {
+          await this.prisma.student.update({
+            where: { id: staleStudent.id },
+            data: { studentId: `${row.studentId}__del_${Date.now()}`, registrationNumber: null },
+          });
+        }
         const hash = await this.password.hash(tempPassword);
         await this.prisma.$transaction(async (tx) => {
           const user = await tx.user.create({
@@ -123,7 +113,15 @@ export class StudentImportProcessor extends WorkerHost {
               mustChangePassword: true,
             },
           });
-          await tx.student.create({ data: { userId: user.id, studentId: row.studentId, batchId } });
+          await tx.student.create({
+            data: {
+              userId: user.id,
+              studentId: row.studentId,
+              batchId,
+              registrationNumber: row.registrationNumber ?? undefined,
+              rollNumber: row.rollNumber ?? undefined,
+            },
+          });
           await tx.userRole.create({ data: { userId: user.id, roleId: studentRole.id } });
         });
         imported++;

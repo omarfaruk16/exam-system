@@ -1,9 +1,11 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, StreamableFile } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import ExcelJS from 'exceljs';
 import { AccessControlService } from '../../common/access/access-control.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { AuthUser } from '../../common/types/auth';
 import { AuditService } from '../audit/audit.service';
+import { PasswordService } from '../auth/password.service';
 import type {
   AssignBatchSemesterDto,
   AssignTeacherDto,
@@ -15,12 +17,16 @@ import type {
   CreateFacultyDto,
   CreateProgramDto,
   CreateSemesterDto,
+  CreateStudentManualDto,
+  CreateTeacherManualDto,
   UpdateBatchDto,
+  UpdateStudentDto,
   UpdateCourseDto,
   UpdateCoursePartDto,
   UpdateDepartmentDto,
   UpdateFacultyDto,
   UpdateProgramDto,
+  UpdateTeacherDto,
 } from './dto/structure.dto';
 import {
   batchSelect,
@@ -31,6 +37,7 @@ import {
   programSelect,
   semesterSelect,
   studentSelect,
+  teacherAdminSelect,
   teacherOptionSelect,
 } from './org.select';
 
@@ -46,6 +53,7 @@ export class StructureService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly acl: AccessControlService,
+    private readonly password: PasswordService,
   ) {}
 
   // ─────────────────────────── parent / scope resolvers ───────────────────────────
@@ -132,6 +140,60 @@ export class StructureService {
       facultyId: program.department.facultyId,
       departmentId: program.departmentId,
     };
+  }
+
+  /**
+   * If a soft-deleted User with this username exists, mangle its username/email so the slot
+   * is freed. Allows re-adding a record after accidental deletion.
+   */
+  private async freeDeletedUserSlot(username: string): Promise<void> {
+    const deleted = await this.prisma.user.findFirst({
+      where: { username, deletedAt: { not: null } },
+      select: { id: true },
+    });
+    if (deleted) {
+      const del = `__del_${Date.now()}`;
+      await this.prisma.user.update({
+        where: { id: deleted.id },
+        data: { username: `${username}${del}`, email: null },
+      });
+    }
+  }
+
+  /**
+   * If a soft-deleted Student with this studentId exists, mangle its studentId/registrationNumber
+   * so the unique slot is freed for re-use.
+   */
+  private async freeDeletedStudentSlot(studentId: string): Promise<void> {
+    const deleted = await this.prisma.student.findFirst({
+      where: { studentId, deletedAt: { not: null } },
+      select: { id: true },
+    });
+    if (deleted) {
+      const del = `__del_${Date.now()}`;
+      await this.prisma.student.update({
+        where: { id: deleted.id },
+        data: { studentId: `${studentId}${del}`, registrationNumber: null },
+      });
+    }
+  }
+
+  /**
+   * If a soft-deleted Course with this code exists in the given semester, mangle its code
+   * so the (semesterId, code) unique slot is freed for re-use.
+   */
+  private async freeDeletedCourseSlot(semesterId: number, code: string): Promise<void> {
+    const deleted = await this.prisma.course.findFirst({
+      where: { semesterId, code, deletedAt: { not: null } },
+      select: { id: true },
+    });
+    if (deleted) {
+      const del = `__del_${Date.now()}`;
+      await this.prisma.course.update({
+        where: { id: deleted.id },
+        data: { code: `${code}${del}` },
+      });
+    }
   }
 
   /** Wrap a write + its audit row in one transaction so they commit together. */
@@ -347,6 +409,7 @@ export class StructureService {
   async createCourse(ctx: OrgContext, dto: CreateCourseDto) {
     const semester = await this.semesterRef(dto.semesterPublicId);
     this.acl.assertFaculty(ctx.actor, semester.facultyId);
+    await this.freeDeletedCourseSlot(semester.id, dto.code);
     return this.mutate(ctx, 'course.create', 'Course', async (tx) => {
       const result = await tx.course.create({
         data: { semesterId: semester.id, code: dto.code, name: dto.name, credit: dto.credit },
@@ -368,12 +431,23 @@ export class StructureService {
     });
   }
   async removeCourse(ctx: OrgContext, publicId: string) {
-    const ref = await this.courseRef(publicId);
-    this.acl.assertFaculty(ctx.actor, ref.facultyId);
+    const course = await this.prisma.db.course.findFirst({
+      where: { publicId },
+      select: {
+        code: true,
+        semester: {
+          select: { program: { select: { department: { select: { facultyId: true } } } } },
+        },
+      },
+    });
+    if (!course) throw new NotFoundException('Course not found');
+    this.acl.assertFaculty(ctx.actor, course.semester.program.department.facultyId);
+
+    const del = `__del_${Date.now()}`;
     return this.mutate(ctx, 'course.delete', 'Course', async (tx) => {
       const result = await tx.course.update({
         where: { publicId },
-        data: { deletedAt: new Date() },
+        data: { deletedAt: new Date(), code: `${course.code}${del}` },
         select: courseSelect,
       });
       return { result, entityId: publicId, after: { deletedAt: new Date() } };
@@ -452,7 +526,9 @@ export class StructureService {
     });
   }
 
-  // ─────────────────────────────── Teachers (selector) ───────────────────────────────
+  // ─────────────────────────────── Teachers ───────────────────────────────
+
+  /** Selector list: teachers within a department (for the assign-teacher dropdown). */
   async listTeachers(actor: AuthUser, departmentPublicId: string) {
     const dept = await this.departmentRef(departmentPublicId);
     this.acl.assertDepartment(actor, dept.id, dept.facultyId);
@@ -467,6 +543,129 @@ export class StructureService {
       username: t.user.username,
       designation: t.designation,
     }));
+  }
+
+  /** Admin teacher list — all teachers, optionally filtered by department. */
+  async listTeachersAdmin(departmentPublicId?: string) {
+    return this.prisma.db.teacher.findMany({
+      where: departmentPublicId ? { department: { publicId: departmentPublicId } } : {},
+      select: teacherAdminSelect,
+      orderBy: { user: { displayName: 'asc' } },
+    });
+  }
+
+  async createTeacherManual(ctx: OrgContext, dto: CreateTeacherManualDto) {
+    const dept = await this.departmentRef(dto.departmentPublicId);
+    this.acl.assertFaculty(ctx.actor, dept.facultyId);
+
+    const teacherRole = await this.prisma.db.role.findUnique({ where: { name: 'teacher' } });
+    if (!teacherRole) throw new BadRequestException('Role "teacher" missing — run seed first');
+
+    await this.freeDeletedUserSlot(dto.username);
+    const hash = await this.password.hash(`${dto.username}@Exam123`);
+
+    return this.mutate(ctx, 'teacher.create', 'Teacher', async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          username: dto.username,
+          email: dto.email,
+          passwordHash: hash,
+          displayName: dto.displayName,
+          mustChangePassword: true,
+        },
+      });
+      const teacher = await tx.teacher.create({
+        data: { userId: user.id, departmentId: dept.id, designation: dto.designation ?? null },
+        select: teacherAdminSelect,
+      });
+      await tx.userRole.create({
+        data: { userId: user.id, roleId: teacherRole.id, scopeDepartmentId: dept.id },
+      });
+      return { result: teacher, entityId: teacher.publicId, after: teacher };
+    });
+  }
+
+  async updateTeacher(ctx: OrgContext, publicId: string, dto: UpdateTeacherDto) {
+    const teacher = await this.prisma.db.teacher.findFirst({
+      where: { publicId },
+      select: { id: true, userId: true, department: { select: { facultyId: true } } },
+    });
+    if (!teacher) throw new NotFoundException('Teacher not found');
+    this.acl.assertFaculty(ctx.actor, teacher.department.facultyId);
+
+    return this.mutate(ctx, 'teacher.update', 'Teacher', async (tx) => {
+      if (dto.displayName) {
+        await tx.user.update({
+          where: { id: teacher.userId },
+          data: { displayName: dto.displayName },
+        });
+      }
+      const result = await tx.teacher.update({
+        where: { publicId },
+        data: { designation: dto.designation },
+        select: teacherAdminSelect,
+      });
+      return { result, entityId: publicId, after: result };
+    });
+  }
+
+  async deleteTeacher(ctx: OrgContext, publicId: string) {
+    const teacher = await this.prisma.db.teacher.findFirst({
+      where: { publicId },
+      select: {
+        id: true,
+        userId: true,
+        user: { select: { username: true } },
+        department: { select: { facultyId: true } },
+      },
+    });
+    if (!teacher) throw new NotFoundException('Teacher not found');
+    this.acl.assertFaculty(ctx.actor, teacher.department.facultyId);
+
+    const del = `__del_${Date.now()}`;
+    return this.mutate(ctx, 'teacher.delete', 'Teacher', async (tx) => {
+      const result = await tx.teacher.update({
+        where: { publicId },
+        data: { deletedAt: new Date() },
+        select: teacherAdminSelect,
+      });
+      // Mangle username/email so those unique slots are freed for re-use.
+      await tx.user.update({
+        where: { id: teacher.userId },
+        data: { deletedAt: new Date(), username: `${teacher.user.username}${del}`, email: null },
+      });
+      return { result, entityId: publicId, after: { deletedAt: new Date() } };
+    });
+  }
+
+  async exportTeachers(): Promise<StreamableFile> {
+    const rows = await this.prisma.db.teacher.findMany({
+      select: teacherAdminSelect,
+      orderBy: { user: { displayName: 'asc' } },
+    });
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Teachers');
+    ws.columns = [
+      { header: 'Username', key: 'username', width: 20 },
+      { header: 'Display Name', key: 'displayName', width: 30 },
+      { header: 'Email', key: 'email', width: 30 },
+      { header: 'Department', key: 'department', width: 30 },
+      { header: 'Designation', key: 'designation', width: 25 },
+    ];
+    for (const t of rows) {
+      ws.addRow({
+        username: t.user.username,
+        displayName: t.user.displayName,
+        email: t.user.email ?? '',
+        department: t.department.name,
+        designation: t.designation ?? '',
+      });
+    }
+    const buffer = await wb.xlsx.writeBuffer();
+    return new StreamableFile(Buffer.from(buffer), {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: 'attachment; filename="teachers.xlsx"',
+    });
   }
 
   // ─────────────────────────────── Batch ───────────────────────────────
@@ -579,6 +778,147 @@ export class StructureService {
         before: { batchId: student.batchId },
         after: { batchId: targetBatch.id },
       };
+    });
+  }
+
+  async createStudentManual(ctx: OrgContext, dto: CreateStudentManualDto) {
+    const batch = await this.batchRef(dto.batchPublicId);
+    this.acl.assertFaculty(ctx.actor, batch.facultyId);
+
+    const studentRole = await this.prisma.db.role.findUnique({ where: { name: 'student' } });
+    if (!studentRole) throw new BadRequestException('Role "student" missing — run seed first');
+
+    await this.freeDeletedUserSlot(dto.studentId);
+    await this.freeDeletedStudentSlot(dto.studentId);
+    const hash = await this.password.hash('Student@123');
+
+    return this.mutate(ctx, 'student.create', 'Student', async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          username: dto.studentId,
+          email: dto.email ?? null,
+          passwordHash: hash,
+          displayName: dto.displayName,
+          mustChangePassword: false,
+        },
+      });
+      const student = await tx.student.create({
+        data: {
+          userId: user.id,
+          batchId: batch.id,
+          studentId: dto.studentId,
+          registrationNumber: dto.registrationNumber ?? null,
+          rollNumber: dto.rollNumber ?? null,
+        },
+        select: studentSelect,
+      });
+      await tx.userRole.create({ data: { userId: user.id, roleId: studentRole.id } });
+      return { result: student, entityId: student.publicId, after: student };
+    });
+  }
+
+  async updateStudent(ctx: OrgContext, studentPublicId: string, dto: UpdateStudentDto) {
+    const student = await this.prisma.db.student.findFirst({
+      where: { publicId: studentPublicId },
+      select: {
+        id: true,
+        userId: true,
+        batch: { select: { program: { select: { department: { select: { facultyId: true } } } } } },
+      },
+    });
+    if (!student) throw new NotFoundException('Student not found');
+    this.acl.assertFaculty(ctx.actor, student.batch.program.department.facultyId);
+
+    return this.mutate(ctx, 'student.update', 'Student', async (tx) => {
+      if (dto.displayName !== undefined || dto.email !== undefined) {
+        await tx.user.update({
+          where: { id: student.userId },
+          data: {
+            ...(dto.displayName ? { displayName: dto.displayName } : {}),
+            ...(dto.email !== undefined ? { email: dto.email || null } : {}),
+          },
+        });
+      }
+      const result = await tx.student.update({
+        where: { publicId: studentPublicId },
+        data: {
+          ...(dto.registrationNumber !== undefined
+            ? { registrationNumber: dto.registrationNumber || null }
+            : {}),
+          ...(dto.rollNumber !== undefined ? { rollNumber: dto.rollNumber || null } : {}),
+        },
+        select: studentSelect,
+      });
+      return { result, entityId: studentPublicId, after: dto };
+    });
+  }
+
+  async deleteStudent(ctx: OrgContext, studentPublicId: string) {
+    const student = await this.prisma.db.student.findFirst({
+      where: { publicId: studentPublicId },
+      select: {
+        id: true,
+        userId: true,
+        studentId: true,
+        user: { select: { username: true } },
+        batch: { select: { program: { select: { department: { select: { facultyId: true } } } } } },
+      },
+    });
+    if (!student) throw new NotFoundException('Student not found');
+    this.acl.assertFaculty(ctx.actor, student.batch.program.department.facultyId);
+
+    const del = `__del_${Date.now()}`;
+    return this.mutate(ctx, 'student.delete', 'Student', async (tx) => {
+      const result = await tx.student.update({
+        where: { publicId: studentPublicId },
+        data: {
+          deletedAt: new Date(),
+          studentId: `${student.studentId}${del}`,
+          registrationNumber: null,
+        },
+        select: studentSelect,
+      });
+      await tx.user.update({
+        where: { id: student.userId },
+        data: { deletedAt: new Date(), username: `${student.user.username}${del}`, email: null },
+      });
+      return { result, entityId: studentPublicId, after: { deletedAt: new Date() } };
+    });
+  }
+
+  async exportStudents(batchPublicId?: string): Promise<StreamableFile> {
+    const rows = await this.prisma.db.student.findMany({
+      where: batchPublicId ? { batch: { publicId: batchPublicId } } : {},
+      select: {
+        ...studentSelect,
+        user: { select: { displayName: true, email: true } },
+      },
+      orderBy: { studentId: 'asc' },
+    });
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Students');
+    ws.columns = [
+      { header: 'Student ID', key: 'studentId', width: 15 },
+      { header: 'Display Name', key: 'displayName', width: 30 },
+      { header: 'Email', key: 'email', width: 30 },
+      { header: 'Batch', key: 'batch', width: 20 },
+      { header: 'Registration Number', key: 'registrationNumber', width: 25 },
+      { header: 'Roll Number', key: 'rollNumber', width: 15 },
+    ];
+    for (const s of rows) {
+      ws.addRow({
+        studentId: s.studentId,
+        displayName: s.user.displayName,
+        email: s.user.email ?? '',
+        batch: s.batch.name,
+        registrationNumber: s.registrationNumber ?? '',
+        rollNumber: s.rollNumber ?? '',
+      });
+    }
+    const buffer = await wb.xlsx.writeBuffer();
+    return new StreamableFile(Buffer.from(buffer), {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: 'attachment; filename="students.xlsx"',
     });
   }
 }

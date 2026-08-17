@@ -20,12 +20,11 @@ export const ROLE_LABELS: Record<RoleName, string> = {
   student: 'Student',
 };
 
-/** Roles that can alter marks and therefore require TOTP 2FA. */
+/** Roles that require TOTP 2FA (admin-tier only; teachers and students are exempt). */
 export const TWO_FACTOR_REQUIRED_ROLES: readonly RoleName[] = [
   'super_admin',
   'admin',
   'department_head',
-  'teacher',
 ];
 
 export const USER_STATUS = ['active', 'suspended'] as const;

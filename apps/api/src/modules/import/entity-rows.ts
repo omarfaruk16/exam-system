@@ -23,10 +23,11 @@ export function validateTeacherRow(
   row: number,
 ): Result<ParsedTeacherRow> {
   const username = pick(cells, 'username', 'user name', 'login');
-  const firstName = pick(cells, 'firstname', 'first name');
-  const lastName = pick(cells, 'lastname', 'last name');
+  const firstName = pick(cells, 'firstname', 'first name', 'first_name');
+  const lastName = pick(cells, 'lastname', 'last name', 'last_name');
   const name =
-    pick(cells, 'name', 'fullname', 'full name') || [firstName, lastName].filter(Boolean).join(' ');
+    pick(cells, 'name', 'fullname', 'full name', 'displayname', 'display name', 'display_name') ||
+    [firstName, lastName].filter(Boolean).join(' ');
   const email = pick(cells, 'email', 'e-mail');
   const departmentName = pick(cells, 'department', 'departmentname', 'department name', 'dept');
   const designation = pick(cells, 'designation', 'title');

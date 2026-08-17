@@ -20,7 +20,6 @@ const ROLES_REQUIRING_2FA: ReadonlySet<RoleName> = new Set([
   'super_admin',
   'admin',
   'department_head',
-  'teacher',
 ]);
 
 const MAX_ATTEMPTS = 5;

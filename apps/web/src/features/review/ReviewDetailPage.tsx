@@ -1,6 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ExamQuestionItem } from '@exam/types';
-import { ArrowLeft, Check, CheckCircle2, Loader2, Pencil, ThumbsDown, XCircle } from 'lucide-react';
+import {
+  ArrowLeft,
+  Check,
+  CheckCircle2,
+  Loader2,
+  Pencil,
+  Send,
+  ThumbsDown,
+  XCircle,
+} from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -19,10 +28,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { useSession } from '@/lib/session';
 import { cn } from '@/lib/utils';
 import { fetchExam, fetchExamQuestions } from '../authoring/authoringApi';
+import { MathText } from '@/components/ui/math-text';
 import { ChangesRequestedBanner } from '../shared/ChangesRequestedBanner';
 import { StatusPill } from '../shared/StatusPill';
 import { ExamMetadataEdit } from './ExamMetadataEdit';
-import { approveExam, rejectExam, requestChanges } from './reviewApi';
+import { approveExam, publishExam, rejectExam, requestChanges } from './reviewApi';
 
 export function ReviewDetailPage() {
   const { examPublicId } = useParams<{ examPublicId: string }>();
@@ -75,6 +85,14 @@ export function ReviewDetailPage() {
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not reject'),
   });
+  const publish = useMutation({
+    mutationFn: () => publishExam(examPublicId!),
+    onSuccess: async () => {
+      toast.success('Exam published — students can now see it');
+      await afterAction();
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not publish'),
+  });
 
   if (examQuery.isLoading || !examPublicId) return <DetailSkeleton />;
   if (examQuery.error || !examQuery.data) {
@@ -91,6 +109,9 @@ export function ReviewDetailPage() {
   const exam = examQuery.data;
   const questions = questionsQuery.data ?? [];
   const canAct = isAdmin && (exam.status === 'in_review' || exam.status === 'changes_requested');
+  const canEdit =
+    isAdmin && ['draft', 'in_review', 'approved', 'changes_requested'].includes(exam.status);
+  const canPublish = isAdmin && exam.status === 'approved';
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-5">
@@ -115,7 +136,7 @@ export function ReviewDetailPage() {
         <Card className="p-6">
           <div className="flex items-start justify-between">
             <h2 className="text-sm font-semibold">Exam details</h2>
-            {canAct && (
+            {canEdit && (
               <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
                 <Pencil className="size-4" /> Edit
               </Button>
@@ -157,6 +178,25 @@ export function ReviewDetailPage() {
           questions.map((q, i) => <ReviewQuestion key={q.publicId} q={q} index={i} />)
         )}
       </div>
+
+      {/* Publish — approved exams are invisible to students until published */}
+      {canPublish && !editing && (
+        <div className="bg-card sticky bottom-0 flex flex-col gap-3 border-t py-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-muted-foreground text-sm">
+            This exam is approved but{' '}
+            <span className="font-medium">not yet visible to students</span>. Publish it so it
+            appears in their exam list.
+          </p>
+          <Button onClick={() => publish.mutate()} disabled={publish.isPending}>
+            {publish.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Send className="size-4" />
+            )}
+            Publish to students
+          </Button>
+        </div>
+      )}
 
       {/* Actions */}
       {canAct && !editing && (
@@ -289,7 +329,9 @@ function ReviewQuestion({ q, index }: { q: ExamQuestionItem; index: number }) {
               {q.question.marks} marks
             </span>
           </div>
-          <p className="mt-2 text-sm">{q.question.text}</p>
+          <p className="mt-2 text-sm">
+            <MathText text={q.question.text} />
+          </p>
 
           {isMcq && (
             <ul className="mt-3 space-y-1.5">
@@ -308,7 +350,7 @@ function ReviewQuestion({ q, index }: { q: ExamQuestionItem; index: number }) {
                   ) : (
                     <span className="mt-0.5 w-4 shrink-0" />
                   )}
-                  <span>{o.text}</span>
+                  <MathText text={o.text} />
                 </li>
               ))}
             </ul>
@@ -317,13 +359,17 @@ function ReviewQuestion({ q, index }: { q: ExamQuestionItem; index: number }) {
           {q.question.explanation && (
             <div className="bg-muted/40 mt-3 rounded-md border px-3 py-2 text-sm">
               <p className="text-muted-foreground mb-0.5 text-xs font-medium">Explanation</p>
-              <p>{q.question.explanation}</p>
+              <p>
+                <MathText text={q.question.explanation} />
+              </p>
             </div>
           )}
           {!isMcq && q.question.modelAnswer && (
             <div className="bg-muted/40 mt-3 rounded-md border px-3 py-2 text-sm">
               <p className="text-muted-foreground mb-0.5 text-xs font-medium">Model answer</p>
-              <p className="whitespace-pre-wrap">{q.question.modelAnswer}</p>
+              <p className="whitespace-pre-wrap">
+                <MathText text={q.question.modelAnswer} />
+              </p>
             </div>
           )}
         </div>

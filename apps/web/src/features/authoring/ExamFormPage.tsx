@@ -22,25 +22,20 @@ import {
 } from './authoringApi';
 import { SettingToggle } from './SettingToggle';
 
-const schema = z
-  .object({
-    coursePartPublicId: z.string().min(1, 'Choose a course part'),
-    title: z.string().trim().min(2, 'Title is required').max(200, 'Title is too long'),
-    instructions: z.string().max(5000).optional(),
-    startAt: z.string().min(1, 'Start time is required'),
-    endAt: z.string().min(1, 'End time is required'),
-    durationMinutes: z.coerce.number().int().positive('Duration must be at least 1 minute'),
-    showMarksAfterSubmit: z.boolean(),
-    showExplanation: z.boolean(),
-    shuffleQuestions: z.boolean(),
-    shuffleOptions: z.boolean(),
-    negativeMarking: z.boolean(),
-    negativeMarkValue: z.coerce.number().min(0),
-  })
-  .refine((v) => new Date(v.endAt) > new Date(v.startAt), {
-    message: 'End time must be after the start time',
-    path: ['endAt'],
-  });
+const schema = z.object({
+  coursePartPublicId: z.string().min(1, 'Choose a course part'),
+  title: z.string().trim().min(2, 'Title is required').max(200, 'Title is too long'),
+  instructions: z.string().max(5000).optional(),
+  examDate: z.string().min(1, 'Exam date is required'),
+  startTime: z.string().min(1, 'Start time is required'),
+  durationMinutes: z.coerce.number().int().positive('Duration must be at least 1 minute'),
+  showMarksAfterSubmit: z.boolean(),
+  showExplanation: z.boolean(),
+  shuffleQuestions: z.boolean(),
+  shuffleOptions: z.boolean(),
+  negativeMarking: z.boolean(),
+  negativeMarkValue: z.coerce.number().min(0),
+});
 
 type FormValues = z.input<typeof schema>;
 
@@ -105,8 +100,8 @@ function ExamForm({
           coursePartPublicId: defaults.coursePart.publicId,
           title: defaults.title,
           instructions: defaults.instructions ?? '',
-          startAt: isoToLocalInput(defaults.startAt),
-          endAt: isoToLocalInput(defaults.endAt),
+          examDate: isoToDate(defaults.startAt),
+          startTime: isoToTime(defaults.startAt),
           durationMinutes: defaults.durationMinutes,
           ...defaults.settings,
         }
@@ -114,8 +109,8 @@ function ExamForm({
           coursePartPublicId: '',
           title: '',
           instructions: '',
-          startAt: '',
-          endAt: '',
+          examDate: '',
+          startTime: '',
           durationMinutes: 60,
           showMarksAfterSubmit: true,
           showExplanation: true,
@@ -138,11 +133,14 @@ function ExamForm({
         negativeMarking: values.negativeMarking,
         negativeMarkValue: Number(values.negativeMarkValue),
       };
+      // End time is derived: start + duration. Students never see a separate end field.
+      const startAt = new Date(`${values.examDate}T${values.startTime}`);
+      const endAt = new Date(startAt.getTime() + Number(values.durationMinutes) * 60_000);
       const body: ExamMetadataInput = {
         title: values.title.trim(),
         instructions: values.instructions?.trim() || undefined,
-        startAt: new Date(values.startAt).toISOString(),
-        endAt: new Date(values.endAt).toISOString(),
+        startAt: startAt.toISOString(),
+        endAt: endAt.toISOString(),
         durationMinutes: Number(values.durationMinutes),
         settings,
       };
@@ -223,39 +221,40 @@ function ExamForm({
             />
           </Field>
 
+          <Field label="Exam date" error={errors.examDate?.message} htmlFor="examDate">
+            <Input
+              id="examDate"
+              type="date"
+              {...register('examDate')}
+              aria-invalid={errors.examDate ? 'true' : 'false'}
+            />
+          </Field>
           <div className="grid gap-5 sm:grid-cols-2">
-            <Field label="Starts at" error={errors.startAt?.message} htmlFor="startAt">
+            <Field label="Start time" error={errors.startTime?.message} htmlFor="startTime">
               <Input
-                id="startAt"
-                type="datetime-local"
-                {...register('startAt')}
-                aria-invalid={errors.startAt ? 'true' : 'false'}
+                id="startTime"
+                type="time"
+                {...register('startTime')}
+                aria-invalid={errors.startTime ? 'true' : 'false'}
               />
             </Field>
-            <Field label="Ends at" error={errors.endAt?.message} htmlFor="endAt">
+            <Field
+              label="Duration (minutes)"
+              error={errors.durationMinutes?.message}
+              htmlFor="duration"
+            >
               <Input
-                id="endAt"
-                type="datetime-local"
-                {...register('endAt')}
-                aria-invalid={errors.endAt ? 'true' : 'false'}
+                id="duration"
+                type="number"
+                min={1}
+                {...register('durationMinutes')}
+                aria-invalid={errors.durationMinutes ? 'true' : 'false'}
               />
             </Field>
           </div>
-
-          <Field
-            label="Duration (minutes)"
-            error={errors.durationMinutes?.message}
-            htmlFor="duration"
-          >
-            <Input
-              id="duration"
-              type="number"
-              min={1}
-              className="max-w-[140px]"
-              {...register('durationMinutes')}
-              aria-invalid={errors.durationMinutes ? 'true' : 'false'}
-            />
-          </Field>
+          <p className="text-muted-foreground -mt-2 text-xs">
+            The exam ends automatically {watch('durationMinutes') || 0} minutes after it starts.
+          </p>
         </Card>
 
         <Card className="space-y-1 p-6">
@@ -401,9 +400,12 @@ function FormSkeleton() {
   );
 }
 
-// datetime-local <-> ISO helpers. datetime-local carries no timezone; treat it as local time.
-function isoToLocalInput(iso: string): string {
+const pad = (n: number) => String(n).padStart(2, '0');
+function isoToDate(iso: string): string {
   const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+function isoToTime(iso: string): string {
+  const d = new Date(iso);
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }

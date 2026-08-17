@@ -11,19 +11,22 @@ import { Textarea } from '@/components/ui/textarea';
 import { SettingToggle } from '../authoring/SettingToggle';
 import { updateExam } from '../authoring/authoringApi';
 
-// datetime-local carries no timezone; treat it as local time.
-function isoToLocal(iso: string): string {
+const p = (n: number) => String(n).padStart(2, '0');
+function isoToDate(iso: string) {
   const d = new Date(iso);
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+function isoToTime(iso: string) {
+  const d = new Date(iso);
+  return `${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 export function ExamMetadataEdit({ exam, onDone }: { exam: ExamDetail; onDone: () => void }) {
   const qc = useQueryClient();
   const [title, setTitle] = useState(exam.title);
   const [instructions, setInstructions] = useState(exam.instructions ?? '');
-  const [startAt, setStartAt] = useState(isoToLocal(exam.startAt));
-  const [endAt, setEndAt] = useState(isoToLocal(exam.endAt));
+  const [examDate, setExamDate] = useState(isoToDate(exam.startAt));
+  const [startTime, setStartTime] = useState(isoToTime(exam.startAt));
   const [duration, setDuration] = useState(String(exam.durationMinutes));
   const [settings, setSettings] = useState<ExamSettings>(exam.settings);
   const [error, setError] = useState<string | null>(null);
@@ -33,14 +36,15 @@ export function ExamMetadataEdit({ exam, onDone }: { exam: ExamDetail; onDone: (
 
   const save = useMutation({
     mutationFn: () => {
-      if (new Date(endAt) <= new Date(startAt))
-        throw new Error('End time must be after start time');
       if (!(Number(duration) > 0)) throw new Error('Duration must be positive');
+      // End time is derived from start + duration.
+      const startAt = new Date(`${examDate}T${startTime}`);
+      const endAt = new Date(startAt.getTime() + Number(duration) * 60_000);
       return updateExam(exam.publicId, {
         title: title.trim(),
         instructions: instructions.trim() || undefined,
-        startAt: new Date(startAt).toISOString(),
-        endAt: new Date(endAt).toISOString(),
+        startAt: startAt.toISOString(),
+        endAt: endAt.toISOString(),
         durationMinutes: Number(duration),
         settings,
       });
@@ -87,45 +91,48 @@ export function ExamMetadataEdit({ exam, onDone }: { exam: ExamDetail; onDone: (
             className="mt-1"
           />
         </div>
+        <div>
+          <Label htmlFor="re-date" className="text-xs">
+            Exam date
+          </Label>
+          <Input
+            id="re-date"
+            type="date"
+            value={examDate}
+            onChange={(e) => setExamDate(e.target.value)}
+            className="mt-1 h-10"
+          />
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label htmlFor="re-start" className="text-xs">
-              Starts at
+              Start time
             </Label>
             <Input
               id="re-start"
-              type="datetime-local"
-              value={startAt}
-              onChange={(e) => setStartAt(e.target.value)}
+              type="time"
+              value={startTime}
+              onChange={(e) => setStartTime(e.target.value)}
               className="mt-1 h-10"
             />
           </div>
           <div>
-            <Label htmlFor="re-end" className="text-xs">
-              Ends at
+            <Label htmlFor="re-dur" className="text-xs">
+              Duration (minutes)
             </Label>
             <Input
-              id="re-end"
-              type="datetime-local"
-              value={endAt}
-              onChange={(e) => setEndAt(e.target.value)}
+              id="re-dur"
+              type="number"
+              min={1}
+              value={duration}
+              onChange={(e) => setDuration(e.target.value)}
               className="mt-1 h-10"
             />
           </div>
         </div>
-        <div>
-          <Label htmlFor="re-dur" className="text-xs">
-            Duration (minutes)
-          </Label>
-          <Input
-            id="re-dur"
-            type="number"
-            min={1}
-            value={duration}
-            onChange={(e) => setDuration(e.target.value)}
-            className="mt-1 h-10 max-w-[140px]"
-          />
-        </div>
+        <p className="text-muted-foreground -mt-1 text-xs">
+          The exam ends automatically {Number(duration) || 0} minutes after it starts.
+        </p>
 
         <div className="border-t pt-3">
           <SettingToggle

@@ -5,6 +5,8 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { StatusPill } from '../shared/StatusPill';
+import { StartCountdown } from '../shared/ExamCountdown';
+import { useServerNow } from '../shared/useServerNow';
 import { fetchMyExams } from './resultsApi';
 
 function formatDate(iso: string) {
@@ -39,9 +41,13 @@ function groupExams(exams: MyExamListItem[]) {
 
 export function MyExamsPage() {
   const navigate = useNavigate();
+  const nowMs = useServerNow();
   const { data, isLoading } = useQuery({
     queryKey: ['my-exams'],
     queryFn: fetchMyExams,
+    // Poll so a published→live flip (server scheduler, ~60s) turns the Start
+    // button on without the student needing to refresh.
+    refetchInterval: 20_000,
   });
 
   if (isLoading) {
@@ -114,6 +120,7 @@ export function MyExamsPage() {
               <ExamCard
                 key={e.examPublicId}
                 exam={e}
+                nowMs={nowMs}
                 onAction={() => navigate(`/exam/${e.examPublicId}`)}
               />
             ))}
@@ -122,7 +129,7 @@ export function MyExamsPage() {
         {upcoming.length > 0 && (
           <Section title="Upcoming">
             {upcoming.map((e) => (
-              <ExamCard key={e.examPublicId} exam={e} />
+              <ExamCard key={e.examPublicId} exam={e} nowMs={nowMs} />
             ))}
           </Section>
         )}
@@ -132,6 +139,7 @@ export function MyExamsPage() {
               <ExamCard
                 key={e.examPublicId}
                 exam={e}
+                nowMs={nowMs}
                 onAction={
                   e.attempt && e.status === 'results_published' && e.showMarksAfterSubmit
                     ? () => navigate(`/results/${e.attempt!.publicId}`)
@@ -157,12 +165,24 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function ExamCard({ exam, onAction }: { exam: MyExamListItem; onAction?: () => void }) {
+function ExamCard({
+  exam,
+  nowMs,
+  onAction,
+}: {
+  exam: MyExamListItem;
+  nowMs: number;
+  onAction?: () => void;
+}) {
   const { attempt, status, showMarksAfterSubmit } = exam;
   const isLive = status === 'live';
+  const isUpcoming = status === 'published';
   const isResultsPublished = status === 'results_published';
   const hasAttempt = attempt !== null;
   const submitted = hasAttempt && attempt.status !== 'in_progress';
+
+  const startAtMs = new Date(exam.startAt).getTime();
+  const beforeStart = nowMs < startAtMs;
 
   const completionState = (() => {
     if (!hasAttempt && (status === 'ended' || status === 'grading' || isResultsPublished)) {
@@ -176,11 +196,12 @@ function ExamCard({ exam, onAction }: { exam: MyExamListItem; onAction?: () => v
     return 'awaiting-release';
   })();
 
-  const actionLabel = (() => {
-    if (isLive && !submitted) return attempt?.status === 'in_progress' ? 'Resume' : 'Start exam';
-    if (completionState === 'results-available') return 'View result';
-    return undefined;
-  })();
+  // The Start button is only ever active while the exam is live (the server
+  // rejects a start attempt otherwise). Upcoming exams show it disabled.
+  const canStart = isLive && !submitted && Boolean(onAction);
+  const showStartDisabled = isUpcoming;
+  const showResult = completionState === 'results-available' && Boolean(onAction);
+  const showAction = canStart || showStartDisabled || showResult;
 
   return (
     <Card className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between">
@@ -202,6 +223,28 @@ function ExamCard({ exam, onAction }: { exam: MyExamListItem; onAction?: () => v
             {exam.durationMinutes} min · {exam.totalMarks} marks
           </span>
         </div>
+
+        {/* Upcoming: a live countdown to the start time (amber < 5 min, red < 1 min) */}
+        {isUpcoming && (
+          <div className="mt-3 text-sm">
+            {beforeStart ? (
+              <StartCountdown startAtMs={startAtMs} nowMs={nowMs} />
+            ) : (
+              <span className="text-muted-foreground flex items-center gap-1.5">
+                <Loader2 className="size-3.5 animate-spin" />
+                Opening the exam — this can take up to a minute…
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Live: reassure the student they can begin now */}
+        {isLive && !submitted && (
+          <p className="text-success mt-3 flex items-center gap-1.5 text-sm font-medium">
+            <Clock className="size-3.5" />
+            The exam is open — you can start now.
+          </p>
+        )}
 
         {/* Completion state messaging */}
         <div className="mt-3">
@@ -241,21 +284,25 @@ function ExamCard({ exam, onAction }: { exam: MyExamListItem; onAction?: () => v
         </div>
       </div>
 
-      {(actionLabel || (completionState === 'results-available' && onAction)) && (
+      {showAction && (
         <div className="shrink-0">
-          {actionLabel && onAction ? (
+          {canStart ? (
+            <Button size="sm" onClick={onAction} className="flex items-center gap-1.5">
+              {attempt?.status === 'in_progress' ? 'Resume' : 'Start exam'}
+            </Button>
+          ) : showStartDisabled ? (
+            <Button size="sm" disabled title="You can start once the exam begins">
+              Start exam
+            </Button>
+          ) : showResult ? (
             <Button
               size="sm"
-              variant={isLive && !submitted ? 'default' : 'outline'}
+              variant="outline"
               onClick={onAction}
               className="flex items-center gap-1.5"
             >
-              {completionState === 'results-available' && <Award className="size-3.5" />}
-              {actionLabel}
-            </Button>
-          ) : actionLabel ? (
-            <Button size="sm" disabled>
-              {actionLabel}
+              <Award className="size-3.5" />
+              View result
             </Button>
           ) : null}
         </div>

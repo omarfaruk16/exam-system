@@ -87,3 +87,23 @@ export interface TeacherOption {
   username: string;
   designation: string | null;
 }
+
+export interface TeacherRow {
+  publicId: string;
+  designation: string | null;
+  createdAt: string;
+  user: { publicId: string; username: string; displayName: string; email: string | null };
+  department: { publicId: string; name: string };
+}
+
+export interface AdminUserRow {
+  publicId: string;
+  username: string;
+  displayName: string;
+  email: string | null;
+  mustChangePassword: boolean;
+  createdAt: string;
+  role: 'admin' | 'department_head';
+  scopeFaculty: { publicId: string; name: string } | null;
+  scopeDepartment: { publicId: string; name: string } | null;
+}

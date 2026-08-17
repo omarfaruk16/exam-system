@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { MathText } from '@/components/ui/math-text';
 import { addExamQuestion, createBank, fetchBankQuestions, fetchBanks } from './authoringApi';
 import { QuestionCreateForm } from './QuestionCreateForm';
 
@@ -190,7 +191,9 @@ function BankQuestionCard({
         </span>
         <span className="text-muted-foreground text-xs tabular-nums">{q.marks} marks</span>
       </div>
-      <p className="mt-1.5 line-clamp-2 text-sm">{q.text}</p>
+      <p className="mt-1.5 line-clamp-3 text-sm">
+        <MathText text={q.text} />
+      </p>
       <div className="mt-2 flex justify-end">
         {added ? (
           <Button variant="ghost" size="sm" disabled className="text-success h-7">

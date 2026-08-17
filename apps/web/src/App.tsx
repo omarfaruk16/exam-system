@@ -1,13 +1,4 @@
-import {
-  BarChart3,
-  BookOpen,
-  Building2,
-  ListChecks,
-  Loader2,
-  ScrollText,
-  Upload,
-  Users,
-} from 'lucide-react';
+import { BarChart3, Building2, Loader2, ScrollText, Upload } from 'lucide-react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { ChangePasswordPage } from '@/features/auth/ChangePasswordPage';
@@ -22,10 +13,16 @@ import { ExamFormPage } from '@/features/authoring/ExamFormPage';
 import { ExamBuilderPage } from '@/features/authoring/ExamBuilderPage';
 import { GradingExamsPage } from '@/features/teacher/GradingExamsPage';
 import { GradingWorkspace } from '@/features/teacher/GradingWorkspace';
+import { MyCoursesPage } from '@/features/teacher/MyCoursesPage';
+import { QuestionBankPage } from '@/features/teacher/QuestionBankPage';
+import { ResultsPortalPage } from '@/features/teacher/ResultsPortalPage';
+import { ExamResultsPage } from '@/features/teacher/ExamResultsPage';
 import { ResultPage } from '@/features/student/ResultPage';
 import { OrgLayout } from '@/features/org/OrgLayout';
 import { OrgStructurePage } from '@/features/org/OrgStructurePage';
 import { BatchesPage } from '@/features/org/BatchesPage';
+import { StudentsPage } from '@/features/org/StudentsPage';
+import { TeachersPage } from '@/features/org/TeachersPage';
 import { ImportsPage } from '@/features/org/ImportsPage';
 import { ReviewQueuePage } from '@/features/review/ReviewQueuePage';
 import { ReviewDetailPage } from '@/features/review/ReviewDetailPage';
@@ -33,6 +30,7 @@ import { ReportsPage } from '@/features/reports/ReportsPage';
 import { NotFoundPage } from '@/features/misc/NotFoundPage';
 import { PlaceholderPage } from '@/features/misc/PlaceholderPage';
 import { MaintenancePage } from '@/features/misc/MaintenancePage';
+import { UsersPage } from '@/features/users/UsersPage';
 import { ApiError } from '@/lib/api';
 import { useSession } from '@/lib/session';
 
@@ -98,6 +96,8 @@ export function App() {
         <Route path="/org" element={<OrgLayout />}>
           <Route index element={<OrgStructurePage />} />
           <Route path="batches" element={<BatchesPage />} />
+          <Route path="students" element={<StudentsPage />} />
+          <Route path="teachers" element={<TeachersPage />} />
           <Route path="imports" element={<ImportsPage />} />
         </Route>
         <Route path="/review" element={<ReviewQueuePage />} />
@@ -118,20 +118,19 @@ export function App() {
         <Route path="/exams/:examPublicId/edit" element={<ExamFormPage />} />
         <Route path="/exams/:examPublicId/build" element={<ExamBuilderPage />} />
         <Route path="/reports" element={<ReportsPage />} />
-        <Route path="/users" element={<PlaceholderPage title="Users" icon={Users} />} />
+        <Route path="/users" element={<UsersPage />} />
         <Route path="/audit" element={<PlaceholderPage title="Audit Log" icon={ScrollText} />} />
         <Route
           path="/department"
           element={<PlaceholderPage title="Department" icon={Building2} />}
         />
-        <Route path="/teachers" element={<PlaceholderPage title="Teachers" icon={Users} />} />
-        <Route path="/courses" element={<PlaceholderPage title="My Courses" icon={BookOpen} />} />
-        <Route
-          path="/questions"
-          element={<PlaceholderPage title="Question Bank" icon={ListChecks} />}
-        />
+        <Route path="/courses" element={<MyCoursesPage />} />
+        <Route path="/questions" element={<QuestionBankPage />} />
         <Route path="/grading" element={<GradingExamsPage />} />
         <Route path="/grading/:examPublicId" element={<GradingWorkspace />} />
+        <Route path="/exam-results" element={<ResultsPortalPage />} />
+        <Route path="/exam-results/:examPublicId" element={<ExamResultsPage />} />
+
         <Route path="/my-exams" element={<MyExamsPage />} />
         <Route path="/results/:attemptPublicId" element={<ResultPage />} />
         <Route path="/results" element={<PlaceholderPage title="Results" icon={BarChart3} />} />

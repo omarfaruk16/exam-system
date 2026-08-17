@@ -8,6 +8,7 @@ import type {
   Semester,
   StudentRow,
   TeacherOption,
+  TeacherRow,
 } from '@exam/types';
 import { api } from '@/lib/api';
 
@@ -84,9 +85,40 @@ export const deleteSemester = (id: string) => api.del(`/org/semesters/${id}`);
 export const deleteCourse = (id: string) => api.del(`/org/courses/${id}`);
 export const deleteCoursePart = (id: string) => api.del(`/org/course-parts/${id}`);
 
+// ── Teacher admin management ──
+export const fetchTeachersAdmin = (department?: string) =>
+  api.get<TeacherRow[]>(`/org/teachers${qs({ department })}`);
+export const createTeacher = (b: {
+  username: string;
+  displayName: string;
+  email: string;
+  departmentPublicId: string;
+  designation?: string;
+}) => api.post<TeacherRow>('/org/teachers', b);
+export const updateTeacher = (id: string, b: { designation?: string; displayName?: string }) =>
+  api.patch<TeacherRow>(`/org/teachers/${id}`, b);
+export const deleteTeacher = (id: string) => api.del(`/org/teachers/${id}`);
+
+// ── Teacher selector (dept_head-accessible, scoped to department) ──
+export const fetchTeachersSelector = (department: string) =>
+  api.get<TeacherOption[]>(`/org/teachers/selector${qs({ department })}`);
+
+// ── Teacher / student Excel export (browser download) ──
+export async function downloadExport(path: string, filename: string) {
+  const res = await fetch(`/api/v1${path}`, { credentials: 'include' });
+  if (!res.ok) throw new Error(`Export failed: ${res.statusText}`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 // ── Teacher assignment (on a course part) ──
-export const fetchTeachers = (department: string) =>
-  api.get<TeacherOption[]>(`/org/teachers${qs({ department })}`);
 export const assignTeacher = (coursePartId: string, teacherPublicId: string | null) =>
   api.put<CoursePart>(`/org/course-parts/${coursePartId}/teacher`, { teacherPublicId });
 
@@ -97,5 +129,18 @@ export const assignBatchSemester = (batchId: string, semesterPublicId: string | 
 // ── Students ──
 export const fetchStudents = (batch?: string) =>
   api.get<StudentRow[]>(`/org/students${qs({ batch })}`);
+export const createStudent = (b: {
+  studentId: string;
+  displayName: string;
+  email?: string;
+  batchPublicId: string;
+  registrationNumber?: string;
+  rollNumber?: string;
+}) => api.post<StudentRow>('/org/students', b);
+export const updateStudent = (
+  id: string,
+  b: { displayName?: string; email?: string; registrationNumber?: string; rollNumber?: string },
+) => api.patch<StudentRow>(`/org/students/${id}`, b);
+export const deleteStudent = (id: string) => api.del(`/org/students/${id}`);
 export const changeStudentBatch = (studentId: string, batchPublicId: string) =>
   api.put<StudentRow>(`/org/students/${studentId}/batch`, { batchPublicId });

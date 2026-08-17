@@ -16,8 +16,14 @@ import {
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChangesRequestedBanner } from '../shared/ChangesRequestedBanner';
+import { StartCountdown } from '../shared/ExamCountdown';
 import { StatusPill } from '../shared/StatusPill';
+import { useServerNow } from '../shared/useServerNow';
+import { useSession } from '@/lib/session';
+import { publishExam } from '../review/reviewApi';
 import { deleteExam, fetchExams, reviseExam } from './authoringApi';
+
+const ADMIN_EDITABLE_STATUSES = ['draft', 'in_review', 'approved', 'changes_requested'];
 
 interface Bucket {
   key: string;
@@ -41,7 +47,14 @@ const BUCKETS: Bucket[] = [
 
 export function ExamListPage() {
   const navigate = useNavigate();
-  const { data, isLoading } = useQuery({ queryKey: ['authoring-exams'], queryFn: fetchExams });
+  const nowMs = useServerNow();
+  const { data, isLoading } = useQuery({
+    queryKey: ['authoring-exams'],
+    queryFn: fetchExams,
+    refetchInterval: 20_000,
+  });
+  const { data: user } = useSession();
+  const isAdmin = (user?.roles ?? []).some((r) => r.role === 'admin' || r.role === 'super_admin');
 
   const grouped = BUCKETS.map((b) => ({
     ...b,
@@ -79,7 +92,7 @@ export function ExamListPage() {
                 {b.label}
               </h2>
               {b.items.map((exam) => (
-                <ExamCard key={exam.publicId} exam={exam} />
+                <ExamCard key={exam.publicId} exam={exam} isAdmin={isAdmin} nowMs={nowMs} />
               ))}
             </section>
           ))}
@@ -89,7 +102,15 @@ export function ExamListPage() {
   );
 }
 
-function ExamCard({ exam }: { exam: ExamListItem }) {
+function ExamCard({
+  exam,
+  isAdmin,
+  nowMs,
+}: {
+  exam: ExamListItem;
+  isAdmin: boolean;
+  nowMs: number;
+}) {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -108,6 +129,15 @@ function ExamCard({ exam }: { exam: ExamListItem }) {
       await qc.invalidateQueries({ queryKey: ['authoring-exams'] });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not delete the exam'),
+  });
+
+  const publish = useMutation({
+    mutationFn: () => publishExam(exam.publicId),
+    onSuccess: async () => {
+      toast.success('Exam published — students can now see it');
+      await qc.invalidateQueries({ queryKey: ['authoring-exams'] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not publish the exam'),
   });
 
   const isDraft = exam.status === 'draft';
@@ -135,43 +165,79 @@ function ExamCard({ exam }: { exam: ExamListItem }) {
               marks · {exam.durationMinutes} min
             </span>
           </div>
+
+          {/* Live countdown once the exam is visible to students */}
+          {exam.status === 'published' &&
+            (nowMs < new Date(exam.startAt).getTime() ? (
+              <div className="mt-2 text-xs">
+                <StartCountdown startAtMs={new Date(exam.startAt).getTime()} nowMs={nowMs} />
+              </div>
+            ) : (
+              <p className="text-warning mt-2 text-xs">Opening — going live any moment…</p>
+            ))}
+          {exam.status === 'live' && (
+            <p className="text-success mt-2 flex items-center gap-1.5 text-xs font-medium">
+              <span className="bg-success inline-block size-2 rounded-full" />
+              Live now — students can start
+            </p>
+          )}
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          {isDraft && (
+          {isAdmin ? (
             <>
+              {exam.status === 'approved' && (
+                <Button size="sm" onClick={() => publish.mutate()} disabled={publish.isPending}>
+                  {publish.isPending && <Loader2 className="size-4 animate-spin" />}
+                  Publish
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => navigate(`/exams/${exam.publicId}/build`)}
+                onClick={() => navigate(`/review/${exam.publicId}`)}
               >
-                Edit
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setConfirmDelete(true)}
-                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                aria-label="Delete exam"
-              >
-                <Trash2 className="size-4" />
+                {ADMIN_EDITABLE_STATUSES.includes(exam.status) ? 'Edit' : 'View'}
               </Button>
             </>
-          )}
-          {isChanges && (
-            <Button size="sm" onClick={() => revise.mutate()} disabled={revise.isPending}>
-              {revise.isPending && <Loader2 className="size-4 animate-spin" />}
-              Revise & edit
-            </Button>
-          )}
-          {!isDraft && !isChanges && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => navigate(`/exams/${exam.publicId}/build`)}
-            >
-              View
-            </Button>
+          ) : (
+            <>
+              {isDraft && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate(`/exams/${exam.publicId}/build`)}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setConfirmDelete(true)}
+                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    aria-label="Delete exam"
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </>
+              )}
+              {isChanges && (
+                <Button size="sm" onClick={() => revise.mutate()} disabled={revise.isPending}>
+                  {revise.isPending && <Loader2 className="size-4 animate-spin" />}
+                  Revise & edit
+                </Button>
+              )}
+              {!isDraft && !isChanges && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate(`/exams/${exam.publicId}/build`)}
+                >
+                  View
+                </Button>
+              )}
+            </>
           )}
         </div>
       </div>

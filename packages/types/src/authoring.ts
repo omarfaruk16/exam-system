@@ -26,6 +26,40 @@ export interface ExamListItem {
   createdByName: string;
 }
 
+/** One student's row in the per-exam review roster (GET /exams/:id/results). */
+export interface ExamResultRow {
+  studentPublicId: string;
+  studentId: string;
+  rollNumber: string | null;
+  name: string;
+  batchName: string;
+  attempted: boolean;
+  attemptStatus: string | null;
+  gradingStatus: string | null;
+  submittedAt: string | null;
+  attemptPublicId: string | null;
+  score: number | null;
+  percentage: number | null;
+  rank: number | null;
+}
+
+/** Per-exam review portal payload: exam header + every enrolled student's attendance and mark. */
+export interface ExamResultsOverview {
+  exam: {
+    publicId: string;
+    title: string;
+    courseCode: string;
+    courseName: string;
+    partName: string;
+    semesterNumber: number;
+    totalMarks: number;
+    startAt: string;
+    status: string;
+  };
+  counts: { total: number; attempted: number; absent: number };
+  rows: ExamResultRow[];
+}
+
 /** Full exam as returned by GET /exams/:id — pre-fills the metadata form and the builder header. */
 export interface ExamDetail {
   publicId: string;

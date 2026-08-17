@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, ChevronRight, Loader2, Pencil, Plus, Trash2, UserCog } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,6 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { UserCog } from 'lucide-react';
 import { LEVEL_LABEL, loadChildren, nodeName, type OrgNode } from './orgModel';
 import {
   childCountOf,
@@ -29,11 +28,13 @@ import { TeacherSelector } from './TeacherSelector';
 
 export function OrgDetailPanel({
   node,
+  breadcrumb,
   onSelect,
   onDeleted,
 }: {
   node: OrgNode;
-  onSelect: (n: OrgNode) => void;
+  breadcrumb: OrgNode[];
+  onSelect: (n: OrgNode, ancestors: OrgNode[]) => void;
   onDeleted: () => void;
 }) {
   const qc = useQueryClient();
@@ -72,6 +73,29 @@ export function OrgDetailPanel({
   return (
     <div className="space-y-4">
       <Card className="p-6">
+        {/* Breadcrumb path */}
+        {breadcrumb.length > 1 && (
+          <nav className="mb-3 flex flex-wrap items-center gap-1 text-xs" aria-label="Breadcrumb">
+            {breadcrumb.map((crumb, i) => (
+              <span key={crumb.publicId} className="flex items-center gap-1">
+                {i > 0 && <ChevronRight className="text-muted-foreground size-3 shrink-0" />}
+                {i < breadcrumb.length - 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => onSelect(crumb, breadcrumb.slice(0, i))}
+                    className="text-muted-foreground hover:text-foreground max-w-[160px] truncate transition-colors"
+                  >
+                    {nodeName(crumb)}
+                  </button>
+                ) : (
+                  <span className="text-foreground max-w-[200px] truncate font-medium">
+                    {nodeName(crumb)}
+                  </span>
+                )}
+              </span>
+            ))}
+          </nav>
+        )}
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
@@ -112,6 +136,7 @@ export function OrgDetailPanel({
         ) : (
           <EditForm
             node={node}
+            breadcrumb={breadcrumb}
             onDone={() => setMode('view')}
             onSaved={invalidateTree}
             onSelect={onSelect}
@@ -150,7 +175,7 @@ export function OrgDetailPanel({
             />
           )}
 
-          <ChildrenTable node={node} onSelect={onSelect} />
+          <ChildrenTable node={node} breadcrumb={breadcrumb} onSelect={onSelect} />
         </Card>
       )}
 
@@ -189,14 +214,16 @@ export function OrgDetailPanel({
 
 function EditForm({
   node,
+  breadcrumb,
   onDone,
   onSaved,
   onSelect,
 }: {
   node: OrgNode;
+  breadcrumb: OrgNode[];
   onDone: () => void;
   onSaved: () => Promise<unknown>;
-  onSelect: (n: OrgNode) => void;
+  onSelect: (n: OrgNode, ancestors: OrgNode[]) => void;
 }) {
   const cfg = LEVEL_CONFIG[node.level];
   const [values, setValues] = useState<Record<string, string>>(fieldValues(node));
@@ -211,7 +238,10 @@ function EditForm({
       toast.success('Saved');
       await onSaved();
       // Reflect the edit in the selected node without a full refetch.
-      onSelect({ ...node, raw: { ...node.raw, ...(updated as object) } } as OrgNode);
+      onSelect(
+        { ...node, raw: { ...node.raw, ...(updated as object) } } as OrgNode,
+        breadcrumb.slice(0, -1),
+      );
       onDone();
     },
     onError: (e) => setError(e instanceof Error ? e.message : 'Could not save'),
@@ -306,7 +336,15 @@ function AddChildForm({
   );
 }
 
-function ChildrenTable({ node, onSelect }: { node: OrgNode; onSelect: (n: OrgNode) => void }) {
+function ChildrenTable({
+  node,
+  breadcrumb,
+  onSelect,
+}: {
+  node: OrgNode;
+  breadcrumb: OrgNode[];
+  onSelect: (n: OrgNode, ancestors: OrgNode[]) => void;
+}) {
   const q = useQuery({
     queryKey: ['org-children', node.level, node.publicId, 'panel'],
     queryFn: () => loadChildren(node),
@@ -345,7 +383,7 @@ function ChildrenTable({ node, onSelect }: { node: OrgNode; onSelect: (n: OrgNod
               </td>
               <td className="py-2 text-right">
                 <button
-                  onClick={() => onSelect(c)}
+                  onClick={() => onSelect(c, breadcrumb)}
                   className="text-primary text-xs font-medium hover:underline"
                 >
                   View
@@ -406,14 +444,44 @@ function PartTeacherCard({
   node: Extract<OrgNode, { level: 'part' }>;
   onSaved: () => Promise<unknown>;
 }) {
+  const qc = useQueryClient();
   const [assigning, setAssigning] = useState(false);
   const part = node.raw;
   const departmentPublicId = part.course.semester.program.department.publicId;
 
+  // Local copy so the display updates instantly without waiting for the tree to refetch.
+  const [localTeacher, setLocalTeacher] = useState<{
+    publicId: string;
+    designation: string | null;
+    user: { displayName: string };
+  } | null>(part.assignedTeacher ?? null);
+
+  // Sync when the user navigates to a different course part.
+  const [prevNodeId, setPrevNodeId] = useState(node.publicId);
+  if (prevNodeId !== node.publicId) {
+    setPrevNodeId(node.publicId);
+    setLocalTeacher(part.assignedTeacher ?? null);
+  }
+
   const assign = useMutation({
     mutationFn: (teacherPublicId: string | null) => assignTeacher(node.publicId, teacherPublicId),
-    onSuccess: async () => {
+    onSuccess: async (_, teacherPublicId) => {
       toast.success('Teacher assignment updated');
+      if (teacherPublicId === null) {
+        setLocalTeacher(null);
+      } else {
+        const cached = qc.getQueryData<
+          { publicId: string; displayName: string; designation?: string | null }[]
+        >(['org-teachers', departmentPublicId]);
+        const found = cached?.find((t) => t.publicId === teacherPublicId);
+        if (found) {
+          setLocalTeacher({
+            publicId: found.publicId,
+            designation: found.designation ?? null,
+            user: { displayName: found.displayName },
+          });
+        }
+      }
       await onSaved();
       setAssigning(false);
     },
@@ -426,19 +494,19 @@ function PartTeacherCard({
         <div>
           <h3 className="text-sm font-semibold">Assigned teacher</h3>
           <p className="text-muted-foreground mt-0.5 text-sm">
-            {part.assignedTeacher
-              ? `${part.assignedTeacher.user.displayName}${part.assignedTeacher.designation ? ` · ${part.assignedTeacher.designation}` : ''}`
+            {localTeacher
+              ? `${localTeacher.user.displayName}${localTeacher.designation ? ` · ${localTeacher.designation}` : ''}`
               : 'No teacher assigned'}
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => setAssigning((v) => !v)}>
-          <UserCog className="size-4" /> {part.assignedTeacher ? 'Change' : 'Assign'}
+          <UserCog className="size-4" /> {localTeacher ? 'Change' : 'Assign'}
         </Button>
       </div>
       {assigning && (
         <TeacherSelector
           departmentPublicId={departmentPublicId}
-          currentTeacherPublicId={part.assignedTeacher?.publicId ?? null}
+          currentTeacherPublicId={localTeacher?.publicId ?? null}
           pending={assign.isPending}
           onPick={(teacherPublicId) => assign.mutate(teacherPublicId)}
         />

@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import 'katex/dist/katex.min.css';
 
 /* Dark mode driven by a `.dark` class on <html> (see ThemeProvider). */
 @custom-variant dark (&:is(.dark *));

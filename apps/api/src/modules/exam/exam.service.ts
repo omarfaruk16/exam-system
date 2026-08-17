@@ -281,6 +281,99 @@ export class ExamService {
     }));
   }
 
+  /** Per-exam review roster: every enrolled student, whether they sat the exam,
+   *  their attempt status and their mark. Powers the teacher "Results" portal. */
+  async getResultsOverview(user: AuthUser, publicId: string) {
+    const exam = await this.loadExam(publicId);
+    await this.assertReadAccess(user, exam);
+    const full = await this.prisma.db.exam.findFirstOrThrow({
+      where: { publicId },
+      select: {
+        title: true,
+        totalMarks: true,
+        startAt: true,
+        status: true,
+        coursePart: {
+          select: {
+            name: true,
+            course: {
+              select: {
+                code: true,
+                name: true,
+                semesterId: true,
+                semester: { select: { number: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+    const semesterId = full.coursePart.course.semesterId;
+    const students = await this.prisma.db.student.findMany({
+      where: { batch: { currentSemesterId: semesterId } },
+      select: {
+        publicId: true,
+        studentId: true,
+        rollNumber: true,
+        user: { select: { displayName: true } },
+        batch: { select: { name: true } },
+      },
+      orderBy: { studentId: 'asc' },
+    });
+    const attempts = await this.prisma.db.examAttempt.findMany({
+      where: { exam: { publicId } },
+      select: {
+        publicId: true,
+        status: true,
+        gradingStatus: true,
+        submittedAt: true,
+        student: { select: { publicId: true } },
+        result: { select: { finalScore: true, percentage: true, rank: true } },
+      },
+    });
+    const byStudent = new Map(attempts.map((a) => [a.student.publicId, a]));
+
+    const rows = students.map((s) => {
+      const a = byStudent.get(s.publicId);
+      return {
+        studentPublicId: s.publicId,
+        studentId: s.studentId,
+        rollNumber: s.rollNumber,
+        name: s.user.displayName,
+        batchName: s.batch.name,
+        attempted: Boolean(a),
+        attemptStatus: a?.status ?? null,
+        gradingStatus: a?.gradingStatus ?? null,
+        submittedAt: a?.submittedAt?.toISOString() ?? null,
+        attemptPublicId: a?.publicId ?? null,
+        score: a?.result?.finalScore ?? null,
+        percentage: a?.result?.percentage ?? null,
+        rank: a?.result?.rank ?? null,
+      };
+    });
+
+    const attemptedCount = rows.filter((r) => r.attempted).length;
+    return {
+      exam: {
+        publicId,
+        title: full.title,
+        courseCode: full.coursePart.course.code,
+        courseName: full.coursePart.course.name,
+        partName: full.coursePart.name,
+        semesterNumber: full.coursePart.course.semester.number,
+        totalMarks: full.totalMarks,
+        startAt: full.startAt.toISOString(),
+        status: full.status,
+      },
+      counts: {
+        total: rows.length,
+        attempted: attemptedCount,
+        absent: rows.length - attemptedCount,
+      },
+      rows,
+    };
+  }
+
   async updateExam(user: AuthUser, ip: string, publicId: string, dto: UpdateExamDto) {
     const exam = await this.loadExam(publicId);
     if (this.isAdmin(user)) {

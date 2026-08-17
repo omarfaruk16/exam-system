@@ -3,7 +3,7 @@ import { Loader2, Search, X } from 'lucide-react';
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { fetchTeachers } from './orgApi';
+import { fetchTeachersSelector } from './orgApi';
 
 /** Searchable teacher picker scoped to a department. Calls onPick with a publicId, or null to unassign. */
 export function TeacherSelector({
@@ -20,7 +20,7 @@ export function TeacherSelector({
   const [q, setQ] = useState('');
   const { data, isLoading } = useQuery({
     queryKey: ['org-teachers', departmentPublicId],
-    queryFn: () => fetchTeachers(departmentPublicId),
+    queryFn: () => fetchTeachersSelector(departmentPublicId),
   });
   const teachers = (data ?? []).filter((t) => {
     const s = q.trim().toLowerCase();

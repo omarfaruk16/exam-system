@@ -90,6 +90,17 @@ export class EntityImportProcessor extends WorkerHost {
           });
           continue;
         }
+        // Free the username slot if a soft-deleted user previously held it.
+        const staleUser = await this.prisma.user.findFirst({
+          where: { username: row.username, deletedAt: { not: null } },
+          select: { id: true },
+        });
+        if (staleUser) {
+          await this.prisma.user.update({
+            where: { id: staleUser.id },
+            data: { username: `${row.username}__del_${Date.now()}`, email: null },
+          });
+        }
         const tempPassword = `${row.username}@Exam123`;
         const hash = await this.password.hash(tempPassword);
         await this.prisma.$transaction(async (tx) => {

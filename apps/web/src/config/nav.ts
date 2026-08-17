@@ -3,12 +3,12 @@ import {
   BookOpen,
   Building2,
   ClipboardCheck,
+  ClipboardList,
   FileCheck2,
   GraduationCap,
   LayoutDashboard,
   ListChecks,
   ScrollText,
-  Upload,
   Users,
   type LucideIcon,
 } from 'lucide-react';
@@ -26,9 +26,9 @@ const BY_ROLE: Record<RoleName, NavItem[]> = {
   super_admin: [
     HOME,
     { label: 'Organization', path: '/org', icon: Building2 },
-    { label: 'Students', path: '/students', icon: Upload },
     { label: 'Exams', path: '/exams', icon: FileCheck2 },
     { label: 'Review', path: '/review', icon: ClipboardCheck },
+    { label: 'Results', path: '/exam-results', icon: ClipboardList },
     { label: 'Reports', path: '/reports', icon: BarChart3 },
     { label: 'Users', path: '/users', icon: Users },
     { label: 'Audit Log', path: '/audit', icon: ScrollText },
@@ -36,15 +36,17 @@ const BY_ROLE: Record<RoleName, NavItem[]> = {
   admin: [
     HOME,
     { label: 'Organization', path: '/org', icon: Building2 },
-    { label: 'Students', path: '/students', icon: Upload },
     { label: 'Exams', path: '/exams', icon: FileCheck2 },
     { label: 'Review', path: '/review', icon: ClipboardCheck },
+    { label: 'Results', path: '/exam-results', icon: ClipboardList },
     { label: 'Reports', path: '/reports', icon: BarChart3 },
     { label: 'Audit Log', path: '/audit', icon: ScrollText },
   ],
   department_head: [
     HOME,
+    { label: 'Organization', path: '/org', icon: Building2 },
     { label: 'Review', path: '/review', icon: ClipboardCheck },
+    { label: 'Results', path: '/exam-results', icon: ClipboardList },
     { label: 'Reports', path: '/reports', icon: BarChart3 },
   ],
   teacher: [
@@ -53,6 +55,7 @@ const BY_ROLE: Record<RoleName, NavItem[]> = {
     { label: 'Exams', path: '/exams', icon: FileCheck2 },
     { label: 'Question Bank', path: '/questions', icon: ListChecks },
     { label: 'Grading', path: '/grading', icon: ClipboardCheck },
+    { label: 'Results', path: '/exam-results', icon: ClipboardList },
     { label: 'Reports', path: '/reports', icon: BarChart3 },
   ],
   student: [

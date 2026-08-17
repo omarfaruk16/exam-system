@@ -1,4 +1,5 @@
 import { GraduationCap } from 'lucide-react';
+import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import type { NavItem } from '@/config/nav';
 import { cn } from '@/lib/utils';
@@ -11,6 +12,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ items, institution, mobileOpen, onNavigate }: SidebarProps) {
+  const [logoOk, setLogoOk] = useState(true);
   return (
     <>
       {mobileOpen && (
@@ -27,9 +29,18 @@ export function Sidebar({ items, institution, mobileOpen, onNavigate }: SidebarP
         )}
       >
         <div className="border-border flex h-16 items-center gap-2.5 border-b px-5">
-          <div className="bg-primary text-primary-foreground flex h-9 w-9 items-center justify-center rounded-md">
-            <GraduationCap className="size-5" />
-          </div>
+          {logoOk ? (
+            <img
+              src="/ru-logo.png"
+              alt={institution}
+              className="h-9 w-9 shrink-0 object-contain"
+              onError={() => setLogoOk(false)}
+            />
+          ) : (
+            <div className="bg-primary text-primary-foreground flex h-9 w-9 shrink-0 items-center justify-center rounded-md">
+              <GraduationCap className="size-5" />
+            </div>
+          )}
           <div className="min-w-0">
             <div className="truncate text-sm font-medium leading-tight">{institution}</div>
             <div className="text-muted-foreground text-xs">Examination System</div>

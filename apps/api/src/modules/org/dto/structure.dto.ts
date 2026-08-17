@@ -1,5 +1,15 @@
 import { DegreeType } from '@prisma/client';
-import { IsEnum, IsInt, IsNumber, IsOptional, IsString, Length, Max, Min } from 'class-validator';
+import {
+  IsEmail,
+  IsEnum,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Length,
+  Max,
+  Min,
+} from 'class-validator';
 
 export class CreateFacultyDto {
   @IsString() @Length(2, 150) name!: string;
@@ -78,4 +88,35 @@ export class AssignBatchSemesterDto {
 /** Move a student to a different batch. */
 export class ChangeStudentBatchDto {
   @IsString() batchPublicId!: string;
+}
+
+/** Manually create a single teacher account. Temp password = {username}@Exam123. */
+export class CreateTeacherManualDto {
+  @IsString() @Length(3, 50) username!: string;
+  @IsString() @Length(2, 150) displayName!: string;
+  @IsEmail() email!: string;
+  @IsString() departmentPublicId!: string;
+  @IsOptional() @IsString() @Length(1, 100) designation?: string;
+}
+
+export class UpdateTeacherDto {
+  @IsOptional() @IsString() @Length(1, 100) designation?: string;
+  @IsOptional() @IsString() @Length(2, 150) displayName?: string;
+}
+
+/** Manually create a single student account. Temp password = Student@123. */
+export class CreateStudentManualDto {
+  @IsString() @Length(2, 30) studentId!: string;
+  @IsString() @Length(2, 150) displayName!: string;
+  @IsOptional() @IsEmail() email?: string;
+  @IsString() batchPublicId!: string;
+  @IsOptional() @IsString() @Length(2, 50) registrationNumber?: string;
+  @IsOptional() @IsString() @Length(1, 20) rollNumber?: string;
+}
+
+export class UpdateStudentDto {
+  @IsOptional() @IsString() @Length(2, 150) displayName?: string;
+  @IsOptional() @IsEmail() email?: string;
+  @IsOptional() @IsString() @Length(2, 50) registrationNumber?: string;
+  @IsOptional() @IsString() @Length(1, 20) rollNumber?: string;
 }

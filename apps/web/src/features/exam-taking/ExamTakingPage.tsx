@@ -1,6 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import type { StartAttemptResponse, SubmitResult } from '@exam/types';
-import { AlertTriangle, CheckCircle2, Clock, Loader2, Lock, RotateCcw } from 'lucide-react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  Loader2,
+  Lock,
+  Maximize,
+  RotateCcw,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -88,6 +96,7 @@ function ExamRunner({ data }: { data: StartAttemptResponse }) {
   const [showSubmit, setShowSubmit] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [restore, setRestore] = useState<AnswerState | null>(null);
+  const [fsPrompt, setFsPrompt] = useState(false);
 
   const clock = useExamClock(attempt.deadline, serverTime);
   const disabled = locked || timeUp || submitting || Boolean(submitted);
@@ -197,6 +206,73 @@ function ExamRunner({ data }: { data: StartAttemptResponse }) {
     return () => window.removeEventListener('beforeunload', handler);
   }, [submitted, timeUp]);
 
+  // Block copy / cut / paste / right-click during the exam.
+  useEffect(() => {
+    if (submitted) return;
+    const prevent = (e: Event) => e.preventDefault();
+    document.addEventListener('copy', prevent);
+    document.addEventListener('cut', prevent);
+    document.addEventListener('paste', prevent);
+    document.addEventListener('contextmenu', prevent);
+    return () => {
+      document.removeEventListener('copy', prevent);
+      document.removeEventListener('cut', prevent);
+      document.removeEventListener('paste', prevent);
+      document.removeEventListener('contextmenu', prevent);
+    };
+  }, [submitted]);
+
+  // Block keyboard shortcuts that could expose content or exit the exam.
+  useEffect(() => {
+    if (submitted) return;
+    const blockKeys = (e: KeyboardEvent) => {
+      if (e.key === 'F12' || e.key === 'F11') {
+        e.preventDefault();
+        return;
+      }
+      const ctrl = e.ctrlKey || e.metaKey;
+      if (ctrl) {
+        const k = e.key.toLowerCase();
+        if (['c', 'x', 'v', 'u', 'a', 'p', 's'].includes(k)) {
+          e.preventDefault();
+          return;
+        }
+        if (e.shiftKey && ['i', 'j', 'c'].includes(k)) {
+          e.preventDefault();
+          return;
+        }
+      }
+    };
+    document.addEventListener('keydown', blockKeys, true);
+    return () => document.removeEventListener('keydown', blockKeys, true);
+  }, [submitted]);
+
+  // Keep the exam in full screen. The browser reserves Esc to exit full screen
+  // and refuses to re-enter without a user gesture, so we can't silently force it
+  // back. Instead, whenever the student leaves full screen we raise a blocking
+  // overlay (see below) that covers the exam until they click to return — that
+  // click is the gesture that re-enters. This makes Esc a dead end, not an escape.
+  useEffect(() => {
+    if (submitted) return;
+    const enter = () =>
+      Promise.resolve(document.documentElement.requestFullscreen?.())
+        .then(() => setFsPrompt(false))
+        .catch(() => setFsPrompt(true));
+    if (!document.fullscreenElement) void enter();
+    const onChange = () => {
+      if (!submitted) setFsPrompt(!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, [submitted]);
+
+  // Leave full screen once the exam is over, so the result screen isn't locked in.
+  useEffect(() => {
+    if (submitted && document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => undefined);
+    }
+  }, [submitted]);
+
   // Offer to restore local (IndexedDB) answers that are newer than what the server has.
   useEffect(() => {
     let cancelled = false;
@@ -293,7 +369,7 @@ function ExamRunner({ data }: { data: StartAttemptResponse }) {
   }
 
   return (
-    <div className="bg-muted/30 flex min-h-screen flex-col">
+    <div className="bg-muted/30 flex min-h-screen select-none flex-col">
       {/* Fixed top bar */}
       <header className="bg-card sticky top-0 z-30 border-b">
         <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-4 px-4 md:px-6">
@@ -420,6 +496,30 @@ function ExamRunner({ data }: { data: StartAttemptResponse }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Full-screen guard — blocks the exam whenever the student leaves full screen */}
+      {fsPrompt && !submitted && !timeUp && !locked && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/90 p-4">
+          <div className="bg-card w-full max-w-md rounded-xl border p-6 text-center shadow-lg">
+            <Maximize className="text-warning mx-auto size-10" />
+            <h2 className="mt-3 text-xl font-semibold">Full screen required</h2>
+            <p className="text-muted-foreground mt-1 text-sm">
+              This exam must run in full screen with no other windows. Click below to continue —
+              your saved answers are safe.
+            </p>
+            <Button
+              className="mt-4 w-full"
+              onClick={() =>
+                Promise.resolve(document.documentElement.requestFullscreen?.())
+                  .then(() => setFsPrompt(false))
+                  .catch(() => undefined)
+              }
+            >
+              <Maximize className="size-4" /> Enter full screen
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Time-up overlay */}
       {timeUp && !locked && (

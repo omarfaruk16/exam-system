@@ -5,6 +5,8 @@ export interface ParsedStudentRow {
   studentId: string;
   name: string;
   email: string | null;
+  registrationNumber: string | null;
+  rollNumber: string | null;
   /** Optional password from the sheet; when absent the worker generates a temporary one. */
   password: string | null;
 }
@@ -28,9 +30,27 @@ export function validateStudentRow(
   raw: Record<string, unknown>,
   rowNumber: number,
 ): { value?: ParsedStudentRow; error?: ImportRowError } {
-  const studentId = cell(raw, 'studentid', 'student id', 'id', 'roll');
-  const name = cell(raw, 'name', 'fullname', 'full name', 'student name');
+  const studentId = cell(raw, 'studentid', 'student id', 'id');
+  const name = cell(
+    raw,
+    'name',
+    'fullname',
+    'full name',
+    'student name',
+    'displayname',
+    'display name',
+  );
   const email = cell(raw, 'email', 'e-mail');
+  const registrationNumber = cell(
+    raw,
+    'registrationnumber',
+    'registration number',
+    'registration',
+    'reg no',
+    'reg. no',
+    'regno',
+  );
+  const rollNumber = cell(raw, 'rollnumber', 'roll number', 'roll no', 'roll');
   const password = cell(raw, 'password', 'temppassword', 'temp password');
 
   if (!studentId) {
@@ -65,6 +85,14 @@ export function validateStudentRow(
   }
 
   return {
-    value: { rowNumber, studentId, name, email: email || null, password: password || null },
+    value: {
+      rowNumber,
+      studentId,
+      name,
+      email: email || null,
+      registrationNumber: registrationNumber || null,
+      rollNumber: rollNumber || null,
+      password: password || null,
+    },
   };
 }

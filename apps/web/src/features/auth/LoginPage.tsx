@@ -128,7 +128,7 @@ function BrandHeader() {
     <div className="flex flex-col items-center text-center">
       {logoOk ? (
         <img
-          src="/university-logo.png"
+          src="/ru-logo.png"
           alt={INSTITUTION}
           className="h-14 w-auto object-contain"
           onError={() => setLogoOk(false)}

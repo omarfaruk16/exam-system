@@ -27,7 +27,14 @@ beforeAll(async () => {
   process.loadEnvFile('.env');
   prisma = new PrismaService();
   await prisma.onModuleInit();
-  structure = new StructureService(prisma, new AuditService(prisma), new AccessControlService());
+  // PasswordService is only used by manual-create methods not exercised here — pass a stub.
+  const passwordStub = { hash: async () => '' } as never;
+  structure = new StructureService(
+    prisma,
+    new AuditService(prisma),
+    new AccessControlService(),
+    passwordStub,
+  );
 
   const cse = await prisma.db.department.findFirstOrThrow({
     where: { name: 'Computer Science & Engineering' },

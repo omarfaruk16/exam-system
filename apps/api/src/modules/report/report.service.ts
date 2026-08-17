@@ -62,11 +62,15 @@ export class ReportService {
 
   private async assertReportAccess(user: AuthUser, exam: ExamScope): Promise<void> {
     const program = exam.coursePart.course.semester.program;
-    if (this.isAdmin(user)) {
-      this.access.assertAdminScope(user, {
-        departmentId: program.departmentId,
-        facultyId: program.department.facultyId,
-      });
+    const scope = {
+      departmentId: program.departmentId,
+      facultyId: program.department.facultyId,
+    };
+    // super_admin, faculty-scoped admin, and the department's head are all authorized by scope
+    // (assertAdminScope delegates to acl.assertDepartment, which understands each of those roles).
+    const isDeptHead = user.roles.some((r) => r.role === 'department_head');
+    if (this.isAdmin(user) || isDeptHead) {
+      this.access.assertAdminScope(user, scope);
       return;
     }
     const teacher = await this.access.requireTeacher(user);

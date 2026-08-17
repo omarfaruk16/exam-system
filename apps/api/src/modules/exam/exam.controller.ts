@@ -53,6 +53,12 @@ export class ExamController {
     return this.exams.getRoster(u, id);
   }
 
+  @Roles('teacher', 'admin', 'super_admin', 'department_head')
+  @Get(':publicId/results')
+  resultsOverview(@CurrentUser() u: AuthUser, @Param('publicId') id: string) {
+    return this.exams.getResultsOverview(u, id);
+  }
+
   @Roles('teacher', 'admin', 'super_admin')
   @Patch(':publicId')
   update(

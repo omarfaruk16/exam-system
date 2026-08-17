@@ -9,15 +9,21 @@ interface TemplateSpec {
 
 const TEMPLATES: Record<TemplateType, TemplateSpec> = {
   students: {
-    headers: ['studentId', 'firstName', 'lastName', 'email', 'batchId', 'phone'],
-    example: ['2021099', 'Ayesha', 'Rahman', 'ayesha99@student.example.edu', 1, '01700000000'],
+    headers: ['studentId', 'name', 'email', 'registrationNumber', 'rollNumber', 'phone'],
+    example: [
+      '2021099',
+      'Ayesha Rahman',
+      'ayesha99@student.example.edu',
+      'RU-2021-CSE-099',
+      '01',
+      '01700000000',
+    ],
   },
   teachers: {
-    headers: ['username', 'firstName', 'lastName', 'email', 'department', 'designation', 'phone'],
+    headers: ['username', 'name', 'email', 'department', 'designation', 'phone'],
     example: [
       'jdoe',
-      'John',
-      'Doe',
+      'Dr. John Doe',
       'jdoe@example.edu',
       'Computer Science & Engineering',
       'Lecturer',

@@ -62,6 +62,10 @@ export class ImportController {
   ): Promise<{ jobId: string }> {
     if (!file) throw new BadRequestException('No file uploaded (field name must be "file")');
     if (!batchPublicId) throw new BadRequestException('A "batch" query parameter is required');
+    const studentFileName = file.originalname.toLowerCase();
+    if (!studentFileName.endsWith('.xlsx') && !studentFileName.endsWith('.csv')) {
+      throw new BadRequestException('Only .xlsx or .csv files are accepted');
+    }
 
     const batch = await this.prisma.db.batch.findFirst({ where: { publicId: batchPublicId } });
     if (!batch) throw new NotFoundException('Batch not found');

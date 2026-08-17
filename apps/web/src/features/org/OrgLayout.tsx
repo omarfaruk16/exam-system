@@ -3,7 +3,9 @@ import { cn } from '@/lib/utils';
 
 const tabs = [
   { to: '/org', label: 'Structure', end: true },
-  { to: '/org/batches', label: 'Batches & students', end: false },
+  { to: '/org/batches', label: 'Batches', end: false },
+  { to: '/org/students', label: 'Students', end: false },
+  { to: '/org/teachers', label: 'Teachers', end: false },
   { to: '/org/imports', label: 'Bulk import', end: false },
 ];
 
