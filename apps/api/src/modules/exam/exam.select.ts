@@ -15,7 +15,7 @@ export const questionSelect = {
   marks: true,
   explanation: true,
   modelAnswer: true,
-  bank: { select: { publicId: true } },
+  bank: { select: { publicId: true, name: true } },
   options: {
     select: { publicId: true, text: true, isCorrect: true, order: true },
     orderBy: { order: 'asc' },

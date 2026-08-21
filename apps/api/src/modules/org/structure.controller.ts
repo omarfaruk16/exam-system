@@ -59,6 +59,11 @@ export class StructureController {
   @Get('faculties/:publicId') getFaculty(@Param('publicId') id: string) {
     return this.svc.getFaculty(id);
   }
+  @Roles('super_admin', 'admin', 'department_head')
+  @Get('faculties/:publicId/stats')
+  getFacultyStats(@Param('publicId') id: string) {
+    return this.svc.getFacultyStats(id);
+  }
   @Post('faculties') createFaculty(
     @CurrentUser() u: AuthUser,
     @Ip() ip: string,

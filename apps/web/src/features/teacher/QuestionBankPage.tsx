@@ -35,8 +35,8 @@ export function QuestionBankPage() {
       <header className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight">Question Bank</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          Manage questions for your assigned course parts. Use $…$ for inline math and $$…$$ for
-          display math.
+          Manage chapters and questions for your assigned course parts. Each chapter groups related
+          questions. Use $…$ for inline math and $$…$$ for display math.
         </p>
       </header>
 
@@ -98,7 +98,7 @@ export function QuestionBankPage() {
 
 function BankView({ part }: { part: PartOption }) {
   const qc = useQueryClient();
-  const [newBankName, setNewBankName] = useState('Question bank');
+  const [newBankName, setNewBankName] = useState('Chapter 1');
   const [creatingBank, setCreatingBank] = useState(false);
   const [activeBankId, setActiveBankId] = useState<string>('');
 
@@ -113,15 +113,15 @@ function BankView({ part }: { part: PartOption }) {
   }, [activeBankId, banks]);
 
   const createBankMut = useMutation({
-    mutationFn: () => createBank(part.publicId, newBankName.trim() || 'Question bank'),
+    mutationFn: () => createBank(part.publicId, newBankName.trim() || 'Chapter 1'),
     onSuccess: async (bank) => {
       await qc.invalidateQueries({ queryKey: ['banks', part.publicId] });
       setActiveBankId(bank.publicId);
       setCreatingBank(false);
-      setNewBankName('Question bank');
-      toast.success('Bank created');
+      setNewBankName('Chapter 1');
+      toast.success('Chapter created');
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not create bank'),
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not create chapter'),
   });
 
   return (
@@ -177,7 +177,7 @@ function BankView({ part }: { part: PartOption }) {
             className="h-8 rounded-full"
             onClick={() => setCreatingBank(true)}
           >
-            <Plus className="size-3.5" /> New bank
+            <Plus className="size-3.5" /> New chapter
           </Button>
         )}
       </div>
@@ -186,9 +186,9 @@ function BankView({ part }: { part: PartOption }) {
         <Skeleton className="h-40 w-full rounded-xl" />
       ) : banks.length === 0 ? (
         <Card className="flex flex-col items-center gap-2 py-12 text-center">
-          <p className="text-sm font-medium">No question banks yet</p>
+          <p className="text-sm font-medium">No chapters yet</p>
           <p className="text-muted-foreground text-xs">
-            Create a bank above to start adding questions.
+            Create a chapter above to start adding questions.
           </p>
         </Card>
       ) : activeBankId ? (

@@ -17,7 +17,7 @@ const DESCRIPTIONS: Record<string, string> = {
   '/questions': 'Build reusable MCQ and written question banks.',
   '/grading': 'Mark written answers and finalize results.',
   '/my-exams': 'Take your scheduled examinations.',
-  '/results': 'View your marks and feedback.',
+  '/results': 'View your marks, scores, and feedback by semester.',
 };
 
 export function DashboardPage({ user }: { user: SessionUser }) {

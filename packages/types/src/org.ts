@@ -97,6 +97,19 @@ export interface TeacherRow {
   department: { publicId: string; name: string };
 }
 
+export interface FacultyStats {
+  publicId: string;
+  name: string;
+  createdAt: string;
+  departments: { publicId: string; name: string; programCount: number }[];
+  stats: {
+    departmentCount: number;
+    programCount: number;
+    studentCount: number;
+    teacherCount: number;
+  };
+}
+
 export interface AdminUserRow {
   publicId: string;
   username: string;

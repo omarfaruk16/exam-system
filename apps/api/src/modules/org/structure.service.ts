@@ -259,6 +259,64 @@ export class StructureService {
     if (!row) throw new NotFoundException('Faculty not found');
     return row;
   }
+
+  async getFacultyStats(publicId: string) {
+    const faculty = await this.prisma.db.faculty.findFirst({
+      where: { publicId, deletedAt: null },
+      select: {
+        publicId: true,
+        name: true,
+        createdAt: true,
+        departments: {
+          where: { deletedAt: null },
+          select: {
+            publicId: true,
+            name: true,
+            _count: { select: { programs: { where: { deletedAt: null } } } },
+            teachers: { where: { deletedAt: null }, select: { id: true } },
+            programs: {
+              where: { deletedAt: null },
+              select: {
+                batches: {
+                  where: { deletedAt: null },
+                  select: { _count: { select: { students: { where: { deletedAt: null } } } } },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!faculty) throw new NotFoundException('Faculty not found');
+
+    let totalPrograms = 0;
+    let totalStudents = 0;
+    let totalTeachers = 0;
+    for (const d of faculty.departments) {
+      totalPrograms += d._count.programs;
+      totalTeachers += d.teachers.length;
+      for (const p of d.programs) {
+        for (const b of p.batches) totalStudents += b._count.students;
+      }
+    }
+
+    return {
+      publicId: faculty.publicId,
+      name: faculty.name,
+      createdAt: faculty.createdAt,
+      departments: faculty.departments.map((d) => ({
+        publicId: d.publicId,
+        name: d.name,
+        programCount: d._count.programs,
+      })),
+      stats: {
+        departmentCount: faculty.departments.length,
+        programCount: totalPrograms,
+        studentCount: totalStudents,
+        teacherCount: totalTeachers,
+      },
+    };
+  }
   createFaculty(ctx: OrgContext, dto: CreateFacultyDto) {
     return this.mutate(ctx, 'faculty.create', 'Faculty', async (tx) => {
       const result = await tx.faculty.create({ data: { name: dto.name }, select: facultySelect });

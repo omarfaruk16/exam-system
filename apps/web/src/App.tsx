@@ -1,4 +1,4 @@
-import { BarChart3, Building2, Loader2, ScrollText, Upload } from 'lucide-react';
+import { Building2, Loader2, ScrollText, Upload } from 'lucide-react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { ChangePasswordPage } from '@/features/auth/ChangePasswordPage';
@@ -20,10 +20,12 @@ import { QuestionBankPage } from '@/features/teacher/QuestionBankPage';
 import { ResultsPortalPage } from '@/features/teacher/ResultsPortalPage';
 import { ExamResultsPage } from '@/features/teacher/ExamResultsPage';
 import { ResultPage } from '@/features/student/ResultPage';
+import { StudentResultsPage } from '@/features/student/StudentResultsPage';
 import { OrgLayout } from '@/features/org/OrgLayout';
 import { OrgStructurePage } from '@/features/org/OrgStructurePage';
 import { DepartmentsListPage } from '@/features/org/DepartmentsListPage';
 import { DepartmentProfilePage } from '@/features/org/DepartmentProfilePage';
+import { FacultyDashboardPage } from '@/features/org/FacultyDashboardPage';
 import { BatchesPage } from '@/features/org/BatchesPage';
 import { StudentsPage } from '@/features/org/StudentsPage';
 import { TeachersPage } from '@/features/org/TeachersPage';
@@ -108,6 +110,7 @@ export function App() {
           <Route path="imports" element={<ImportsPage />} />
         </Route>
         <Route path="/org/departments/:publicId" element={<DepartmentProfilePage />} />
+        <Route path="/org/faculties/:publicId" element={<FacultyDashboardPage />} />
         <Route path="/review" element={<ReviewQueuePage />} />
         <Route path="/review/:examPublicId" element={<ReviewDetailPage />} />
         <Route
@@ -141,7 +144,7 @@ export function App() {
 
         <Route path="/my-exams" element={<MyExamsPage />} />
         <Route path="/results/:attemptPublicId" element={<ResultPage />} />
-        <Route path="/results" element={<PlaceholderPage title="Results" icon={BarChart3} />} />
+        <Route path="/results" element={<StudentResultsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

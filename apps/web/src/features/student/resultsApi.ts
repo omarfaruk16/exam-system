@@ -1,4 +1,4 @@
-import type { AttemptResult, MyExamListItem } from '@exam/types';
+import type { AttemptResult, MyExamListItem, StudentSemesterResult } from '@exam/types';
 import { api } from '@/lib/api';
 
 export function fetchMyExams(): Promise<MyExamListItem[]> {
@@ -7,6 +7,10 @@ export function fetchMyExams(): Promise<MyExamListItem[]> {
 
 export function fetchAttemptResult(attemptPublicId: string): Promise<AttemptResult> {
   return api.get(`/attempts/${attemptPublicId}/result`);
+}
+
+export function fetchMyResults(): Promise<StudentSemesterResult[]> {
+  return api.get('/me/results');
 }
 
 export interface ReportStatus {

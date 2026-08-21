@@ -54,8 +54,14 @@ export class QuestionController {
 
   @Roles('teacher', 'admin', 'super_admin')
   @Get('questions')
-  listQuestions(@CurrentUser() u: AuthUser, @Query('bank') bank: string) {
-    return this.questions.listQuestions(u, bank);
+  listQuestions(
+    @CurrentUser() u: AuthUser,
+    @Query('bank') bank?: string,
+    @Query('part') part?: string,
+  ) {
+    if (part) return this.questions.listQuestionsByPart(u, part);
+    if (bank) return this.questions.listQuestions(u, bank);
+    throw new BadRequestException('Either bank or part query param is required');
   }
 
   @Roles('teacher')

@@ -8,10 +8,17 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { MathText } from '@/components/ui/math-text';
-import { addExamQuestion, createBank, fetchBankQuestions, fetchBanks } from './authoringApi';
+import {
+  addExamQuestion,
+  createBank,
+  fetchBankQuestions,
+  fetchBanks,
+  fetchQuestionsByPart,
+} from './authoringApi';
 import { QuestionCreateForm } from './QuestionCreateForm';
 
 type Filter = 'all' | 'mcq' | 'written';
+const ALL_CHAPTERS = '__all__';
 
 export function QuestionBankPanel({
   examPublicId,
@@ -25,7 +32,7 @@ export function QuestionBankPanel({
   nextOrder: number;
 }) {
   const qc = useQueryClient();
-  const [bankId, setBankId] = useState<string>('');
+  const [chapterId, setChapterId] = useState<string>('');
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
 
@@ -34,16 +41,19 @@ export function QuestionBankPanel({
     queryFn: () => fetchBanks(coursePartPublicId),
   });
 
-  // Auto-select the first bank once banks load.
   useEffect(() => {
     const first = banksQuery.data?.[0];
-    if (!bankId && first) setBankId(first.publicId);
-  }, [bankId, banksQuery.data]);
+    if (!chapterId && first) setChapterId(first.publicId);
+  }, [chapterId, banksQuery.data]);
 
+  // All-chapters mode fetches across the whole part; single-chapter mode fetches one bank.
+  const allMode = chapterId === ALL_CHAPTERS;
   const questionsQuery = useQuery({
-    queryKey: ['bank-questions', bankId],
-    queryFn: () => fetchBankQuestions(bankId),
-    enabled: Boolean(bankId),
+    queryKey: allMode ? ['questions-by-part', coursePartPublicId] : ['bank-questions', chapterId],
+    queryFn: allMode
+      ? () => fetchQuestionsByPart(coursePartPublicId)
+      : () => fetchBankQuestions(chapterId),
+    enabled: allMode ? true : Boolean(chapterId),
   });
 
   const add = useMutation({
@@ -66,34 +76,40 @@ export function QuestionBankPanel({
     return true;
   });
 
+  const activeBankForCreate = allMode ? (banks[0]?.publicId ?? '') : chapterId;
+
   return (
     <Card className="flex max-h-[calc(100vh-11rem)] flex-col overflow-hidden p-0 lg:sticky lg:top-6">
       <div className="border-b p-4">
         <h2 className="text-sm font-semibold">Question bank</h2>
-        <p className="text-muted-foreground mt-0.5 text-xs">Add questions to this exam.</p>
+        <p className="text-muted-foreground mt-0.5 text-xs">
+          Filter by chapter, then add questions to this exam.
+        </p>
 
         {banksQuery.isLoading ? (
           <div className="bg-muted mt-3 h-10 animate-pulse rounded-md" />
         ) : banks.length === 0 ? (
-          <NoBanks coursePartPublicId={coursePartPublicId} onCreated={(id) => setBankId(id)} />
+          <NoBanks coursePartPublicId={coursePartPublicId} onCreated={(id) => setChapterId(id)} />
         ) : (
           <>
-            {banks.length > 1 && (
-              <select
-                value={bankId}
-                onChange={(e) => setBankId(e.target.value)}
-                className="border-input bg-card focus-visible:ring-ring mt-3 flex h-9 w-full rounded-md border px-2 text-sm focus-visible:outline-none focus-visible:ring-2"
-                aria-label="Select question bank"
-              >
-                {banks.map((b) => (
-                  <option key={b.publicId} value={b.publicId}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-            )}
+            {/* Chapter filter chips */}
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              <ChapterChip
+                label="All chapters"
+                active={chapterId === ALL_CHAPTERS}
+                onClick={() => setChapterId(ALL_CHAPTERS)}
+              />
+              {banks.map((b) => (
+                <ChapterChip
+                  key={b.publicId}
+                  label={b.name}
+                  active={chapterId === b.publicId}
+                  onClick={() => setChapterId(b.publicId)}
+                />
+              ))}
+            </div>
 
-            {/* Filter bar */}
+            {/* MCQ / Written filter */}
             <div className="mt-3 flex items-center gap-1 rounded-md border p-0.5">
               {(['all', 'mcq', 'written'] as Filter[]).map((f) => (
                 <button
@@ -136,7 +152,7 @@ export function QuestionBankPanel({
           ) : filtered.length === 0 ? (
             <p className="text-muted-foreground py-8 text-center text-sm">
               {questions.length === 0
-                ? 'This bank is empty. Create a question below.'
+                ? 'No questions in this chapter yet. Add one below.'
                 : 'No questions match your filter.'}
             </p>
           ) : (
@@ -145,6 +161,7 @@ export function QuestionBankPanel({
                 <BankQuestionCard
                   key={q.publicId}
                   q={q}
+                  showChapter={allMode}
                   added={addedQuestionIds.has(q.publicId)}
                   adding={add.isPending && add.variables === q.publicId}
                   onAdd={() => add.mutate(q.publicId)}
@@ -155,30 +172,57 @@ export function QuestionBankPanel({
         </div>
       )}
 
-      {/* Inline creation */}
-      {bankId && (
+      {/* Inline question creation */}
+      {activeBankForCreate && (
         <div className="border-t p-4">
-          <QuestionCreateForm bankPublicId={bankId} />
+          <QuestionCreateForm bankPublicId={activeBankForCreate} />
         </div>
       )}
     </Card>
   );
 }
 
+function ChapterChip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors',
+        active
+          ? 'border-primary bg-primary text-primary-foreground'
+          : 'border-input text-muted-foreground hover:text-foreground',
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
 function BankQuestionCard({
   q,
+  showChapter,
   added,
   adding,
   onAdd,
 }: {
   q: BankQuestion;
+  showChapter: boolean;
   added: boolean;
   adding: boolean;
   onAdd: () => void;
 }) {
   return (
     <li className="rounded-md border p-3">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center gap-1.5">
         <span
           className={cn(
             'rounded-full px-2 py-0.5 text-[10px] font-medium uppercase',
@@ -189,7 +233,12 @@ function BankQuestionCard({
         >
           {q.type}
         </span>
-        <span className="text-muted-foreground text-xs tabular-nums">{q.marks} marks</span>
+        {showChapter && (
+          <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-[10px] font-medium">
+            {q.bank.name}
+          </span>
+        )}
+        <span className="text-muted-foreground ml-auto text-xs tabular-nums">{q.marks} marks</span>
       </div>
       <p className="mt-1.5 line-clamp-3 text-sm">
         <MathText text={q.text} />
@@ -218,20 +267,20 @@ function NoBanks({
   onCreated: (bankId: string) => void;
 }) {
   const qc = useQueryClient();
-  const [name, setName] = useState('Question bank');
+  const [name, setName] = useState('Chapter 1');
   const create = useMutation({
-    mutationFn: () => createBank(coursePartPublicId, name.trim() || 'Question bank'),
+    mutationFn: () => createBank(coursePartPublicId, name.trim() || 'Chapter 1'),
     onSuccess: async (bank) => {
       await qc.invalidateQueries({ queryKey: ['banks', coursePartPublicId] });
       onCreated(bank.publicId);
-      toast.success('Question bank created');
+      toast.success('Chapter created');
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not create the bank'),
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not create the chapter'),
   });
   return (
     <div className="mt-3 rounded-md border border-dashed p-3">
       <p className="text-muted-foreground text-xs">
-        No question bank yet. Create one to start adding questions.
+        No chapters yet. Create one to start adding questions.
       </p>
       <div className="mt-2 flex gap-2">
         <Input value={name} onChange={(e) => setName(e.target.value)} className="h-9" />

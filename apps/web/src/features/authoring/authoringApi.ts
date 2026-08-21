@@ -71,6 +71,9 @@ export const createBank = (coursePartPublicId: string, name: string) =>
 export const fetchBankQuestions = (bankPublicId: string) =>
   api.get<BankQuestion[]>(`/questions?bank=${encodeURIComponent(bankPublicId)}`);
 
+export const fetchQuestionsByPart = (coursePartPublicId: string) =>
+  api.get<BankQuestion[]>(`/questions?part=${encodeURIComponent(coursePartPublicId)}`);
+
 export interface CreateQuestionInput {
   bankPublicId: string;
   type: 'mcq' | 'written';

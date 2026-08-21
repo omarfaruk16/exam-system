@@ -414,4 +414,104 @@ export class AttemptService {
       questions,
     };
   }
+
+  /** All completed attempts for the student, grouped by semester (for the results history page). */
+  async getMyResults(user: AuthUser) {
+    const student = await this.prisma.db.student.findFirst({
+      where: { userId: user.id, deletedAt: null },
+      select: { id: true },
+    });
+    if (!student) return [];
+
+    const attempts = await this.prisma.db.examAttempt.findMany({
+      where: {
+        studentId: student.id,
+        status: { in: ['submitted', 'graded'] },
+      },
+      select: {
+        publicId: true,
+        totalScore: true,
+        submittedAt: true,
+        gradingStatus: true,
+        exam: {
+          select: {
+            publicId: true,
+            title: true,
+            totalMarks: true,
+            startAt: true,
+            status: true,
+            settings: true,
+            coursePart: {
+              select: {
+                name: true,
+                course: {
+                  select: {
+                    code: true,
+                    name: true,
+                    semester: {
+                      select: {
+                        number: true,
+                        name: true,
+                        program: { select: { name: true } },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        result: { select: { percentage: true, rank: true, finalScore: true } },
+      },
+    });
+
+    attempts.sort((a, b) => {
+      const na = a.exam.coursePart.course.semester.number;
+      const nb = b.exam.coursePart.course.semester.number;
+      if (na !== nb) return na - nb;
+      return new Date(a.exam.startAt).getTime() - new Date(b.exam.startAt).getTime();
+    });
+
+    const semMap = new Map<
+      number,
+      { number: number; name: string | null; programName: string; exams: typeof attempts }
+    >();
+    for (const a of attempts) {
+      const sem = a.exam.coursePart.course.semester;
+      if (!semMap.has(sem.number)) {
+        semMap.set(sem.number, {
+          number: sem.number,
+          name: sem.name,
+          programName: sem.program.name,
+          exams: [],
+        });
+      }
+      semMap.get(sem.number)!.exams.push(a);
+    }
+
+    return [...semMap.values()].map((g) => ({
+      semester: { number: g.number, name: g.name },
+      programName: g.programName,
+      exams: g.exams.map((a) => {
+        const settings = (a.exam.settings as ExamSettings) ?? {};
+        return {
+          attemptPublicId: a.publicId,
+          examPublicId: a.exam.publicId,
+          title: a.exam.title,
+          courseCode: a.exam.coursePart.course.code,
+          courseName: a.exam.coursePart.course.name,
+          partName: a.exam.coursePart.name,
+          totalMarks: a.exam.totalMarks,
+          startAt: a.exam.startAt.toISOString(),
+          examStatus: a.exam.status,
+          gradingStatus: a.gradingStatus,
+          submittedAt: a.submittedAt?.toISOString() ?? null,
+          score: a.result?.finalScore ?? a.totalScore,
+          percentage: a.result?.percentage ?? null,
+          rank: a.result?.rank ?? null,
+          showMarks: settings.showMarksAfterSubmit !== false,
+        };
+      }),
+    }));
+  }
 }

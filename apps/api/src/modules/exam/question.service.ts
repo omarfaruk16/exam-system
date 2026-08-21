@@ -217,6 +217,22 @@ export class QuestionService {
     });
   }
 
+  async listQuestionsByPart(user: AuthUser, coursePartPublicId: string) {
+    await this.access.requireAuthorablePart(user, coursePartPublicId).catch(async (e) => {
+      const ctx = await this.access.loadActiveCoursePart(coursePartPublicId);
+      if (this.isAdmin(user)) return this.access.assertAdminScope(user, ctx);
+      throw e;
+    });
+    return this.prisma.db.question.findMany({
+      where: {
+        bank: { coursePart: { publicId: coursePartPublicId }, deletedAt: null },
+        deletedAt: null,
+      },
+      select: questionSelect,
+      orderBy: [{ bank: { createdAt: 'asc' } }, { createdAt: 'asc' }],
+    });
+  }
+
   async updateQuestion(user: AuthUser, ip: string, publicId: string, dto: UpdateQuestionDto) {
     const question = await this.prisma.db.question.findFirst({
       where: { publicId },

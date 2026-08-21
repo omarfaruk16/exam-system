@@ -143,7 +143,7 @@ export interface BankQuestion {
   marks: number;
   explanation: string | null;
   modelAnswer: string | null;
-  bank: { publicId: string };
+  bank: { publicId: string; name: string };
   options: BankQuestionOption[];
 }
 

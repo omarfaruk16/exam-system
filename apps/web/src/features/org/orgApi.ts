@@ -4,6 +4,7 @@ import type {
   CoursePart,
   Department,
   Faculty,
+  FacultyStats,
   Program,
   Semester,
   StudentRow,
@@ -21,6 +22,8 @@ const qs = (params: Record<string, string | undefined>) => {
 
 // ── Structure ──
 export const fetchFaculties = () => api.get<Faculty[]>('/org/faculties');
+export const fetchFacultyStats = (publicId: string) =>
+  api.get<FacultyStats>(`/org/faculties/${publicId}/stats`);
 export const fetchDepartments = (faculty?: string) =>
   api.get<Department[]>(`/org/departments${qs({ faculty })}`);
 export const fetchPrograms = (department?: string) =>

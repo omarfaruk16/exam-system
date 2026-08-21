@@ -99,6 +99,30 @@ export interface AttemptResultQuestion {
   feedback: string | null;
 }
 
+export interface StudentExamResult {
+  attemptPublicId: string;
+  examPublicId: string;
+  title: string;
+  courseCode: string;
+  courseName: string;
+  partName: string;
+  totalMarks: number;
+  startAt: string;
+  examStatus: string;
+  gradingStatus: string | null;
+  submittedAt: string | null;
+  score: number | null;
+  percentage: number | null;
+  rank: number | null;
+  showMarks: boolean;
+}
+
+export interface StudentSemesterResult {
+  semester: { number: number; name: string | null };
+  programName: string;
+  exams: StudentExamResult[];
+}
+
 /** Returned by GET /attempts/:id/result. showMarks=false → Mode B (no breakdown). */
 export interface AttemptResult {
   attemptPublicId: string;
