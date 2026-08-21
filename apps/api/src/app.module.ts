@@ -12,6 +12,7 @@ import { MaintenanceGuard } from './common/guards/maintenance.guard';
 import type { Env } from './common/config/env.validation';
 import { validateEnv } from './common/config/env.validation';
 import { AccessModule } from './common/access/access.module';
+import { MailModule } from './common/mail/mail.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { AuthenticatedGuard } from './common/guards/authenticated.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -83,6 +84,7 @@ import { QueueModule } from './queue/queue.module';
     }),
     PrismaModule,
     RedisModule,
+    MailModule,
     AccessModule,
     AuditModule,
     QueueModule,

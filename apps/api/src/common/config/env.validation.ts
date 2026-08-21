@@ -59,6 +59,14 @@ export const envSchema = z.object({
 
   // App version surfaced by GET /health (set from package version / build in production).
   APP_VERSION: z.string().default('phase-6'),
+
+  // Outgoing email (password reset, notifications). All optional — omit SMTP_HOST to log to console.
+  SMTP_HOST: z.string().default(''),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  SMTP_SECURE: zBool(false),
+  SMTP_USER: z.string().default(''),
+  SMTP_PASS: z.string().default(''),
+  MAIL_FROM: z.string().default('no-reply@exam.local'),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -16,11 +16,7 @@ import type { AuthUser } from '../../common/types/auth';
 import type { RoleName } from '@exam/types';
 
 /** Staff roles must use 2FA; students never do. */
-const ROLES_REQUIRING_2FA: ReadonlySet<RoleName> = new Set([
-  'super_admin',
-  'admin',
-  'department_head',
-]);
+const ROLES_REQUIRING_2FA: ReadonlySet<RoleName> = new Set(['super_admin', 'admin']);
 
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_SECONDS = 15 * 60;

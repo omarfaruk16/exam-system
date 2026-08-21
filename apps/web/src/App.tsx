@@ -2,7 +2,9 @@ import { BarChart3, Building2, Loader2, ScrollText, Upload } from 'lucide-react'
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { ChangePasswordPage } from '@/features/auth/ChangePasswordPage';
+import { ForgotPasswordPage } from '@/features/auth/ForgotPasswordPage';
 import { LoginPage } from '@/features/auth/LoginPage';
+import { ResetPasswordPage } from '@/features/auth/ResetPasswordPage';
 import { TwoFactorSetupPage } from '@/features/auth/TwoFactorSetupPage';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
 import { DevShowcase } from '@/features/exam-taking/DevShowcase';
@@ -20,6 +22,8 @@ import { ExamResultsPage } from '@/features/teacher/ExamResultsPage';
 import { ResultPage } from '@/features/student/ResultPage';
 import { OrgLayout } from '@/features/org/OrgLayout';
 import { OrgStructurePage } from '@/features/org/OrgStructurePage';
+import { DepartmentsListPage } from '@/features/org/DepartmentsListPage';
+import { DepartmentProfilePage } from '@/features/org/DepartmentProfilePage';
 import { BatchesPage } from '@/features/org/BatchesPage';
 import { StudentsPage } from '@/features/org/StudentsPage';
 import { TeachersPage } from '@/features/org/TeachersPage';
@@ -57,6 +61,8 @@ export function App() {
     return (
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
@@ -94,12 +100,14 @@ export function App() {
       <Route element={<AppShell user={user} />}>
         <Route path="/" element={<DashboardPage user={user} />} />
         <Route path="/org" element={<OrgLayout />}>
-          <Route index element={<OrgStructurePage />} />
+          <Route index element={<DepartmentsListPage />} />
+          <Route path="structure" element={<OrgStructurePage />} />
           <Route path="batches" element={<BatchesPage />} />
           <Route path="students" element={<StudentsPage />} />
           <Route path="teachers" element={<TeachersPage />} />
           <Route path="imports" element={<ImportsPage />} />
         </Route>
+        <Route path="/org/departments/:publicId" element={<DepartmentProfilePage />} />
         <Route path="/review" element={<ReviewQueuePage />} />
         <Route path="/review/:examPublicId" element={<ReviewDetailPage />} />
         <Route

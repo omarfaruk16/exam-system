@@ -79,6 +79,12 @@ export class ReportService {
     }
   }
 
+  private reportFilesExist(jobId: string): boolean {
+    const safeId = jobId.replace(/[^A-Za-z0-9_-]/g, '');
+    const dir = join(this.config.getOrThrow('STORAGE_DIR', { infer: true }), 'reports');
+    return existsSync(join(dir, `${safeId}.xlsx`)) && existsSync(join(dir, `${safeId}.pdf`));
+  }
+
   async request(user: AuthUser, dto: RequestReportDto): Promise<{ jobId: string }> {
     const exam = await this.prisma.db.exam.findFirst({
       where: { publicId: dto.examPublicId },
@@ -116,7 +122,15 @@ export class ReportService {
     const existing = await this.redis.get(cacheKey);
     if (existing) {
       const job = await this.queue.getJob(existing);
-      if (job) return { jobId: existing };
+      if (job) {
+        const state = await job.getState();
+        // Only reuse if still in-flight OR completed with files present.
+        // If completed but files are missing (e.g. server restart mid-write), fall through to re-queue.
+        if (state !== 'completed' || this.reportFilesExist(String(job.id))) {
+          return { jobId: existing };
+        }
+        await this.redis.del(cacheKey);
+      }
     }
 
     const job = await this.queue.add('generate', {
@@ -139,6 +153,12 @@ export class ReportService {
     if (!job) throw new NotFoundException('Report job not found');
     const state = await job.getState();
     if (state === 'completed') {
+      if (!this.reportFilesExist(jobId)) {
+        return {
+          status: 'failed',
+          message: 'Report files were not found. Please generate the report again.',
+        };
+      }
       return {
         status: 'ready',
         downloads: {

@@ -151,7 +151,11 @@ export function OrgDetailPanel({
       {(cfg.addChildren.length > 0 || count > 0) && (
         <Card className="p-6">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">Children</h3>
+            <h3 className="text-sm font-semibold">
+              {label === 'part'
+                ? 'Course Parts'
+                : `${label.charAt(0).toUpperCase()}${label.slice(1)}s`}
+            </h3>
             <div className="flex gap-2">
               {cfg.addChildren.map((ac) => (
                 <Button

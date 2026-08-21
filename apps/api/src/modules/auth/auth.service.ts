@@ -1,7 +1,18 @@
-import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { randomBytes } from 'node:crypto';
+import type { Redis } from 'ioredis';
+import { Inject } from '@nestjs/common';
 import type { SessionUser } from '@exam/types';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { REDIS_CLIENT } from '../../common/redis/redis.constants';
+import { MailService } from '../../common/mail/mail.service';
 import type { AuthUser } from '../../common/types/auth';
 import { PasswordService } from './password.service';
 import { TwoFactorService } from './two-factor.service';
@@ -12,12 +23,16 @@ const userWithRoles = {
 
 type UserWithRoles = Prisma.UserGetPayload<typeof userWithRoles>;
 
+const RESET_TTL = 3600; // 1 hour
+
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly password: PasswordService,
     private readonly twoFactor: TwoFactorService,
+    private readonly mail: MailService,
+    @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
 
   /**
@@ -84,6 +99,41 @@ export class AuthService {
       where: { id: userId },
       data: { twoFactorSecret: null, twoFactorEnabled: false },
     });
+  }
+
+  /** Send a password-reset link to the user's email address (silent on unknown email). */
+  async forgotPassword(email: string): Promise<void> {
+    const user = await this.prisma.db.user.findFirst({
+      where: { email: email.toLowerCase().trim(), deletedAt: null },
+      select: { id: true, email: true, displayName: true },
+    });
+    if (!user?.email) return; // never reveal whether an email exists
+
+    const token = randomBytes(32).toString('hex');
+    await this.redis.set(`pwd_reset:${token}`, String(user.id), 'EX', RESET_TTL);
+    await this.mail.sendPasswordReset(user.email, token, user.displayName);
+  }
+
+  /** Consume a reset token and update the password; throws if token is invalid or expired. */
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    const key = `pwd_reset:${token}`;
+    const userId = await this.redis.get(key);
+    if (!userId) throw new BadRequestException('This reset link is invalid or has expired.');
+
+    const id = Number(userId);
+    const dbUser = await this.prisma.db.user.findFirst({ where: { id } });
+    if (!dbUser) throw new NotFoundException('User not found');
+
+    if (await this.password.verify(dbUser.passwordHash, newPassword)) {
+      throw new BadRequestException('New password must be different from the current one');
+    }
+
+    const passwordHash = await this.password.hash(newPassword);
+    await this.prisma.user.update({
+      where: { id },
+      data: { passwordHash, mustChangePassword: false },
+    });
+    await this.redis.del(key);
   }
 
   /** Resolve a user + roles by publicId (for admin 2FA reset). */

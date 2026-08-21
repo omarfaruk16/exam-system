@@ -7,7 +7,7 @@ import type { RoleName } from './roles';
  * TOTP is required on the second step for staff roles that can alter marks.
  */
 export const loginSchema = z.object({
-  identifier: z.string().trim().min(1, 'Username, email, or student ID is required').max(200),
+  identifier: z.string().trim().min(1, 'Email or Student ID is required').max(200),
   password: z.string().min(1, 'Password is required').max(200),
   totp: z
     .string()

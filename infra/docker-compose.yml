@@ -87,13 +87,14 @@ services:
       DIRECT_URL: postgresql://${POSTGRES_USER:-exam}:${POSTGRES_PASSWORD:-exam_dev_password}@postgres:5432/${POSTGRES_DB:-exam}?schema=public
       REDIS_URL: redis://redis:6379
       SESSION_SECRET: ${SESSION_SECRET:-dev_only_session_secret_change_me_please_0123456789abcdef}
-      CORS_ORIGINS: http://localhost:${WEB_PORT:-8080}
-      WEB_APP_URL: http://localhost:${WEB_PORT:-8080}
-      COOKIE_SECURE: 'false'
-      INSTITUTION_NAME: University of Rajshahi
-      BRAND_PRIMARY: '#1E3A5F'
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+      WEB_APP_URL: ${WEB_APP_URL:-http://localhost:8080}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
+      INSTITUTION_NAME: ${INSTITUTION_NAME:-University of Rajshahi}
+      BRAND_PRIMARY: ${BRAND_PRIMARY:-#1E3A5F}
       STORAGE_DIR: /app/apps/api/storage
-      LOG_LEVEL: info
+      LOG_LEVEL: ${LOG_LEVEL:-info}
       # Phase 6 hardening knobs (overridable from the shell when running compose):
       MAINTENANCE_MODE: ${MAINTENANCE_MODE:-false}
       MAINTENANCE_RESUME: ${MAINTENANCE_RESUME:-}
@@ -101,7 +102,7 @@ services:
       LOGIN_THROTTLE_LIMIT: ${LOGIN_THROTTLE_LIMIT:-10}
       LOGIN_THROTTLE_TTL_SECONDS: ${LOGIN_THROTTLE_TTL_SECONDS:-900}
       SENTRY_DSN: ${SENTRY_DSN:-}
-      APP_VERSION: ${APP_VERSION:-phase-6}
+      APP_VERSION: ${APP_VERSION:-1.0.0}
     volumes:
       - apistorage:/app/apps/api/storage
     profiles: ['app', 'full']
@@ -110,6 +111,8 @@ services:
     build:
       context: ..
       dockerfile: infra/web.Dockerfile
+      args:
+        VITE_INSTITUTION_NAME: ${INSTITUTION_NAME:-University of Rajshahi}
     container_name: exam_web
     restart: unless-stopped
     depends_on:

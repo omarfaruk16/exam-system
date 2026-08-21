@@ -27,7 +27,7 @@ import {
 
 const ROLE_LABELS = {
   admin: 'Admin',
-  department_head: 'Department Head',
+  department_head: 'Department Admin',
 } as const;
 
 export function UsersPage() {
@@ -53,7 +53,6 @@ export function UsersPage() {
     const q = search.toLowerCase();
     return (
       u.displayName.toLowerCase().includes(q) ||
-      u.username.toLowerCase().includes(q) ||
       (u.email?.toLowerCase().includes(q) ?? false) ||
       (u.scopeDepartment?.name.toLowerCase().includes(q) ?? false) ||
       (u.scopeFaculty?.name.toLowerCase().includes(q) ?? false)
@@ -68,9 +67,9 @@ export function UsersPage() {
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold">Admin &amp; Department Head accounts</h2>
+          <h2 className="text-sm font-semibold">Admin &amp; Department Admin accounts</h2>
           <p className="text-muted-foreground text-sm">
-            Manage admin and department head accounts. Temp password on creation: username@Exam123.
+            Manage admin and department admin accounts. A temporary password is emailed on creation.
           </p>
         </div>
         <Button size="sm" onClick={() => setAdding((v) => !v)}>
@@ -97,7 +96,7 @@ export function UsersPage() {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name, username…"
+            placeholder="Search by name, email…"
             className="h-9 w-60 pl-8"
           />
         </div>
@@ -108,7 +107,7 @@ export function UsersPage() {
         >
           <option value="">All roles</option>
           <option value="admin">Admin</option>
-          <option value="department_head">Department Head</option>
+          <option value="department_head">Department Admin</option>
         </select>
       </div>
 
@@ -138,7 +137,6 @@ export function UsersPage() {
               <thead>
                 <tr className="text-muted-foreground border-b text-left text-xs">
                   <th className="px-4 py-3 font-medium">Name</th>
-                  <th className="px-4 py-3 font-medium">Username</th>
                   <th className="px-4 py-3 font-medium">Email</th>
                   <th className="px-4 py-3 font-medium">Role</th>
                   <th className="px-4 py-3 font-medium">Scope</th>
@@ -186,6 +184,7 @@ function UserRow({ user, onMutated }: { user: AdminUserRow; onMutated: () => voi
     mutationFn: () => setAdminUserPassword(user.publicId, newPassword),
     onSuccess: () => {
       toast.success('Password updated — user will be prompted to change it on next login');
+      onMutated();
       setSettingPassword(false);
       setNewPassword('');
     },
@@ -207,7 +206,7 @@ function UserRow({ user, onMutated }: { user: AdminUserRow; onMutated: () => voi
   if (editing) {
     return (
       <tr className="bg-muted/30 border-b last:border-0">
-        <td className="px-4 py-2" colSpan={6}>
+        <td className="px-4 py-2" colSpan={5}>
           <form
             className="flex flex-wrap items-end gap-3"
             onSubmit={(e) => {
@@ -267,7 +266,6 @@ function UserRow({ user, onMutated }: { user: AdminUserRow; onMutated: () => voi
             <span className="text-muted-foreground ml-2 text-xs">(temp pw)</span>
           )}
         </td>
-        <td className="text-muted-foreground px-4 py-3 tabular-nums">{user.username}</td>
         <td className="text-muted-foreground px-4 py-3">{user.email ?? '—'}</td>
         <td className="px-4 py-3">
           <span
@@ -322,8 +320,8 @@ function UserRow({ user, onMutated }: { user: AdminUserRow; onMutated: () => voi
               <ShieldCheck className="size-5" /> Set password
             </DialogTitle>
             <DialogDescription>
-              Set a new password for <strong>{user.displayName}</strong> ({user.username}). They
-              will be prompted to change it on next login.
+              Set a new password for <strong>{user.displayName}</strong>. They will be prompted to
+              change it on next login.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
@@ -365,8 +363,7 @@ function UserRow({ user, onMutated }: { user: AdminUserRow; onMutated: () => voi
           <DialogHeader>
             <DialogTitle>Remove user?</DialogTitle>
             <DialogDescription>
-              "{user.displayName}" ({user.username}) will be deactivated. This cannot be undone from
-              the UI.
+              "{user.displayName}" will be deactivated. This cannot be undone from the UI.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -399,7 +396,6 @@ function AddUserForm({
   onCreated: () => void;
 }) {
   const [role, setRole] = useState<'admin' | 'department_head'>('admin');
-  const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [scopeFacultyPublicId, setScopeFacultyPublicId] = useState('');
@@ -408,15 +404,14 @@ function AddUserForm({
 
   const create = useMutation({
     mutationFn: () => {
-      if (!username.trim()) throw new Error('Username is required');
       if (!displayName.trim()) throw new Error('Display name is required');
+      if (!email.trim()) throw new Error('Email is required');
       if (role === 'department_head' && !scopeDepartmentPublicId) {
-        throw new Error('Select a department for a department head');
+        throw new Error('Select a department for a department admin');
       }
       return createAdminUser({
-        username: username.trim(),
         displayName: displayName.trim(),
-        email: email.trim() || undefined,
+        email: email.trim(),
         role,
         scopeFacultyPublicId: role === 'admin' ? scopeFacultyPublicId || undefined : undefined,
         scopeDepartmentPublicId:
@@ -440,7 +435,7 @@ function AddUserForm({
           create.mutate();
         }}
       >
-        <p className="text-sm font-medium">New admin / department head</p>
+        <p className="text-sm font-medium">New admin / department admin</p>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label htmlFor="au-role" className="text-xs">
@@ -453,20 +448,8 @@ function AddUserForm({
               className="border-input bg-card focus-visible:ring-ring mt-1 flex h-9 w-full rounded-md border px-2 text-sm focus-visible:outline-none focus-visible:ring-2"
             >
               <option value="admin">Admin</option>
-              <option value="department_head">Department Head</option>
+              <option value="department_head">Department Admin</option>
             </select>
-          </div>
-          <div>
-            <Label htmlFor="au-username" className="text-xs">
-              Username
-            </Label>
-            <Input
-              id="au-username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="e.g. admin01"
-              className="mt-1 h-9"
-            />
           </div>
           <div>
             <Label htmlFor="au-name" className="text-xs">
@@ -480,15 +463,16 @@ function AddUserForm({
               className="mt-1 h-9"
             />
           </div>
-          <div>
+          <div className="col-span-2">
             <Label htmlFor="au-email" className="text-xs">
-              Email (optional)
+              Email *
             </Label>
             <Input
               id="au-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              placeholder="user@example.com"
               className="mt-1 h-9"
             />
           </div>
@@ -538,8 +522,7 @@ function AddUserForm({
 
         {error && <p className="text-destructive text-xs">{error}</p>}
         <p className="text-muted-foreground text-xs">
-          Temporary password:{' '}
-          <code className="bg-muted rounded px-1">{username || '<username>'}@Exam123</code>
+          A temporary password will be sent to the email address.
         </p>
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" size="sm" onClick={onClose}>

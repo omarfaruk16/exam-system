@@ -25,6 +25,7 @@ import type { Env } from '../../common/config/env.validation';
 import { AuditService } from '../audit/audit.service';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { ForgotPasswordDto, ResetPasswordDto } from './dto/password-reset.dto';
 import { TwoFactorConfirmDto, TwoFactorLoginDto } from './dto/two-factor.dto';
 import { SessionService } from './session.service';
 import { TwoFactorService } from './two-factor.service';
@@ -103,6 +104,25 @@ export class AuthController {
 
     await this.completeLogin(req, user, ip);
     return { status: 'ok', user: await this.auth.toSessionUser(user) };
+  }
+
+  // ─────────────────────────── Password reset ───────────────────────────
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 15 * 60 * 1000 } })
+  @Post('forgot-password')
+  @HttpCode(200)
+  async forgotPassword(@Body() dto: ForgotPasswordDto): Promise<{ status: 'ok' }> {
+    await this.auth.forgotPassword(dto.email);
+    return { status: 'ok' }; // always 200 — never reveal whether an email exists
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 15 * 60 * 1000 } })
+  @Post('reset-password')
+  @HttpCode(200)
+  async resetPassword(@Body() dto: ResetPasswordDto): Promise<{ status: 'ok' }> {
+    await this.auth.resetPassword(dto.token, dto.newPassword);
+    return { status: 'ok' };
   }
 
   // ─────────────────────────── 2FA enrolment ───────────────────────────

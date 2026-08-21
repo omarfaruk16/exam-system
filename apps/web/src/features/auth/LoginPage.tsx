@@ -68,10 +68,10 @@ export function LoginPage() {
             )}
 
             <div className="space-y-1.5">
-              <Label htmlFor="identifier">Username / Student ID</Label>
+              <Label htmlFor="identifier">Email / Student ID</Label>
               <Input
                 id="identifier"
-                autoComplete="username"
+                autoComplete="email"
                 autoFocus
                 aria-invalid={!!errors.identifier}
                 {...register('identifier')}
@@ -110,6 +110,12 @@ export function LoginPage() {
               {isSubmitting && <Loader2 className="animate-spin" />}
               Login
             </Button>
+
+            <div className="text-center">
+              <a href="/forgot-password" className="text-muted-foreground text-sm hover:underline">
+                Forgot password?
+              </a>
+            </div>
           </form>
         </>
       )}

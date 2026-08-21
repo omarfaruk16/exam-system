@@ -4,6 +4,7 @@ import {
   createDepartment,
   createProgram,
   createSemester,
+  updateSemester,
   deleteCourse,
   deleteCoursePart,
   deleteDepartment,
@@ -65,7 +66,7 @@ const PROGRAM: AddChildDef = {
 const SEMESTER: AddChildDef = {
   level: 'semester',
   label: 'Add Semester',
-  fields: [{ key: 'number', label: 'Semester number', kind: 'number' }],
+  fields: [{ key: 'name', label: 'Semester name', kind: 'text' }],
   create: (parent, b) =>
     createSemester({ programPublicId: parent, ...b } as Parameters<typeof createSemester>[0]),
 };
@@ -120,9 +121,9 @@ export const LEVEL_CONFIG: Record<OrgLevel, LevelConfig> = {
     addChildren: [SEMESTER],
   },
   semester: {
-    // No update route for semesters — number is fixed once created.
-    fields: [{ key: 'number', label: 'Semester number', kind: 'number' }],
-    editable: false,
+    fields: [{ key: 'name', label: 'Semester name', kind: 'text' }],
+    editable: true,
+    update: (id, b) => updateSemester(id, b as never),
     remove: deleteSemester,
     addChildren: [COURSE],
   },

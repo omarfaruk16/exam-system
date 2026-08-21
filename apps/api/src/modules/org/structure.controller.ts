@@ -26,6 +26,7 @@ import {
   CreateFacultyDto,
   CreateProgramDto,
   CreateSemesterDto,
+  UpdateSemesterDto,
   CreateStudentManualDto,
   CreateTeacherManualDto,
   UpdateBatchDto,
@@ -50,8 +51,10 @@ export class StructureController {
   }
 
   // Faculties
-  @Get('faculties') listFaculties() {
-    return this.svc.listFaculties();
+  @Roles('super_admin', 'admin', 'department_head')
+  @Get('faculties')
+  listFaculties(@CurrentUser() u: AuthUser) {
+    return this.svc.listFaculties(u);
   }
   @Get('faculties/:publicId') getFaculty(@Param('publicId') id: string) {
     return this.svc.getFaculty(id);
@@ -80,8 +83,10 @@ export class StructureController {
   }
 
   // Departments
-  @Get('departments') listDepartments(@Query('faculty') faculty?: string) {
-    return this.svc.listDepartments(faculty);
+  @Roles('super_admin', 'admin', 'department_head')
+  @Get('departments')
+  listDepartments(@CurrentUser() u: AuthUser, @Query('faculty') faculty?: string) {
+    return this.svc.listDepartments(u, faculty);
   }
   @Get('departments/:publicId') getDepartment(@Param('publicId') id: string) {
     return this.svc.getDepartment(id);
@@ -110,8 +115,10 @@ export class StructureController {
   }
 
   // Programs
-  @Get('programs') listPrograms(@Query('department') department?: string) {
-    return this.svc.listPrograms(department);
+  @Roles('super_admin', 'admin', 'department_head')
+  @Get('programs')
+  listPrograms(@CurrentUser() u: AuthUser, @Query('department') department?: string) {
+    return this.svc.listPrograms(u, department);
   }
   @Post('programs') createProgram(
     @CurrentUser() u: AuthUser,
@@ -139,8 +146,12 @@ export class StructureController {
   // Batches
   @Roles('super_admin', 'admin', 'department_head')
   @Get('batches')
-  listBatches(@Query('program') program?: string) {
-    return this.svc.listBatches(program);
+  listBatches(
+    @CurrentUser() u: AuthUser,
+    @Query('program') program?: string,
+    @Query('department') department?: string,
+  ) {
+    return this.svc.listBatches(u, program, department);
   }
   @Post('batches') createBatch(
     @CurrentUser() u: AuthUser,
@@ -166,8 +177,10 @@ export class StructureController {
   }
 
   // Semesters
-  @Get('semesters') listSemesters(@Query('program') program?: string) {
-    return this.svc.listSemesters(program);
+  @Roles('super_admin', 'admin', 'department_head')
+  @Get('semesters')
+  listSemesters(@CurrentUser() u: AuthUser, @Query('program') program?: string) {
+    return this.svc.listSemesters(u, program);
   }
   @Post('semesters') createSemester(
     @CurrentUser() u: AuthUser,
@@ -175,6 +188,14 @@ export class StructureController {
     @Body() dto: CreateSemesterDto,
   ) {
     return this.svc.createSemester(this.ctx(u, ip), dto);
+  }
+  @Patch('semesters/:publicId') updateSemester(
+    @CurrentUser() u: AuthUser,
+    @Ip() ip: string,
+    @Param('publicId') id: string,
+    @Body() dto: UpdateSemesterDto,
+  ) {
+    return this.svc.updateSemester(this.ctx(u, ip), id, dto);
   }
   @Delete('semesters/:publicId') removeSemester(
     @CurrentUser() u: AuthUser,
@@ -185,8 +206,10 @@ export class StructureController {
   }
 
   // Courses
-  @Get('courses') listCourses(@Query('semester') semester?: string) {
-    return this.svc.listCourses(semester);
+  @Roles('super_admin', 'admin', 'department_head')
+  @Get('courses')
+  listCourses(@CurrentUser() u: AuthUser, @Query('semester') semester?: string) {
+    return this.svc.listCourses(u, semester);
   }
   @Post('courses') createCourse(
     @CurrentUser() u: AuthUser,
@@ -212,7 +235,9 @@ export class StructureController {
   }
 
   // Course parts
-  @Get('course-parts') listCourseParts(@Query('course') course?: string) {
+  @Roles('super_admin', 'admin', 'department_head')
+  @Get('course-parts')
+  listCourseParts(@Query('course') course?: string) {
     return this.svc.listCourseParts(course);
   }
   @Post('course-parts') createCoursePart(
@@ -251,15 +276,20 @@ export class StructureController {
   }
 
   // Teacher admin list and CRUD (admin only — class-level @Roles applies)
+  @Roles('super_admin', 'admin', 'department_head')
   @Get('teachers/export')
-  exportTeachers(@Res({ passthrough: true }) res: Response) {
+  exportTeachers(
+    @Res({ passthrough: true }) res: Response,
+    @Query('department') department?: string,
+  ) {
     res.set({ 'Cache-Control': 'no-store' });
-    return this.svc.exportTeachers();
+    return this.svc.exportTeachers(department);
   }
 
+  @Roles('super_admin', 'admin', 'department_head')
   @Get('teachers')
-  listTeachersAdmin(@Query('department') department?: string) {
-    return this.svc.listTeachersAdmin(department);
+  listTeachersAdmin(@CurrentUser() u: AuthUser, @Query('department') department?: string) {
+    return this.svc.listTeachersAdmin(u, department);
   }
 
   @Post('teachers')
@@ -312,8 +342,8 @@ export class StructureController {
 
   @Roles('super_admin', 'admin', 'department_head')
   @Get('students')
-  listStudents(@Query('batch') batch?: string) {
-    return this.svc.listStudents(batch);
+  listStudents(@CurrentUser() u: AuthUser, @Query('batch') batch?: string) {
+    return this.svc.listStudents(u, batch);
   }
 
   @Roles('super_admin', 'admin', 'department_head')

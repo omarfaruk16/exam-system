@@ -25,8 +25,8 @@ export const fetchDepartments = (faculty?: string) =>
   api.get<Department[]>(`/org/departments${qs({ faculty })}`);
 export const fetchPrograms = (department?: string) =>
   api.get<Program[]>(`/org/programs${qs({ department })}`);
-export const fetchBatches = (program?: string) =>
-  api.get<Batch[]>(`/org/batches${qs({ program })}`);
+export const fetchBatches = (program?: string, department?: string) =>
+  api.get<Batch[]>(`/org/batches${qs({ program, department })}`);
 export const fetchSemesters = (program?: string) =>
   api.get<Semester[]>(`/org/semesters${qs({ program })}`);
 export const fetchCourses = (semester?: string) =>
@@ -46,8 +46,10 @@ export const createProgram = (b: {
 }) => api.post<Program>('/org/programs', b);
 export const createBatch = (b: { programPublicId: string; name: string; year: number }) =>
   api.post<Batch>('/org/batches', b);
-export const createSemester = (b: { programPublicId: string; number: number }) =>
+export const createSemester = (b: { programPublicId: string; name: string; number?: number }) =>
   api.post<Semester>('/org/semesters', b);
+export const updateSemester = (id: string, b: { name?: string }) =>
+  api.patch<Semester>(`/org/semesters/${id}`, b);
 export const createCourse = (b: {
   semesterPublicId: string;
   code: string;
@@ -89,7 +91,6 @@ export const deleteCoursePart = (id: string) => api.del(`/org/course-parts/${id}
 export const fetchTeachersAdmin = (department?: string) =>
   api.get<TeacherRow[]>(`/org/teachers${qs({ department })}`);
 export const createTeacher = (b: {
-  username: string;
   displayName: string;
   email: string;
   departmentPublicId: string;

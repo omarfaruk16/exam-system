@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { randomBytes } from 'node:crypto';
 import type { AdminUserRow } from '@exam/types';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -31,6 +32,16 @@ const userRoleSelect = {
   scopeFaculty: { select: { publicId: true, name: true } },
   scopeDepartment: { select: { publicId: true, name: true } },
 } as const;
+
+/** Derive a unique-friendly username from an email prefix + random suffix. */
+function usernameFromEmail(email: string): string {
+  const prefix =
+    email
+      .split('@')[0]
+      ?.replace(/[^a-z0-9]/gi, '')
+      .toLowerCase() ?? 'user';
+  return `${prefix}_${randomBytes(3).toString('hex')}`;
+}
 
 function toRow(ur: {
   user: {
@@ -103,17 +114,17 @@ export class AdminUsersService {
       scopeDepartmentId = dept.id;
     }
 
-    // Free the slot if a soft-deleted user previously held this username.
-    await this.freeDeletedUserSlot(dto.username);
+    // Auto-generate a username from the email address.
+    const username = usernameFromEmail(dto.email);
 
-    const tempPassword = `${dto.username}@Exam123`;
+    const tempPassword = `Exam@${randomBytes(4).toString('hex')}`;
     const hash = await this.password.hash(tempPassword);
 
     const userRole = await this.prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
         data: {
-          username: dto.username,
-          email: dto.email ?? null,
+          username,
+          email: dto.email,
           passwordHash: hash,
           displayName: dto.displayName,
           mustChangePassword: true,
@@ -139,7 +150,7 @@ export class AdminUsersService {
       entity: 'User',
       entityId: userRole.user.publicId,
       ip,
-      after: { username: dto.username, role: dto.role },
+      after: { username, role: dto.role },
     });
 
     return toRow(userRole);
@@ -243,18 +254,5 @@ export class AdminUsersService {
     });
     if (!ur) throw new NotFoundException('User not found');
     return ur;
-  }
-
-  private async freeDeletedUserSlot(username: string): Promise<void> {
-    const deleted = await this.prisma.user.findFirst({
-      where: { username, deletedAt: { not: null } },
-      select: { id: true },
-    });
-    if (deleted) {
-      await this.prisma.user.update({
-        where: { id: deleted.id },
-        data: { username: `${username}__del_${Date.now()}`, email: null },
-      });
-    }
   }
 }

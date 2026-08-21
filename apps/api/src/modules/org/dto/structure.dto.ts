@@ -40,7 +40,14 @@ export class UpdateProgramDto {
 
 export class CreateSemesterDto {
   @IsString() programPublicId!: string;
-  @IsInt() @Min(1) @Max(12) number!: number;
+  // A free-text label, e.g. "Fall 2024" or "1st Semester".
+  @IsString() @Length(1, 60) name!: string;
+  // Optional explicit ordinal; auto-assigned (next in the program) when omitted.
+  @IsOptional() @IsInt() @Min(1) @Max(100) number?: number;
+}
+
+export class UpdateSemesterDto {
+  @IsOptional() @IsString() @Length(1, 60) name?: string;
 }
 
 export class CreateCourseDto {
@@ -90,9 +97,8 @@ export class ChangeStudentBatchDto {
   @IsString() batchPublicId!: string;
 }
 
-/** Manually create a single teacher account. Temp password = {username}@Exam123. */
+/** Manually create a single teacher account. */
 export class CreateTeacherManualDto {
-  @IsString() @Length(3, 50) username!: string;
   @IsString() @Length(2, 150) displayName!: string;
   @IsEmail() email!: string;
   @IsString() departmentPublicId!: string;

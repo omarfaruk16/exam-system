@@ -129,8 +129,12 @@ export class ExamService {
 
   // ─────────────────────────────── CRUD ───────────────────────────────
   async createExam(user: AuthUser, ip: string, dto: CreateExamDto) {
-    // Guards BOTH a soft-deleted course part (400) AND teacher assignment (403).
-    const ctx = await this.access.requireAuthorablePart(user, dto.coursePartPublicId);
+    const isAdminLike = user.roles.some((r) =>
+      ['admin', 'super_admin', 'department_head'].includes(r.role),
+    );
+    const ctx = isAdminLike
+      ? await this.access.requireAuthorablePartForAdmin(user, dto.coursePartPublicId)
+      : await this.access.requireAuthorablePart(user, dto.coursePartPublicId);
     const startAt = new Date(dto.startAt);
     const endAt = new Date(dto.endAt);
     if (endAt <= startAt) throw new BadRequestException('endAt must be after startAt');
@@ -163,15 +167,13 @@ export class ExamService {
     });
   }
 
-  /** Every exam the current teacher owns (admin: all in scope; department_head: their department). */
-  async listExams(user: AuthUser) {
+  /** Every exam the current teacher owns (admin: all in scope; department_head: their department).
+   *  Pass `departmentPublicId` to further restrict to one department (admin/dept-head only). */
+  async listExams(user: AuthUser, departmentPublicId?: string) {
     let where: Prisma.ExamWhereInput;
     if (this.isAdmin(user)) {
-      // Admins see everything they can scope to; the ACL is enforced per-exam on open. A broad list
-      // is acceptable here because the detail/action endpoints already gate on department scope.
       where = { deletedAt: null };
     } else if (user.roles.some((r) => r.role === 'department_head')) {
-      // A department head sees exams within the department(s) they head — read-only (review/report).
       const deptIds = user.roles
         .filter((r) => r.role === 'department_head' && r.scopeDepartmentId !== null)
         .map((r) => r.scopeDepartmentId as number);
@@ -182,6 +184,19 @@ export class ExamService {
     } else {
       const teacher = await this.access.requireTeacher(user);
       where = { deletedAt: null, createdByTeacherId: teacher.id };
+    }
+
+    if (departmentPublicId) {
+      const deptFilter: Prisma.ExamWhereInput = {
+        coursePart: {
+          course: {
+            semester: {
+              program: { department: { publicId: departmentPublicId } },
+            },
+          },
+        },
+      };
+      where = { AND: [where, deptFilter] };
     }
     const exams = await this.prisma.db.exam.findMany({
       where,

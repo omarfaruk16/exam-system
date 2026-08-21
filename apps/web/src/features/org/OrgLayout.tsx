@@ -1,26 +1,34 @@
 import { NavLink, Outlet } from 'react-router-dom';
+import { useSession } from '@/lib/session';
 import { cn } from '@/lib/utils';
 
 const tabs = [
-  { to: '/org', label: 'Structure', end: true },
-  { to: '/org/batches', label: 'Batches', end: false },
-  { to: '/org/students', label: 'Students', end: false },
-  { to: '/org/teachers', label: 'Teachers', end: false },
-  { to: '/org/imports', label: 'Bulk import', end: false },
+  { to: '/org', label: 'Departments', end: true, adminOnly: false },
+  { to: '/org/structure', label: 'Full structure', end: false, adminOnly: true },
+  { to: '/org/batches', label: 'Batches', end: false, adminOnly: false },
+  { to: '/org/students', label: 'Students', end: false, adminOnly: false },
+  { to: '/org/teachers', label: 'Teachers', end: false, adminOnly: false },
+  { to: '/org/imports', label: 'Bulk import', end: false, adminOnly: true },
 ];
 
 export function OrgLayout() {
+  const { data: user } = useSession();
+  const isAdmin = (user?.roles ?? []).some((r) => r.role === 'admin' || r.role === 'super_admin');
+  const visible = tabs.filter((t) => isAdmin || !t.adminOnly);
+
   return (
     <div className="mx-auto w-full max-w-6xl">
       <header className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight">Organization</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          Manage the academic structure, batches &amp; students, and bulk imports.
+          {isAdmin
+            ? 'Manage the academic structure, batches & students, and bulk imports.'
+            : 'View your department’s structure, batches, students and faculty.'}
         </p>
       </header>
 
       <nav className="mb-6 flex gap-1 border-b">
-        {tabs.map((t) => (
+        {visible.map((t) => (
           <NavLink
             key={t.to}
             to={t.to}

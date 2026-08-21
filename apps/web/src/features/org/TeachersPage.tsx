@@ -46,7 +46,7 @@ export function TeachersPage() {
         const s = search.toLowerCase();
         return (
           t.user.displayName.toLowerCase().includes(s) ||
-          t.user.username.toLowerCase().includes(s) ||
+          (t.user.email?.toLowerCase().includes(s) ?? false) ||
           t.department.name.toLowerCase().includes(s) ||
           (t.designation?.toLowerCase().includes(s) ?? false)
         );
@@ -70,7 +70,7 @@ export function TeachersPage() {
         <div>
           <h2 className="text-sm font-semibold">Teachers</h2>
           <p className="text-muted-foreground text-sm">
-            Manage teacher accounts. Temp password on creation: username@Exam123.
+            Manage teacher accounts. A temporary password is emailed on creation.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -106,7 +106,7 @@ export function TeachersPage() {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name, username, dept…"
+            placeholder="Search by name, email, dept…"
             className="h-9 w-64 pl-8"
           />
         </div>
@@ -148,7 +148,6 @@ export function TeachersPage() {
               <thead>
                 <tr className="text-muted-foreground border-b text-left text-xs">
                   <th className="px-4 py-3 font-medium">Name</th>
-                  <th className="px-4 py-3 font-medium">Username</th>
                   <th className="px-4 py-3 font-medium">Email</th>
                   <th className="px-4 py-3 font-medium">Department</th>
                   <th className="px-4 py-3 font-medium">Designation</th>
@@ -216,7 +215,7 @@ function TeacherRow({
   if (editing) {
     return (
       <tr className="bg-muted/30 border-b last:border-0">
-        <td className="px-4 py-2" colSpan={6}>
+        <td className="px-4 py-2" colSpan={5}>
           <form
             className="flex flex-wrap items-end gap-3"
             onSubmit={(e) => {
@@ -259,7 +258,6 @@ function TeacherRow({
     <>
       <tr className="border-b last:border-0">
         <td className="px-4 py-3 font-medium">{teacher.user.displayName}</td>
-        <td className="text-muted-foreground px-4 py-3 tabular-nums">{teacher.user.username}</td>
         <td className="text-muted-foreground px-4 py-3">{teacher.user.email ?? '—'}</td>
         <td className="px-4 py-3">{teacher.department.name}</td>
         <td className="text-muted-foreground px-4 py-3">{teacher.designation ?? '—'}</td>
@@ -285,8 +283,7 @@ function TeacherRow({
           <DialogHeader>
             <DialogTitle>Remove teacher?</DialogTitle>
             <DialogDescription>
-              "{teacher.user.displayName}" ({teacher.user.username}) will be deactivated. This
-              cannot be undone from the UI.
+              "{teacher.user.displayName}" will be deactivated. This cannot be undone from the UI.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -316,7 +313,6 @@ function AddTeacherForm({
   onClose: () => void;
   onCreated: () => void;
 }) {
-  const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [dept, setDept] = useState('');
@@ -326,11 +322,9 @@ function AddTeacherForm({
   const create = useMutation({
     mutationFn: () => {
       if (!dept) throw new Error('Select a department');
-      if (!username.trim()) throw new Error('Username is required');
       if (!displayName.trim()) throw new Error('Display name is required');
       if (!email.trim()) throw new Error('Email is required');
       return createTeacher({
-        username: username.trim(),
         displayName: displayName.trim(),
         email: email.trim(),
         departmentPublicId: dept,
@@ -356,18 +350,6 @@ function AddTeacherForm({
       >
         <p className="text-sm font-medium">New teacher</p>
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label htmlFor="t-username" className="text-xs">
-              Username
-            </Label>
-            <Input
-              id="t-username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="e.g. jdoe"
-              className="mt-1 h-9"
-            />
-          </div>
           <div>
             <Label htmlFor="t-name" className="text-xs">
               Display name

@@ -4,9 +4,8 @@ import { api } from '@/lib/api';
 export const fetchAdminUsers = () => api.get<AdminUserRow[]>('/admin-users');
 
 export const createAdminUser = (b: {
-  username: string;
   displayName: string;
-  email?: string;
+  email: string;
   role: 'admin' | 'department_head';
   scopeFacultyPublicId?: string;
   scopeDepartmentPublicId?: string;

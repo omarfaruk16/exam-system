@@ -1,7 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ExamSettings } from '@exam/types';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -12,7 +13,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
+import { useSession } from '@/lib/session';
 import { cn } from '@/lib/utils';
+import {
+  fetchCourseParts,
+  fetchCourses,
+  fetchDepartments,
+  fetchFaculties,
+  fetchPrograms,
+  fetchSemesters,
+} from '../org/orgApi';
 import {
   createExam,
   fetchExam,
@@ -42,11 +52,16 @@ type FormValues = z.input<typeof schema>;
 export function ExamFormPage() {
   const { examPublicId } = useParams<{ examPublicId: string }>();
   const isEdit = Boolean(examPublicId);
+  const { data: user } = useSession();
+
+  const isAdminLike = (user?.roles ?? []).some((r) =>
+    ['admin', 'super_admin', 'department_head'].includes(r.role),
+  );
 
   const partsQuery = useQuery({
     queryKey: ['my-offering-parts'],
     queryFn: fetchMyParts,
-    enabled: !isEdit,
+    enabled: !isEdit && !isAdminLike,
   });
   const examQuery = useQuery({
     queryKey: ['authoring-exam', examPublicId],
@@ -55,10 +70,9 @@ export function ExamFormPage() {
   });
 
   if (isEdit && examQuery.isLoading) return <FormSkeleton />;
-  if (!isEdit && partsQuery.isLoading) return <FormSkeleton />;
+  if (!isEdit && !isAdminLike && partsQuery.isLoading) return <FormSkeleton />;
 
   const exam = examQuery.data;
-  // A teacher can only edit metadata while the exam is a draft.
   if (isEdit && exam && exam.status !== 'draft') {
     return <ReadOnlyNotice status={exam.status} examPublicId={exam.publicId} />;
   }
@@ -66,6 +80,7 @@ export function ExamFormPage() {
   return (
     <ExamForm
       isEdit={isEdit}
+      isAdminLike={isAdminLike}
       examPublicId={examPublicId}
       parts={partsQuery.data ?? []}
       defaults={exam}
@@ -75,11 +90,13 @@ export function ExamFormPage() {
 
 function ExamForm({
   isEdit,
+  isAdminLike,
   examPublicId,
   parts,
   defaults,
 }: {
   isEdit: boolean;
+  isAdminLike: boolean;
   examPublicId?: string;
   parts: { publicId: string; label: string }[];
   defaults?: import('@exam/types').ExamDetail;
@@ -178,26 +195,53 @@ function ExamForm({
       <form onSubmit={handleSubmit((v) => mutation.mutate(v))} className="space-y-6">
         <Card className="space-y-5 p-6">
           {!isEdit && (
-            <Field label="Course part" error={errors.coursePartPublicId?.message} htmlFor="part">
-              <select
-                id="part"
-                {...register('coursePartPublicId')}
-                className="border-input bg-card focus-visible:ring-ring aria-[invalid=true]:border-destructive flex h-10 w-full rounded-md border px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2"
-                aria-invalid={errors.coursePartPublicId ? 'true' : 'false'}
-              >
-                <option value="">Select a course part…</option>
-                {parts.map((p) => (
-                  <option key={p.publicId} value={p.publicId}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
-              {parts.length === 0 && (
-                <p className="text-muted-foreground mt-1 text-xs">
-                  You are not assigned to any course part yet. Ask an admin to assign you.
-                </p>
-              )}
-            </Field>
+            <Controller
+              control={control}
+              name="coursePartPublicId"
+              render={({ field }) =>
+                isAdminLike ? (
+                  <div>
+                    <Label className={cn(errors.coursePartPublicId && 'text-destructive')}>
+                      Course part
+                    </Label>
+                    <div className="mt-1.5">
+                      <CascadingPartPicker value={field.value} onChange={field.onChange} />
+                    </div>
+                    {errors.coursePartPublicId && (
+                      <p className="text-destructive mt-1 text-xs">
+                        {errors.coursePartPublicId.message}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <Field
+                    label="Course part"
+                    error={errors.coursePartPublicId?.message}
+                    htmlFor="part"
+                  >
+                    <select
+                      id="part"
+                      value={field.value}
+                      onChange={field.onChange}
+                      className="border-input bg-card focus-visible:ring-ring aria-[invalid=true]:border-destructive flex h-10 w-full rounded-md border px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2"
+                      aria-invalid={errors.coursePartPublicId ? 'true' : 'false'}
+                    >
+                      <option value="">Select a course part…</option>
+                      {parts.map((p) => (
+                        <option key={p.publicId} value={p.publicId}>
+                          {p.label}
+                        </option>
+                      ))}
+                    </select>
+                    {parts.length === 0 && (
+                      <p className="text-muted-foreground mt-1 text-xs">
+                        You are not assigned to any course part yet. Ask an admin to assign you.
+                      </p>
+                    )}
+                  </Field>
+                )
+              }
+            />
           )}
 
           <Field label="Title" error={errors.title?.message} htmlFor="title">
@@ -346,6 +390,216 @@ function ExamForm({
           </Button>
         </div>
       </form>
+    </div>
+  );
+}
+
+// ── Cascading picker for admin/dept_head exam creation ──────────────────────
+
+const selectCls =
+  'border-input bg-card focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50';
+
+function CascadingPartPicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [facultyId, setFacultyId] = useState('');
+  const [deptId, setDeptId] = useState('');
+  const [programId, setProgramId] = useState('');
+  const [semesterId, setSemesterId] = useState('');
+  const [courseId, setCourseId] = useState('');
+
+  const facultiesQ = useQuery({ queryKey: ['org-faculties'], queryFn: fetchFaculties });
+  const deptsQ = useQuery({
+    queryKey: ['org-departments', facultyId],
+    queryFn: () => fetchDepartments(facultyId),
+    enabled: !!facultyId,
+  });
+  const programsQ = useQuery({
+    queryKey: ['org-programs', deptId],
+    queryFn: () => fetchPrograms(deptId),
+    enabled: !!deptId,
+  });
+  const semestersQ = useQuery({
+    queryKey: ['org-semesters', programId],
+    queryFn: () => fetchSemesters(programId),
+    enabled: !!programId,
+  });
+  const coursesQ = useQuery({
+    queryKey: ['org-courses', semesterId],
+    queryFn: () => fetchCourses(semesterId),
+    enabled: !!semesterId,
+  });
+  const partsQ = useQuery({
+    queryKey: ['org-course-parts', courseId],
+    queryFn: () => fetchCourseParts(courseId),
+    enabled: !!courseId,
+  });
+
+  const selectedPart = partsQ.data?.find((p) => p.publicId === value);
+
+  const reset = (level: 'faculty' | 'dept' | 'program' | 'semester' | 'course') => {
+    if (level === 'faculty') {
+      setDeptId('');
+      setProgramId('');
+      setSemesterId('');
+      setCourseId('');
+    }
+    if (level === 'dept') {
+      setProgramId('');
+      setSemesterId('');
+      setCourseId('');
+    }
+    if (level === 'program') {
+      setSemesterId('');
+      setCourseId('');
+    }
+    if (level === 'semester') {
+      setCourseId('');
+    }
+    onChange('');
+  };
+
+  return (
+    <div className="space-y-2">
+      {/* Faculty */}
+      <select
+        className={selectCls}
+        value={facultyId}
+        onChange={(e) => {
+          setFacultyId(e.target.value);
+          reset('faculty');
+        }}
+      >
+        <option value="">Faculty…</option>
+        {(facultiesQ.data ?? []).map((f) => (
+          <option key={f.publicId} value={f.publicId}>
+            {f.name}
+          </option>
+        ))}
+      </select>
+
+      {/* Department */}
+      {facultyId && (
+        <select
+          className={selectCls}
+          value={deptId}
+          disabled={deptsQ.isLoading}
+          onChange={(e) => {
+            setDeptId(e.target.value);
+            reset('dept');
+          }}
+        >
+          <option value="">Department…</option>
+          {(deptsQ.data ?? []).map((d) => (
+            <option key={d.publicId} value={d.publicId}>
+              {d.name}
+            </option>
+          ))}
+        </select>
+      )}
+
+      {/* Program */}
+      {deptId && (
+        <select
+          className={selectCls}
+          value={programId}
+          disabled={programsQ.isLoading}
+          onChange={(e) => {
+            setProgramId(e.target.value);
+            reset('program');
+          }}
+        >
+          <option value="">Degree / program…</option>
+          {(programsQ.data ?? []).map((p) => (
+            <option key={p.publicId} value={p.publicId}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+      )}
+
+      {/* Semester */}
+      {programId && (
+        <select
+          className={selectCls}
+          value={semesterId}
+          disabled={semestersQ.isLoading}
+          onChange={(e) => {
+            setSemesterId(e.target.value);
+            reset('semester');
+          }}
+        >
+          <option value="">Semester…</option>
+          {(semestersQ.data ?? []).map((s) => (
+            <option key={s.publicId} value={s.publicId}>
+              {s.name ?? `Semester ${s.number}`}
+            </option>
+          ))}
+        </select>
+      )}
+
+      {/* Course */}
+      {semesterId && (
+        <select
+          className={selectCls}
+          value={courseId}
+          disabled={coursesQ.isLoading}
+          onChange={(e) => {
+            setCourseId(e.target.value);
+            onChange('');
+          }}
+        >
+          <option value="">Course…</option>
+          {(coursesQ.data ?? []).map((c) => (
+            <option key={c.publicId} value={c.publicId}>
+              {c.code} — {c.name}
+            </option>
+          ))}
+        </select>
+      )}
+
+      {/* Course part */}
+      {courseId && (
+        <select
+          className={selectCls}
+          value={value}
+          disabled={partsQ.isLoading}
+          onChange={(e) => onChange(e.target.value)}
+        >
+          <option value="">Course part…</option>
+          {(partsQ.data ?? []).map((p) => (
+            <option key={p.publicId} value={p.publicId}>
+              {p.name}
+              {p.assignedTeacher
+                ? ` — ${p.assignedTeacher.user.displayName}`
+                : ' (no teacher assigned)'}
+            </option>
+          ))}
+        </select>
+      )}
+
+      {/* Summary chip */}
+      {selectedPart && (
+        <div className="bg-primary/10 text-primary flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium">
+          <ChevronRight className="size-3 shrink-0" />
+          {selectedPart.course.code} → {selectedPart.name}
+          {selectedPart.assignedTeacher && (
+            <span className="text-primary/70 ml-1">
+              · {selectedPart.assignedTeacher.user.displayName}
+            </span>
+          )}
+        </div>
+      )}
+
+      {courseId && partsQ.data?.length === 0 && (
+        <p className="text-muted-foreground text-xs">
+          No course parts defined for this course yet.
+        </p>
+      )}
     </div>
   );
 }

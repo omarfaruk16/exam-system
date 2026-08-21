@@ -147,6 +147,17 @@ export interface BankQuestion {
   options: BankQuestionOption[];
 }
 
+/** Department-level question bank overview: one row per course part. */
+export interface DeptBankRow {
+  courseCode: string;
+  courseName: string;
+  semesterLabel: string;
+  partPublicId: string;
+  partName: string;
+  bankCount: number;
+  questionCount: number;
+}
+
 /** A course part the current teacher is assigned to — for the New Exam / bank pickers. */
 export interface PartOption {
   publicId: string;

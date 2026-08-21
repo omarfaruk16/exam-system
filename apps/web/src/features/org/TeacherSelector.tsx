@@ -24,7 +24,9 @@ export function TeacherSelector({
   });
   const teachers = (data ?? []).filter((t) => {
     const s = q.trim().toLowerCase();
-    return !s || t.displayName.toLowerCase().includes(s) || t.username.toLowerCase().includes(s);
+    return (
+      !s || t.displayName.toLowerCase().includes(s) || (t.email?.toLowerCase().includes(s) ?? false)
+    );
   });
 
   return (
@@ -34,7 +36,7 @@ export function TeacherSelector({
         <Input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search by name or username…"
+          placeholder="Search by name or email…"
           className="h-9 pl-8"
           autoFocus
         />
@@ -66,7 +68,7 @@ export function TeacherSelector({
                 <span className="min-w-0">
                   <span className="block truncate font-medium">{t.displayName}</span>
                   <span className="text-muted-foreground block truncate text-xs">
-                    {t.username}
+                    {t.email ?? ''}
                     {t.designation ? ` · ${t.designation}` : ''}
                   </span>
                 </span>

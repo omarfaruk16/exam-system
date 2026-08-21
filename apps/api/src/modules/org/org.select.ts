@@ -38,6 +38,7 @@ export const programSelect = {
 export const semesterSelect = {
   publicId: true,
   number: true,
+  name: true,
   program: { select: { publicId: true, name: true } },
   _count: { select: { courses: notDeleted, batches: notDeleted } },
 } satisfies Prisma.SemesterSelect;
@@ -47,7 +48,7 @@ export const batchSelect = {
   name: true,
   year: true,
   program: { select: { publicId: true, name: true } },
-  currentSemester: { select: { publicId: true, number: true } },
+  currentSemester: { select: { publicId: true, number: true, name: true } },
   _count: { select: { students: notDeleted } },
 } satisfies Prisma.BatchSelect;
 
@@ -90,7 +91,7 @@ export const coursePartSelect = {
 export const teacherOptionSelect = {
   publicId: true,
   designation: true,
-  user: { select: { username: true, displayName: true } },
+  user: { select: { displayName: true, email: true } },
 } satisfies Prisma.TeacherSelect;
 
 /** Full teacher row for admin management pages. */

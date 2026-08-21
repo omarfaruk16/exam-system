@@ -109,6 +109,7 @@ model Semester {
   publicId  String    @unique @default(uuid())
   programId Int
   number    Int
+  name      String?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?

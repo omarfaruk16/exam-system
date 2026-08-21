@@ -37,7 +37,7 @@ export function nodeName(n: OrgNode): string {
     case 'program':
       return n.raw.name;
     case 'semester':
-      return `Semester ${n.raw.number}`;
+      return n.raw.name ?? `Semester ${n.raw.number}`;
     case 'course':
       return `${n.raw.code} — ${n.raw.name}`;
     case 'part':

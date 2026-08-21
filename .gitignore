@@ -8,10 +8,11 @@ build/
 out/
 *.tsbuildinfo
 
-# env (never commit real secrets; only .env.example is tracked)
+# env (never commit real secrets; only .env.example files are tracked)
 .env
 .env.*
 !.env.example
+!.env.production.example
 
 # logs
 *.log

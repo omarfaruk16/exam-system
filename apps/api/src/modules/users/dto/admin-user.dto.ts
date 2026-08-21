@@ -1,9 +1,8 @@
 import { IsEmail, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class CreateAdminUserDto {
-  @IsString() @MinLength(2) username!: string;
   @IsString() @MinLength(2) displayName!: string;
-  @IsEmail() @IsOptional() email?: string;
+  @IsEmail() email!: string;
   @IsIn(['admin', 'department_head']) role!: 'admin' | 'department_head';
   @IsString() @IsOptional() scopeFacultyPublicId?: string;
   @IsString() @IsOptional() scopeDepartmentPublicId?: string;

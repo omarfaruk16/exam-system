@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, HttpCode, Ip, Param, Patch, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Ip,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import type { AuthUser } from '../../common/types/auth';
@@ -18,8 +29,8 @@ export class ExamController {
   // ── authoring (teacher) ──
   @Roles('teacher', 'admin', 'super_admin', 'department_head')
   @Get()
-  list(@CurrentUser() u: AuthUser) {
-    return this.exams.listExams(u);
+  list(@CurrentUser() u: AuthUser, @Query('department') dept?: string) {
+    return this.exams.listExams(u, dept);
   }
 
   // Two-segment path so it is never captured by the `:publicId` route below.
@@ -29,7 +40,7 @@ export class ExamController {
     return this.exams.listMyParts(u);
   }
 
-  @Roles('teacher')
+  @Roles('teacher', 'admin', 'super_admin', 'department_head')
   @Post()
   create(@CurrentUser() u: AuthUser, @Ip() ip: string, @Body() dto: CreateExamDto) {
     return this.exams.createExam(u, ip, dto);

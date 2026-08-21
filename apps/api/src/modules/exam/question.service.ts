@@ -57,6 +57,65 @@ export class QuestionService {
     });
   }
 
+  /** All course parts in a department with their bank and question counts — for the dept profile tab. */
+  async listBanksByDepartment(departmentPublicId: string) {
+    const courses = await this.prisma.db.course.findMany({
+      where: {
+        deletedAt: null,
+        semester: {
+          deletedAt: null,
+          program: { deletedAt: null, department: { publicId: departmentPublicId } },
+        },
+      },
+      select: {
+        code: true,
+        name: true,
+        semester: { select: { name: true, number: true } },
+        parts: {
+          where: { deletedAt: null },
+          select: {
+            publicId: true,
+            name: true,
+            questionBanks: {
+              select: { _count: { select: { questions: true } } },
+            },
+          },
+          orderBy: { createdAt: 'asc' as const },
+        },
+      },
+      orderBy: [{ semester: { number: 'asc' as const } }, { code: 'asc' as const }],
+    });
+
+    const rows: {
+      courseCode: string;
+      courseName: string;
+      semesterLabel: string;
+      partPublicId: string;
+      partName: string;
+      bankCount: number;
+      questionCount: number;
+    }[] = [];
+
+    for (const course of courses) {
+      const semesterLabel = course.semester.name ?? `Semester ${course.semester.number}`;
+      for (const part of course.parts) {
+        rows.push({
+          courseCode: course.code,
+          courseName: course.name,
+          semesterLabel,
+          partPublicId: part.publicId,
+          partName: part.name,
+          bankCount: part.questionBanks.length,
+          questionCount: part.questionBanks.reduce(
+            (s: number, b: { _count: { questions: number } }) => s + b._count.questions,
+            0,
+          ),
+        });
+      }
+    }
+    return rows;
+  }
+
   async listBanks(user: AuthUser, coursePartPublicId: string) {
     // Access check: teacher must be assigned (admins scoped) — reuse the authoring guard's read side.
     await this.access.requireAuthorablePart(user, coursePartPublicId).catch(async (e) => {

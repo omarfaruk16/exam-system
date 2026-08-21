@@ -82,6 +82,25 @@ export class ExamAccessService {
     return { ...ctx, teacherId: teacher.id };
   }
 
+  /**
+   * Authoring guard for admin / super_admin / department_head.
+   * Checks scope and uses the part's assigned teacher as the exam owner
+   * (Exam.createdByTeacherId is non-nullable).
+   */
+  async requireAuthorablePartForAdmin(
+    user: AuthUser,
+    coursePartPublicId: string,
+  ): Promise<CoursePartContext & { teacherId: number }> {
+    const ctx = await this.loadActiveCoursePart(coursePartPublicId);
+    this.assertAdminScope(user, ctx);
+    if (!ctx.assignedTeacherId) {
+      throw new BadRequestException(
+        'No teacher is assigned to this course part. Assign a teacher first.',
+      );
+    }
+    return { ...ctx, teacherId: ctx.assignedTeacherId };
+  }
+
   /** Admin/super_admin scope check on an exam's department (faculty-scoped admins are confined). */
   assertAdminScope(user: AuthUser, ctx: { departmentId: number; facultyId: number }): void {
     this.acl.assertDepartment(user, ctx.departmentId, ctx.facultyId);

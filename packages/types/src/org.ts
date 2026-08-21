@@ -29,6 +29,7 @@ export interface Program {
 export interface Semester {
   publicId: string;
   number: number;
+  name: string | null;
   program: { publicId: string; name: string };
   /** courses in this semester; batches currently assigned to it */
   _count: { courses: number; batches: number };
@@ -68,7 +69,7 @@ export interface Batch {
   name: string;
   year: number;
   program: { publicId: string; name: string };
-  currentSemester: { publicId: string; number: number } | null;
+  currentSemester: { publicId: string; number: number; name: string | null } | null;
   _count: { students: number };
 }
 
@@ -84,7 +85,7 @@ export interface StudentRow {
 export interface TeacherOption {
   publicId: string;
   displayName: string;
-  username: string;
+  email: string | null;
   designation: string | null;
 }
 

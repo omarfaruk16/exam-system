@@ -1,4 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException, StreamableFile } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  StreamableFile,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import ExcelJS from 'exceljs';
 import { AccessControlService } from '../../common/access/access-control.service';
@@ -17,6 +23,7 @@ import type {
   CreateFacultyDto,
   CreateProgramDto,
   CreateSemesterDto,
+  UpdateSemesterDto,
   CreateStudentManualDto,
   CreateTeacherManualDto,
   UpdateBatchDto,
@@ -221,8 +228,28 @@ export class StructureService {
   }
 
   // ─────────────────────────────── Faculty ───────────────────────────────
-  listFaculties() {
-    return this.prisma.db.faculty.findMany({ select: facultySelect, orderBy: { name: 'asc' } });
+  /**
+   * The department a NON-admin actor is confined to. Admins/super_admins return null (unscoped).
+   * A department_head returns their department id; anyone else is rejected. Lets a department head
+   * read only their own department's structure, students and faculty.
+   */
+  private deptScopeId(actor: AuthUser): number | null {
+    const isAdmin = actor.roles.some((r) => r.role === 'admin' || r.role === 'super_admin');
+    if (isAdmin) return null;
+    const dh = actor.roles.find((r) => r.role === 'department_head' && r.scopeDepartmentId != null);
+    if (!dh || dh.scopeDepartmentId == null) {
+      throw new ForbiddenException('You are not assigned to a department');
+    }
+    return dh.scopeDepartmentId;
+  }
+
+  listFaculties(actor: AuthUser) {
+    const scope = this.deptScopeId(actor);
+    return this.prisma.db.faculty.findMany({
+      where: scope != null ? { departments: { some: { id: scope } } } : {},
+      select: facultySelect,
+      orderBy: { name: 'asc' },
+    });
   }
   async getFaculty(publicId: string) {
     const row = await this.prisma.db.faculty.findFirst({
@@ -265,9 +292,13 @@ export class StructureService {
   }
 
   // ─────────────────────────────── Department ───────────────────────────────
-  listDepartments(facultyPublicId?: string) {
+  listDepartments(actor: AuthUser, facultyPublicId?: string) {
+    const scope = this.deptScopeId(actor);
+    const where: Prisma.DepartmentWhereInput = {};
+    if (facultyPublicId) where.faculty = { publicId: facultyPublicId };
+    if (scope != null) where.id = scope;
     return this.prisma.db.department.findMany({
-      where: facultyPublicId ? { faculty: { publicId: facultyPublicId } } : {},
+      where,
       select: departmentSelect,
       orderBy: { name: 'asc' },
     });
@@ -318,9 +349,14 @@ export class StructureService {
   }
 
   // ─────────────────────────────── Program ───────────────────────────────
-  listPrograms(departmentPublicId?: string) {
+  listPrograms(actor: AuthUser, departmentPublicId?: string) {
+    const scope = this.deptScopeId(actor);
+    const department: Prisma.DepartmentWhereInput = {};
+    if (departmentPublicId) department.publicId = departmentPublicId;
+    if (scope != null) department.id = scope;
+    const where: Prisma.ProgramWhereInput = Object.keys(department).length ? { department } : {};
     return this.prisma.db.program.findMany({
-      where: departmentPublicId ? { department: { publicId: departmentPublicId } } : {},
+      where,
       select: programSelect,
       orderBy: { name: 'asc' },
     });
@@ -367,9 +403,14 @@ export class StructureService {
   }
 
   // ─────────────────────────────── Semester ───────────────────────────────
-  listSemesters(programPublicId?: string) {
+  listSemesters(actor: AuthUser, programPublicId?: string) {
+    const scope = this.deptScopeId(actor);
+    const program: Prisma.ProgramWhereInput = {};
+    if (programPublicId) program.publicId = programPublicId;
+    if (scope != null) program.department = { id: scope };
+    const where: Prisma.SemesterWhereInput = Object.keys(program).length ? { program } : {};
     return this.prisma.db.semester.findMany({
-      where: programPublicId ? { program: { publicId: programPublicId } } : {},
+      where,
       select: semesterSelect,
       orderBy: { number: 'asc' },
     });
@@ -378,11 +419,38 @@ export class StructureService {
     const program = await this.programRef(dto.programPublicId);
     this.acl.assertFaculty(ctx.actor, program.facultyId);
     return this.mutate(ctx, 'semester.create', 'Semester', async (tx) => {
+      // The tx runs on the base client, so max() sees soft-deleted rows too — this
+      // keeps the auto-assigned ordinal clear of the [programId, number] unique slot.
+      let number = dto.number;
+      if (number == null) {
+        const max = await tx.semester.aggregate({
+          where: { programId: program.id },
+          _max: { number: true },
+        });
+        number = (max._max.number ?? 0) + 1;
+      }
       const result = await tx.semester.create({
-        data: { programId: program.id, number: dto.number },
+        data: { programId: program.id, number, name: dto.name.trim() },
         select: semesterSelect,
       });
       return { result, entityId: result.publicId, after: result };
+    });
+  }
+
+  async updateSemester(ctx: OrgContext, publicId: string, dto: UpdateSemesterDto) {
+    const sem = await this.prisma.db.semester.findFirst({
+      where: { publicId },
+      select: { program: { select: { department: { select: { facultyId: true } } } } },
+    });
+    if (!sem) throw new NotFoundException('Semester not found');
+    this.acl.assertFaculty(ctx.actor, sem.program.department.facultyId);
+    return this.mutate(ctx, 'semester.update', 'Semester', async (tx) => {
+      const result = await tx.semester.update({
+        where: { publicId },
+        data: { name: dto.name?.trim() },
+        select: semesterSelect,
+      });
+      return { result, entityId: publicId, after: result };
     });
   }
   async removeSemester(ctx: OrgContext, publicId: string) {
@@ -399,9 +467,14 @@ export class StructureService {
   }
 
   // ─────────────────────────────── Course ───────────────────────────────
-  listCourses(semesterPublicId?: string) {
+  listCourses(actor: AuthUser, semesterPublicId?: string) {
+    const scope = this.deptScopeId(actor);
+    const semester: Prisma.SemesterWhereInput = {};
+    if (semesterPublicId) semester.publicId = semesterPublicId;
+    if (scope != null) semester.program = { department: { id: scope } };
+    const where: Prisma.CourseWhereInput = Object.keys(semester).length ? { semester } : {};
     return this.prisma.db.course.findMany({
-      where: semesterPublicId ? { semester: { publicId: semesterPublicId } } : {},
+      where,
       select: courseSelect,
       orderBy: { code: 'asc' },
     });
@@ -540,15 +613,20 @@ export class StructureService {
     return teachers.map((t) => ({
       publicId: t.publicId,
       displayName: t.user.displayName,
-      username: t.user.username,
+      email: t.user.email,
       designation: t.designation,
     }));
   }
 
   /** Admin teacher list — all teachers, optionally filtered by department. */
-  async listTeachersAdmin(departmentPublicId?: string) {
+  async listTeachersAdmin(actor: AuthUser, departmentPublicId?: string) {
+    const scope = this.deptScopeId(actor);
+    const department: Prisma.DepartmentWhereInput = {};
+    if (departmentPublicId) department.publicId = departmentPublicId;
+    if (scope != null) department.id = scope;
+    const where: Prisma.TeacherWhereInput = Object.keys(department).length ? { department } : {};
     return this.prisma.db.teacher.findMany({
-      where: departmentPublicId ? { department: { publicId: departmentPublicId } } : {},
+      where,
       select: teacherAdminSelect,
       orderBy: { user: { displayName: 'asc' } },
     });
@@ -561,13 +639,18 @@ export class StructureService {
     const teacherRole = await this.prisma.db.role.findUnique({ where: { name: 'teacher' } });
     if (!teacherRole) throw new BadRequestException('Role "teacher" missing — run seed first');
 
-    await this.freeDeletedUserSlot(dto.username);
-    const hash = await this.password.hash(`${dto.username}@Exam123`);
+    const username = `${
+      dto.email
+        .split('@')[0]
+        ?.replace(/[^a-z0-9]/gi, '')
+        .toLowerCase() ?? 'teacher'
+    }_${Math.random().toString(36).slice(2, 8)}`;
+    const hash = await this.password.hash(`Exam@${Math.random().toString(36).slice(2, 10)}`);
 
     return this.mutate(ctx, 'teacher.create', 'Teacher', async (tx) => {
       const user = await tx.user.create({
         data: {
-          username: dto.username,
+          username,
           email: dto.email,
           passwordHash: hash,
           displayName: dto.displayName,
@@ -638,8 +721,10 @@ export class StructureService {
     });
   }
 
-  async exportTeachers(): Promise<StreamableFile> {
+  async exportTeachers(departmentPublicId?: string): Promise<StreamableFile> {
+    const where = departmentPublicId ? { department: { publicId: departmentPublicId } } : undefined;
     const rows = await this.prisma.db.teacher.findMany({
+      where,
       select: teacherAdminSelect,
       orderBy: { user: { displayName: 'asc' } },
     });
@@ -669,9 +754,17 @@ export class StructureService {
   }
 
   // ─────────────────────────────── Batch ───────────────────────────────
-  listBatches(programPublicId?: string) {
+  listBatches(actor: AuthUser, programPublicId?: string, departmentPublicId?: string) {
+    const scope = this.deptScopeId(actor);
+    const program: Prisma.ProgramWhereInput = {};
+    if (programPublicId) program.publicId = programPublicId;
+    const deptFilter: Prisma.DepartmentWhereInput = {};
+    if (scope != null) deptFilter.id = scope;
+    if (departmentPublicId) deptFilter.publicId = departmentPublicId;
+    if (Object.keys(deptFilter).length) program.department = deptFilter;
+    const where: Prisma.BatchWhereInput = Object.keys(program).length ? { program } : {};
     return this.prisma.db.batch.findMany({
-      where: programPublicId ? { program: { publicId: programPublicId } } : {},
+      where,
       select: batchSelect,
       orderBy: { year: 'desc' },
     });
@@ -748,9 +841,14 @@ export class StructureService {
   }
 
   // ─────────────────────────────── Students ───────────────────────────────
-  listStudents(batchPublicId?: string) {
+  listStudents(actor: AuthUser, batchPublicId?: string) {
+    const scope = this.deptScopeId(actor);
+    const batch: Prisma.BatchWhereInput = {};
+    if (batchPublicId) batch.publicId = batchPublicId;
+    if (scope != null) batch.program = { department: { id: scope } };
+    const where: Prisma.StudentWhereInput = Object.keys(batch).length ? { batch } : {};
     return this.prisma.db.student.findMany({
-      where: batchPublicId ? { batch: { publicId: batchPublicId } } : {},
+      where,
       select: studentSelect,
       orderBy: { studentId: 'asc' },
     });

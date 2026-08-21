@@ -40,6 +40,12 @@ export class QuestionController {
     return this.questions.listBanks(u, part);
   }
 
+  @Roles('admin', 'super_admin', 'department_head')
+  @Get('question-banks/by-department')
+  listBanksByDepartment(@Query('dept') dept: string) {
+    return this.questions.listBanksByDepartment(dept);
+  }
+
   @Roles('teacher')
   @Post('questions')
   createQuestion(@CurrentUser() u: AuthUser, @Ip() ip: string, @Body() dto: CreateQuestionDto) {

@@ -14,8 +14,9 @@ ENV npm_config_store_dir=/pnpm-store
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store pnpm install --frozen-lockfile
 
 COPY . .
+ARG VITE_INSTITUTION_NAME="University of Rajshahi"
 RUN pnpm --filter @exam/types build \
-  && pnpm --filter @exam/web build
+  && VITE_INSTITUTION_NAME="${VITE_INSTITUTION_NAME}" pnpm --filter @exam/web build
 
 FROM nginx:1.27-alpine
 COPY infra/nginx/web.conf /etc/nginx/conf.d/default.conf

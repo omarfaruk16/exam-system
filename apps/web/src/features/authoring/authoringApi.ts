@@ -1,5 +1,6 @@
 import type {
   BankQuestion,
+  DeptBankRow,
   ExamDetail,
   ExamListItem,
   ExamQuestionItem,
@@ -11,6 +12,14 @@ import { api } from '@/lib/api';
 
 // ── Exams ──
 export const fetchExams = () => api.get<ExamListItem[]>('/exams');
+
+export const fetchDeptExams = (departmentPublicId: string) =>
+  api.get<ExamListItem[]>(`/exams?department=${encodeURIComponent(departmentPublicId)}`);
+
+export const fetchDeptBankSummary = (departmentPublicId: string) =>
+  api.get<DeptBankRow[]>(
+    `/question-banks/by-department?dept=${encodeURIComponent(departmentPublicId)}`,
+  );
 
 export const fetchExam = (publicId: string) => api.get<ExamDetail>(`/exams/${publicId}`);
 
