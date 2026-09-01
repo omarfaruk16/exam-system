@@ -11,7 +11,7 @@ import { ReportService } from './report.service';
 export class ReportController {
   constructor(private readonly reports: ReportService) {}
 
-  @Roles('teacher', 'admin', 'super_admin', 'department_head')
+  @Roles('student', 'teacher', 'admin', 'super_admin', 'department_head')
   // Guards the PDF/Excel worker: 10 report generations per user per hour.
   @Throttle({ default: { limit: 10, ttl: 3_600_000 } })
   @Post()
@@ -20,13 +20,13 @@ export class ReportController {
     return this.reports.request(u, dto);
   }
 
-  @Roles('teacher', 'admin', 'super_admin', 'department_head')
+  @Roles('student', 'teacher', 'admin', 'super_admin', 'department_head')
   @Get(':jobId')
   status(@Param('jobId') jobId: string) {
     return this.reports.status(jobId);
   }
 
-  @Roles('teacher', 'admin', 'super_admin', 'department_head')
+  @Roles('student', 'teacher', 'admin', 'super_admin', 'department_head')
   @Get(':jobId/download')
   download(
     @Param('jobId') jobId: string,

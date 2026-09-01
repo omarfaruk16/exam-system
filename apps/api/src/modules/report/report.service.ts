@@ -26,6 +26,7 @@ const examScopeSelect = {
   id: true,
   publicId: true,
   status: true,
+  settings: true,
   coursePart: {
     select: {
       assignedTeacherId: true,
@@ -91,9 +92,12 @@ export class ReportService {
       select: examScopeSelect,
     });
     if (!exam) throw new NotFoundException('Exam not found');
-    // Reports are only available once results are published.
-    if (exam.status !== 'results_published') {
-      throw new ForbiddenException('Reports are available only after results are published');
+
+    // Reports need computed marks, which exist once the exam is over. Staff may
+    // export during grading; students only once results are actually visible to them.
+    const RESULT_READY: string[] = ['ended', 'grading', 'results_published'];
+    if (!RESULT_READY.includes(exam.status)) {
+      throw new ForbiddenException('Reports are available only after the exam has ended');
     }
 
     // Students may download their own individual mark sheet.
@@ -108,6 +112,13 @@ export class ReportService {
       });
       if (student?.publicId !== dto.studentPublicId) {
         throw new ForbiddenException('You can only download your own mark sheet');
+      }
+      // Respect the teacher's "withhold marks until published" setting.
+      const settings = (exam.settings as { showMarksAfterSubmit?: boolean } | null) ?? {};
+      const marksVisible =
+        settings.showMarksAfterSubmit !== false || exam.status === 'results_published';
+      if (!marksVisible) {
+        throw new ForbiddenException('Your marks have not been released yet');
       }
     } else {
       await this.assertReportAccess(user, exam);

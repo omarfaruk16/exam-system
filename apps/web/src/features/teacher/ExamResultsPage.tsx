@@ -64,7 +64,7 @@ export function ExamResultsPage() {
             {exam.courseCode} · {exam.courseName} · {exam.partName} · Semester {exam.semesterNumber}
           </p>
         </div>
-        {examPublicId && <ReportButton examPublicId={examPublicId} />}
+        {examPublicId && exam.status !== 'live' && <ReportButton examPublicId={examPublicId} />}
       </div>
 
       {/* Summary */}
