@@ -1,4 +1,4 @@
-import { format } from 'date-fns';
+import { format, parse, isValid } from 'date-fns';
 import { CalendarIcon, Clock } from 'lucide-react';
 import * as React from 'react';
 import { cn } from '@/lib/utils';
@@ -30,122 +30,185 @@ export function DateTimePicker({
   timeError,
   id,
 }: DateTimePickerProps) {
-  const [open, setOpen] = React.useState(false);
+  // ── Date field ──────────────────────────────────────────────────────────────
+  // Keep a display string separate so the user can type freely
+  const [dateInput, setDateInput] = React.useState(date ?? '');
+  const [calOpen, setCalOpen] = React.useState(false);
 
-  // Parse stored "YYYY-MM-DD" → Date for the calendar
-  const selected = date ? new Date(`${date}T12:00:00`) : undefined;
+  // Sync prop → local when parent changes (e.g. edit mode loads defaults)
+  const prevDate = React.useRef(date);
+  if (date !== prevDate.current) {
+    prevDate.current = date;
+    setDateInput(date ?? '');
+  }
 
+  // Parse what the user typed (accepts DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD)
+  function commitDateInput(raw: string) {
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      onDateChange('');
+      return;
+    }
+    // Try common formats
+    const fmts = ['dd/MM/yyyy', 'dd-MM-yyyy', 'yyyy-MM-dd', 'MM/dd/yyyy'];
+    for (const fmt of fmts) {
+      try {
+        const d = parse(trimmed, fmt, new Date());
+        if (isValid(d)) {
+          const iso = format(d, 'yyyy-MM-dd');
+          setDateInput(format(d, 'dd/MM/yyyy')); // normalise display
+          onDateChange(iso);
+          return;
+        }
+      } catch {
+        /* try next */
+      }
+    }
+    // leave as-is so user can keep editing; don't push invalid value
+  }
+
+  function handleCalSelect(day: Date | undefined) {
+    if (!day) return;
+    const iso = format(day, 'yyyy-MM-dd');
+    setDateInput(format(day, 'dd/MM/yyyy'));
+    onDateChange(iso);
+    setCalOpen(false);
+  }
+
+  const calSelected = date
+    ? (() => {
+        const d = new Date(`${date}T12:00:00`);
+        return isValid(d) ? d : undefined;
+      })()
+    : undefined;
+
+  // ── Time field ──────────────────────────────────────────────────────────────
+  const [timeOpen, setTimeOpen] = React.useState(false);
   const [hh, mm] = time ? time.split(':') : ['', ''];
 
-  function handleDaySelect(day: Date | undefined) {
-    if (!day) return;
-    onDateChange(format(day, 'yyyy-MM-dd'));
-    setOpen(false);
-  }
-
-  // Displayed label
-  let dateLabel = 'Pick a date';
-  if (selected && !isNaN(selected.getTime())) {
-    dateLabel = format(selected, 'dd MMM yyyy');
-  }
-
-  let timeLabel = 'Pick time';
-  if (hh && mm) timeLabel = `${hh}:${mm}`;
-
   return (
-    <div className="flex flex-wrap gap-3">
-      {/* Date picker */}
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
+    <div className="flex flex-wrap gap-4">
+      {/* ── Date ─────────────────────────────────────────────── */}
+      <div className="flex flex-col gap-1">
+        <span className="text-muted-foreground text-xs">Date (DD/MM/YYYY)</span>
+        <div className="flex items-center gap-1">
+          <input
             id={id}
-            variant="outline"
+            type="text"
+            inputMode="numeric"
+            placeholder="DD/MM/YYYY"
+            value={dateInput}
+            onChange={(e) => setDateInput(e.target.value)}
+            onBlur={(e) => commitDateInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitDateInput(dateInput);
+            }}
             className={cn(
-              'h-10 w-44 justify-start text-left font-normal',
-              !date && 'text-muted-foreground',
-              dateError && 'border-destructive ring-destructive/20',
+              'border-input bg-background focus-visible:ring-ring h-10 w-36 rounded-md border px-3 text-sm focus-visible:outline-none focus-visible:ring-2',
+              dateError && 'border-destructive focus-visible:ring-destructive/30',
             )}
-          >
-            <CalendarIcon className="mr-2 size-4 shrink-0" />
-            {dateLabel}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
-          <Calendar
-            mode="single"
-            selected={selected}
-            onSelect={handleDaySelect}
-            initialFocus
-            fromDate={new Date()}
           />
-        </PopoverContent>
-      </Popover>
+          <Popover open={calOpen} onOpenChange={setCalOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className={cn('h-10 w-10 shrink-0', dateError && 'border-destructive')}
+                title="Open calendar"
+              >
+                <CalendarIcon className="size-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={calSelected}
+                onSelect={handleCalSelect}
+                initialFocus
+                fromDate={new Date()}
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
+      </div>
 
-      {/* Time picker */}
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
+      {/* ── Time ─────────────────────────────────────────────── */}
+      <div className="flex flex-col gap-1">
+        <span className="text-muted-foreground text-xs">Start time (HH:MM)</span>
+        <div className="flex items-center gap-1">
+          <input
+            type="time"
+            value={time}
+            onChange={(e) => onTimeChange(e.target.value)}
             className={cn(
-              'h-10 w-36 justify-start text-left font-normal',
-              !time && 'text-muted-foreground',
-              timeError && 'border-destructive ring-destructive/20',
+              'border-input bg-background focus-visible:ring-ring h-10 w-32 rounded-md border px-3 text-sm focus-visible:outline-none focus-visible:ring-2',
+              timeError && 'border-destructive focus-visible:ring-destructive/30',
             )}
-          >
-            <Clock className="mr-2 size-4 shrink-0" />
-            {timeLabel}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-52 p-3" align="start">
-          <p className="text-muted-foreground mb-2 text-xs font-medium">Select time</p>
-          <div className="flex gap-2">
-            {/* Hour scroll */}
-            <div className="flex flex-col gap-0.5 overflow-y-auto" style={{ maxHeight: 200 }}>
-              <p className="text-muted-foreground mb-1 text-center text-[10px]">Hour</p>
-              {HOURS.map((h) => (
-                <button
-                  key={h}
-                  type="button"
-                  onClick={() => onTimeChange(`${h}:${mm || '00'}`)}
-                  className={cn(
-                    'rounded px-3 py-1 text-sm tabular-nums transition-colors',
-                    hh === h ? 'bg-primary text-primary-foreground font-medium' : 'hover:bg-accent',
-                  )}
-                >
-                  {h}
-                </button>
-              ))}
-            </div>
-            {/* Minute options */}
-            <div className="flex flex-col gap-0.5">
-              <p className="text-muted-foreground mb-1 text-center text-[10px]">Min</p>
-              {MINUTES.map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => onTimeChange(`${hh || '08'}:${m}`)}
-                  className={cn(
-                    'rounded px-3 py-1 text-sm tabular-nums transition-colors',
-                    mm === m ? 'bg-primary text-primary-foreground font-medium' : 'hover:bg-accent',
-                  )}
-                >
-                  {m}
-                </button>
-              ))}
-            </div>
-          </div>
-          {/* Manual typed input as fallback */}
-          <div className="mt-3 border-t pt-2">
-            <p className="text-muted-foreground mb-1 text-[10px]">Or type (HH:MM)</p>
-            <input
-              type="time"
-              value={time}
-              onChange={(e) => onTimeChange(e.target.value)}
-              className="border-input bg-background focus-visible:ring-ring w-full rounded-md border px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2"
-            />
-          </div>
-        </PopoverContent>
-      </Popover>
+          />
+          <Popover open={timeOpen} onOpenChange={setTimeOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className={cn('h-10 w-10 shrink-0', timeError && 'border-destructive')}
+                title="Pick time"
+              >
+                <Clock className="size-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-48 p-3" align="start">
+              <p className="text-muted-foreground mb-2 text-xs font-medium">Quick select</p>
+              <div className="flex gap-2">
+                {/* Hours */}
+                <div className="flex flex-col gap-0.5 overflow-y-auto" style={{ maxHeight: 200 }}>
+                  <p className="text-muted-foreground mb-1 text-center text-[10px]">Hour</p>
+                  {HOURS.map((h) => (
+                    <button
+                      key={h}
+                      type="button"
+                      onClick={() => {
+                        onTimeChange(`${h}:${mm || '00'}`);
+                      }}
+                      className={cn(
+                        'rounded px-3 py-1 text-sm tabular-nums transition-colors',
+                        hh === h
+                          ? 'bg-primary text-primary-foreground font-medium'
+                          : 'hover:bg-accent',
+                      )}
+                    >
+                      {h}
+                    </button>
+                  ))}
+                </div>
+                {/* Minutes */}
+                <div className="flex flex-col gap-0.5">
+                  <p className="text-muted-foreground mb-1 text-center text-[10px]">Min</p>
+                  {MINUTES.map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => {
+                        onTimeChange(`${hh || '08'}:${m}`);
+                        setTimeOpen(false);
+                      }}
+                      className={cn(
+                        'rounded px-3 py-1 text-sm tabular-nums transition-colors',
+                        mm === m
+                          ? 'bg-primary text-primary-foreground font-medium'
+                          : 'hover:bg-accent',
+                      )}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+      </div>
     </div>
   );
 }
