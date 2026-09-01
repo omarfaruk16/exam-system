@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { DateTimePicker } from '@/components/ui/date-time-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -109,6 +110,7 @@ function ExamForm({
     handleSubmit,
     control,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -265,37 +267,38 @@ function ExamForm({
             />
           </Field>
 
-          <Field label="Exam date" error={errors.examDate?.message} htmlFor="examDate">
-            <Input
+          <div>
+            <Label className="mb-2 block text-sm font-medium">Date &amp; Start time</Label>
+            <DateTimePicker
               id="examDate"
-              type="date"
-              {...register('examDate')}
-              aria-invalid={errors.examDate ? 'true' : 'false'}
+              date={watch('examDate')}
+              time={watch('startTime')}
+              onDateChange={(v) => setValue('examDate', v, { shouldValidate: true })}
+              onTimeChange={(v) => setValue('startTime', v, { shouldValidate: true })}
+              dateError={Boolean(errors.examDate)}
+              timeError={Boolean(errors.startTime)}
+            />
+            {errors.examDate && (
+              <p className="text-destructive mt-1 text-xs">{errors.examDate.message}</p>
+            )}
+            {errors.startTime && (
+              <p className="text-destructive mt-1 text-xs">{errors.startTime.message}</p>
+            )}
+          </div>
+          <Field
+            label="Duration (minutes)"
+            error={errors.durationMinutes?.message}
+            htmlFor="duration"
+          >
+            <Input
+              id="duration"
+              type="number"
+              min={1}
+              className="w-40"
+              {...register('durationMinutes')}
+              aria-invalid={errors.durationMinutes ? 'true' : 'false'}
             />
           </Field>
-          <div className="grid gap-5 sm:grid-cols-2">
-            <Field label="Start time" error={errors.startTime?.message} htmlFor="startTime">
-              <Input
-                id="startTime"
-                type="time"
-                {...register('startTime')}
-                aria-invalid={errors.startTime ? 'true' : 'false'}
-              />
-            </Field>
-            <Field
-              label="Duration (minutes)"
-              error={errors.durationMinutes?.message}
-              htmlFor="duration"
-            >
-              <Input
-                id="duration"
-                type="number"
-                min={1}
-                {...register('durationMinutes')}
-                aria-invalid={errors.durationMinutes ? 'true' : 'false'}
-              />
-            </Field>
-          </div>
           <p className="text-muted-foreground -mt-2 text-xs">
             The exam ends automatically {watch('durationMinutes') || 0} minutes after it starts.
           </p>
