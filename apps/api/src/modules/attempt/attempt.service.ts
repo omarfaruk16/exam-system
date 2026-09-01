@@ -514,4 +514,66 @@ export class AttemptService {
       }),
     }));
   }
+
+  /** The student's current semester info + all courses in it. */
+  async getMyCourses(user: AuthUser) {
+    const student = await this.prisma.db.student.findFirst({
+      where: { userId: user.id, deletedAt: null },
+      select: {
+        id: true,
+        batch: {
+          select: {
+            name: true,
+            currentSemesterId: true,
+            currentSemester: {
+              select: {
+                id: true,
+                number: true,
+                name: true,
+                program: { select: { name: true } },
+                courses: {
+                  where: { deletedAt: null },
+                  select: {
+                    publicId: true,
+                    code: true,
+                    name: true,
+                    parts: {
+                      where: { deletedAt: null },
+                      select: { publicId: true, name: true },
+                      orderBy: { createdAt: 'asc' },
+                    },
+                  },
+                  orderBy: { code: 'asc' },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!student) return { enrolled: false, semester: null, batchName: null, courses: [] };
+
+    const batch = student.batch;
+    if (!batch.currentSemester) {
+      return { enrolled: true, semester: null, batchName: batch.name, courses: [] };
+    }
+
+    const sem = batch.currentSemester;
+    return {
+      enrolled: true,
+      batchName: batch.name,
+      semester: {
+        number: sem.number,
+        name: sem.name ?? `Semester ${sem.number}`,
+        programName: sem.program.name,
+      },
+      courses: sem.courses.map((c) => ({
+        publicId: c.publicId,
+        code: c.code,
+        name: c.name,
+        parts: c.parts,
+      })),
+    };
+  }
 }

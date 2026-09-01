@@ -1,13 +1,23 @@
 import { useQuery } from '@tanstack/react-query';
 import type { MyExamListItem } from '@exam/types';
-import { Award, BookOpen, Clock, Loader2, PenLine } from 'lucide-react';
+import {
+  Award,
+  BookOpen,
+  Clock,
+  GraduationCap,
+  Loader2,
+  PenLine,
+  TriangleAlert,
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { StatusPill } from '../shared/StatusPill';
 import { StartCountdown } from '../shared/ExamCountdown';
 import { useServerNow } from '../shared/useServerNow';
-import { fetchMyExams } from './resultsApi';
+import { fetchMyCourses, fetchMyExams } from './resultsApi';
+import type { MyCourse } from './resultsApi';
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-GB', {
@@ -42,64 +52,28 @@ function groupExams(exams: MyExamListItem[]) {
 export function MyExamsPage() {
   const navigate = useNavigate();
   const nowMs = useServerNow();
-  const { data, isLoading } = useQuery({
+
+  const coursesQuery = useQuery({
+    queryKey: ['my-courses'],
+    queryFn: fetchMyCourses,
+  });
+
+  const examsQuery = useQuery({
     queryKey: ['my-exams'],
     queryFn: fetchMyExams,
-    // Poll so a published→live flip (server scheduler, ~60s) turns the Start
-    // button on without the student needing to refresh.
     refetchInterval: 20_000,
   });
 
+  const isLoading = coursesQuery.isLoading || examsQuery.isLoading;
+  const coursesData = coursesQuery.data;
+  const exams = examsQuery.data ?? [];
+
   if (isLoading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <Loader2 className="text-muted-foreground size-6 animate-spin" />
-      </div>
-    );
-  }
-
-  const exams = data ?? [];
-
-  if (exams.length === 0) {
-    return (
-      <div className="mx-auto w-full max-w-4xl">
-        <header className="mb-8">
-          <h1 className="text-2xl font-semibold tracking-tight">My Exams</h1>
-        </header>
-        <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
-          <svg
-            width="120"
-            height="120"
-            viewBox="0 0 120 120"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            aria-hidden="true"
-          >
-            <rect x="20" y="10" width="80" height="100" rx="6" className="fill-muted" />
-            <rect x="35" y="28" width="50" height="6" rx="3" className="fill-muted-foreground/30" />
-            <rect x="35" y="42" width="40" height="6" rx="3" className="fill-muted-foreground/20" />
-            <rect x="35" y="56" width="45" height="6" rx="3" className="fill-muted-foreground/20" />
-            <rect x="35" y="70" width="30" height="6" rx="3" className="fill-muted-foreground/15" />
-            <circle
-              cx="82"
-              cy="86"
-              r="22"
-              className="fill-background stroke-muted"
-              strokeWidth="2"
-            />
-            <path
-              d="M74 86l6 6 10-10"
-              className="stroke-muted-foreground/40"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          <p className="text-foreground font-medium">No exams yet</p>
-          <p className="text-muted-foreground max-w-xs text-sm">
-            When your teacher publishes an exam for your batch, it will appear here.
-          </p>
-        </div>
+      <div className="mx-auto w-full max-w-4xl space-y-4">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-32 w-full rounded-xl" />
+        <Skeleton className="h-48 w-full rounded-xl" />
       </div>
     );
   }
@@ -107,54 +81,148 @@ export function MyExamsPage() {
   const { upcoming, inProgress, completed } = groupExams(exams);
 
   return (
-    <div className="mx-auto w-full max-w-4xl">
-      <header className="mb-8">
+    <div className="mx-auto w-full max-w-4xl space-y-8">
+      {/* ── Header ── */}
+      <header>
         <h1 className="text-2xl font-semibold tracking-tight">My Exams</h1>
-        <p className="text-muted-foreground mt-1 text-sm">All exams for your enrolled courses.</p>
+        {coursesData?.semester && (
+          <p className="text-muted-foreground mt-1 text-sm">
+            {coursesData.semester.programName} · {coursesData.semester.name}
+            {coursesData.batchName && (
+              <span className="ml-2 opacity-70">({coursesData.batchName})</span>
+            )}
+          </p>
+        )}
       </header>
 
-      <div className="space-y-8">
-        {inProgress.length > 0 && (
-          <Section title="In Progress">
-            {inProgress.map((e) => (
-              <ExamCard
-                key={e.examPublicId}
-                exam={e}
-                nowMs={nowMs}
-                onAction={() => navigate(`/exam/${e.examPublicId}`)}
-              />
+      {/* ── No enrollment warning ── */}
+      {coursesData && !coursesData.enrolled && (
+        <Card className="flex items-start gap-3 border-amber-400/40 bg-amber-50 p-4 dark:bg-amber-950/20">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600" />
+          <p className="text-sm text-amber-800 dark:text-amber-300">
+            Your account is not linked to a student batch yet. Ask an admin to enrol you.
+          </p>
+        </Card>
+      )}
+
+      {/* ── No semester set warning ── */}
+      {coursesData?.enrolled && !coursesData.semester && (
+        <Card className="flex items-start gap-3 border-amber-400/40 bg-amber-50 p-4 dark:bg-amber-950/20">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600" />
+          <p className="text-sm text-amber-800 dark:text-amber-300">
+            Your batch has no active semester set. Contact your admin to advance the batch to the
+            correct semester — exams will appear here once that is done.
+          </p>
+        </Card>
+      )}
+
+      {/* ── Running Courses ── */}
+      {coursesData?.courses && coursesData.courses.length > 0 && (
+        <section>
+          <h2 className="text-muted-foreground mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide">
+            <GraduationCap className="size-3.5" />
+            Running Courses — {coursesData.semester?.name}
+          </h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {coursesData.courses.map((c) => (
+              <CourseCard key={c.publicId} course={c} />
             ))}
-          </Section>
-        )}
-        {upcoming.length > 0 && (
-          <Section title="Upcoming">
-            {upcoming.map((e) => (
-              <ExamCard key={e.examPublicId} exam={e} nowMs={nowMs} />
-            ))}
-          </Section>
-        )}
-        {completed.length > 0 && (
-          <Section title="Completed">
-            {completed.map((e) => (
-              <ExamCard
-                key={e.examPublicId}
-                exam={e}
-                nowMs={nowMs}
-                onAction={
-                  e.attempt && e.status === 'results_published' && e.showMarksAfterSubmit
-                    ? () => navigate(`/results/${e.attempt!.publicId}`)
-                    : undefined
-                }
-              />
-            ))}
-          </Section>
-        )}
-      </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── Exams ── */}
+      {coursesData?.semester && exams.length === 0 ? (
+        <section>
+          <h2 className="text-muted-foreground mb-3 text-xs font-semibold uppercase tracking-wide">
+            Exams
+          </h2>
+          <Card className="flex flex-col items-center gap-2 py-14 text-center">
+            <BookOpen className="text-muted-foreground size-8" />
+            <p className="font-medium">No exams yet</p>
+            <p className="text-muted-foreground max-w-xs text-sm">
+              When your teacher publishes an exam for your batch, it will appear here.
+            </p>
+          </Card>
+        </section>
+      ) : (
+        <div className="space-y-8">
+          {inProgress.length > 0 && (
+            <ExamSection title="In Progress">
+              {inProgress.map((e) => (
+                <ExamCard
+                  key={e.examPublicId}
+                  exam={e}
+                  nowMs={nowMs}
+                  onAction={() => navigate(`/exam/${e.examPublicId}`)}
+                />
+              ))}
+            </ExamSection>
+          )}
+          {upcoming.length > 0 && (
+            <ExamSection title="Upcoming">
+              {upcoming.map((e) => (
+                <ExamCard key={e.examPublicId} exam={e} nowMs={nowMs} />
+              ))}
+            </ExamSection>
+          )}
+          {completed.length > 0 && (
+            <ExamSection title="Completed">
+              {completed.map((e) => (
+                <ExamCard
+                  key={e.examPublicId}
+                  exam={e}
+                  nowMs={nowMs}
+                  onAction={
+                    e.attempt && e.status === 'results_published' && e.showMarksAfterSubmit
+                      ? () => navigate(`/results/${e.attempt!.publicId}`)
+                      : undefined
+                  }
+                />
+              ))}
+            </ExamSection>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+// ── Course card ───────────────────────────────────────────────────────────────
+
+function CourseCard({ course }: { course: MyCourse }) {
+  return (
+    <Card className="flex flex-col gap-2 p-4">
+      <div className="flex items-start gap-2">
+        <div className="bg-primary/10 text-primary flex size-8 shrink-0 items-center justify-center rounded-md">
+          <BookOpen className="size-4" />
+        </div>
+        <div className="min-w-0">
+          <p className="font-mono text-[11px] font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+            {course.code}
+          </p>
+          <p className="truncate text-sm font-medium">{course.name}</p>
+        </div>
+      </div>
+      {course.parts.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 pl-10">
+          {course.parts.map((p) => (
+            <span
+              key={p.publicId}
+              className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-[11px]"
+            >
+              {p.name}
+            </span>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ── Exam section + card ───────────────────────────────────────────────────────
+
+function ExamSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-3">
       <h2 className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">
@@ -196,8 +264,6 @@ function ExamCard({
     return 'awaiting-release';
   })();
 
-  // The Start button is only ever active while the exam is live (the server
-  // rejects a start attempt otherwise). Upcoming exams show it disabled.
   const canStart = isLive && !submitted && Boolean(onAction);
   const showStartDisabled = isUpcoming;
   const showResult = completionState === 'results-available' && Boolean(onAction);
@@ -224,7 +290,6 @@ function ExamCard({
           </span>
         </div>
 
-        {/* Upcoming: a live countdown to the start time (amber < 5 min, red < 1 min) */}
         {isUpcoming && (
           <div className="mt-3 text-sm">
             {beforeStart ? (
@@ -238,7 +303,6 @@ function ExamCard({
           </div>
         )}
 
-        {/* Live: reassure the student they can begin now */}
         {isLive && !submitted && (
           <p className="text-success mt-3 flex items-center gap-1.5 text-sm font-medium">
             <Clock className="size-3.5" />
@@ -246,7 +310,6 @@ function ExamCard({
           </p>
         )}
 
-        {/* Completion state messaging */}
         <div className="mt-3">
           {completionState === 'did-not-attempt' && (
             <p className="text-muted-foreground text-sm italic">You did not attempt this exam.</p>

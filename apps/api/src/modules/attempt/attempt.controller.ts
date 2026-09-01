@@ -33,6 +33,12 @@ export class AttemptController {
   }
 
   @Roles('student')
+  @Get('me/courses')
+  myCourses(@CurrentUser() u: AuthUser) {
+    return this.attempts.getMyCourses(u);
+  }
+
+  @Roles('student')
   @Post('exams/:examPublicId/start')
   @HttpCode(200)
   start(@CurrentUser() u: AuthUser, @Ip() ip: string, @Param('examPublicId') examPublicId: string) {

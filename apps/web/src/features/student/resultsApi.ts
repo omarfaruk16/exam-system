@@ -1,6 +1,27 @@
 import type { AttemptResult, MyExamListItem, StudentSemesterResult } from '@exam/types';
 import { api } from '@/lib/api';
 
+export interface MyCoursesPart {
+  publicId: string;
+  name: string;
+}
+export interface MyCourse {
+  publicId: string;
+  code: string;
+  name: string;
+  parts: MyCoursesPart[];
+}
+export interface MyCoursesData {
+  enrolled: boolean;
+  batchName: string | null;
+  semester: { number: number; name: string; programName: string } | null;
+  courses: MyCourse[];
+}
+
+export function fetchMyCourses(): Promise<MyCoursesData> {
+  return api.get('/me/courses');
+}
+
 export function fetchMyExams(): Promise<MyExamListItem[]> {
   return api.get('/me/exams');
 }
