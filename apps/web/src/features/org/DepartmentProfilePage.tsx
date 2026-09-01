@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Batch, Department, Program, Semester } from '@exam/types';
+import type { Batch, CoursePart, Department, Program, Semester } from '@exam/types';
 import {
   BookOpen,
   Check,
@@ -20,7 +20,7 @@ import {
   UserPlus,
   Users,
 } from 'lucide-react';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -41,31 +41,43 @@ import { cn } from '@/lib/utils';
 import { fetchDeptBankSummary, fetchDeptExams } from '../authoring/authoringApi';
 import {
   assignBatchSemester,
+  assignTeacher,
   createBatch,
   createCourse,
+  createCoursePart,
   createProgram,
   createSemester,
   createStudent,
   createTeacher,
   deleteBatch,
+  deleteCourse,
+  deleteCoursePart,
   deleteDepartment,
+  deleteProgram,
   deleteSemester,
   deleteStudent,
   downloadExport,
   fetchBatches,
+  fetchCourseParts,
   fetchCourses,
   fetchDepartments,
   fetchPrograms,
   fetchSemesters,
   fetchStudents,
+  fetchTeacherAssignments,
   deleteTeacher,
   fetchTeachersAdmin,
   updateBatch,
+  updateCourse,
+  updateCoursePart,
   updateDepartment,
+  updateProgram,
   updateSemester,
   updateStudent,
   updateTeacher,
+  type TeacherAssignment,
 } from './orgApi';
+import { TeacherSelector } from './TeacherSelector';
 import { ImportModal } from './ImportModal';
 import { DEGREE_TYPES } from './orgLevelConfig';
 
@@ -190,7 +202,7 @@ export function DepartmentProfilePage() {
       <div className="mt-5">
         {tab === 'info' && <InfoTab dept={dept} />}
         {tab === 'degrees' && <DegreesTab deptPublicId={dept.publicId} programs={programs} />}
-        {tab === 'courses' && <CoursesTab programs={programs} />}
+        {tab === 'courses' && <CoursesTab programs={programs} deptPublicId={dept.publicId} />}
         {tab === 'batches' && <BatchesTab programs={programs} batches={deptBatches} />}
         {tab === 'enrollments' && <EnrollmentsTab batches={deptBatches} />}
         {tab === 'students' && <StudentsTab batches={deptBatches} />}
@@ -422,18 +434,12 @@ function DegreesTab({ deptPublicId, programs }: { deptPublicId: string; programs
       ) : (
         <ul className="divide-y">
           {programs.map((p) => (
-            <li key={p.publicId} className="flex items-center justify-between py-3">
-              <div>
-                <p className="font-medium">{p.name}</p>
-                <p className="text-muted-foreground text-xs capitalize">
-                  {p.degreeType} · {p.durationYears} year{p.durationYears === 1 ? '' : 's'}
-                </p>
-              </div>
-              <span className="text-muted-foreground text-xs">
-                {p._count.semesters} semester{p._count.semesters === 1 ? '' : 's'} ·{' '}
-                {p._count.batches} batch{p._count.batches === 1 ? '' : 'es'}
-              </span>
-            </li>
+            <ProgramRow
+              key={p.publicId}
+              program={p}
+              deptPublicId={deptPublicId}
+              canManage={canManage}
+            />
           ))}
         </ul>
       )}
@@ -441,8 +447,173 @@ function DegreesTab({ deptPublicId, programs }: { deptPublicId: string; programs
   );
 }
 
+function ProgramRow({
+  program,
+  deptPublicId,
+  canManage,
+}: {
+  program: Program;
+  deptPublicId: string;
+  canManage: boolean;
+}) {
+  const qc = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(program.name);
+  const [degreeType, setDegreeType] = useState(program.degreeType);
+  const [duration, setDuration] = useState(String(program.durationYears));
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const save = useMutation({
+    mutationFn: () =>
+      updateProgram(program.publicId, {
+        name: name.trim(),
+        degreeType,
+        durationYears: Number(duration),
+      }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['org-programs', deptPublicId] });
+      toast.success('Degree updated');
+      setEditing(false);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not update degree'),
+  });
+
+  const remove = useMutation({
+    mutationFn: () => deleteProgram(program.publicId),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['org-programs', deptPublicId] });
+      toast.success('Degree deleted');
+      setConfirmDelete(false);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not delete degree'),
+  });
+
+  if (editing) {
+    return (
+      <li className="py-3">
+        <form
+          className="grid gap-2 sm:grid-cols-[1fr_auto_auto_auto]"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (name.trim()) save.mutate();
+          }}
+        >
+          <Input value={name} onChange={(e) => setName(e.target.value)} className="h-9" autoFocus />
+          <select
+            value={degreeType}
+            onChange={(e) => setDegreeType(e.target.value)}
+            className="border-input bg-card h-9 rounded-md border px-2 text-sm capitalize"
+          >
+            {DEGREE_TYPES.map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </select>
+          <Input
+            type="number"
+            min={1}
+            max={12}
+            value={duration}
+            onChange={(e) => setDuration(e.target.value)}
+            className="h-9 w-20"
+          />
+          <div className="flex gap-1">
+            <Button type="submit" size="sm" className="h-9" disabled={save.isPending}>
+              {save.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Check className="size-4" />
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-9"
+              onClick={() => {
+                setEditing(false);
+                setName(program.name);
+                setDegreeType(program.degreeType);
+                setDuration(String(program.durationYears));
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </form>
+      </li>
+    );
+  }
+
+  return (
+    <li className="flex items-center justify-between gap-2 py-3">
+      <div className="min-w-0">
+        <p className="font-medium">{program.name}</p>
+        <p className="text-muted-foreground text-xs capitalize">
+          {program.degreeType} · {program.durationYears} year
+          {program.durationYears === 1 ? '' : 's'}
+        </p>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="text-muted-foreground hidden text-xs sm:inline">
+          {program._count.semesters} semester{program._count.semesters === 1 ? '' : 's'} ·{' '}
+          {program._count.batches} session{program._count.batches === 1 ? '' : 's'}
+        </span>
+        {canManage && (
+          <>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8"
+              onClick={() => setEditing(true)}
+              title="Edit degree"
+            >
+              <Pencil className="size-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-destructive hover:bg-destructive/10 size-8"
+              onClick={() => setConfirmDelete(true)}
+              title="Delete degree"
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          </>
+        )}
+      </div>
+
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete “{program.name}”?</DialogTitle>
+            <DialogDescription>
+              This degree, its {program._count.semesters} semester
+              {program._count.semesters === 1 ? '' : 's'} and {program._count.batches} session
+              {program._count.batches === 1 ? '' : 's'} will be removed (soft delete).
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDelete(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => remove.mutate()}
+              disabled={remove.isPending}
+            >
+              {remove.isPending && <Loader2 className="size-4 animate-spin" />} Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </li>
+  );
+}
+
 // ─────────────────────────── Syllabus & Courses ───────────────────────────
-function CoursesTab({ programs }: { programs: Program[] }) {
+function CoursesTab({ programs, deptPublicId }: { programs: Program[]; deptPublicId: string }) {
   const [programId, setProgramId] = useState(programs[0]?.publicId ?? '');
   const active = programs.find((p) => p.publicId === programId) ?? programs[0];
 
@@ -474,12 +645,18 @@ function CoursesTab({ programs }: { programs: Program[] }) {
           ) : undefined
         }
       />
-      {active && <SemesterList programPublicId={active.publicId} />}
+      {active && <SemesterList programPublicId={active.publicId} deptPublicId={deptPublicId} />}
     </Card>
   );
 }
 
-function SemesterList({ programPublicId }: { programPublicId: string }) {
+function SemesterList({
+  programPublicId,
+  deptPublicId,
+}: {
+  programPublicId: string;
+  deptPublicId: string;
+}) {
   const qc = useQueryClient();
   const canManage = useCanManage();
   const [name, setName] = useState('');
@@ -530,7 +707,7 @@ function SemesterList({ programPublicId }: { programPublicId: string }) {
       ) : (
         <div className="space-y-3">
           {semesters.map((s) => (
-            <SemesterCourses key={s.publicId} semester={s} />
+            <SemesterCourses key={s.publicId} semester={s} deptPublicId={deptPublicId} />
           ))}
         </div>
       )}
@@ -538,7 +715,7 @@ function SemesterList({ programPublicId }: { programPublicId: string }) {
   );
 }
 
-function SemesterCourses({ semester }: { semester: Semester }) {
+function SemesterCourses({ semester, deptPublicId }: { semester: Semester; deptPublicId: string }) {
   const qc = useQueryClient();
   const canManage = useCanManage();
   const [open, setOpen] = useState(false);
@@ -709,14 +886,15 @@ function SemesterCourses({ semester }: { semester: Semester }) {
           ) : courses.length === 0 ? (
             <p className="text-muted-foreground mb-3 text-sm">No courses yet.</p>
           ) : (
-            <ul className="mb-3 divide-y">
+            <ul className="mb-3 space-y-2">
               {courses.map((c) => (
-                <li key={c.publicId} className="flex items-center justify-between py-2 text-sm">
-                  <span>
-                    <span className="font-mono text-xs">{c.code}</span> — {c.name}
-                  </span>
-                  <span className="text-muted-foreground text-xs">{c.credit} cr</span>
-                </li>
+                <CourseRow
+                  key={c.publicId}
+                  course={c}
+                  semesterPublicId={semester.publicId}
+                  deptPublicId={deptPublicId}
+                  canManage={canManage}
+                />
               ))}
             </ul>
           )}
@@ -760,6 +938,471 @@ function SemesterCourses({ semester }: { semester: Semester }) {
         </div>
       )}
     </div>
+  );
+}
+
+// ── A single course: inline edit/delete + expandable parts & teacher assignment ──
+function CourseRow({
+  course,
+  semesterPublicId,
+  deptPublicId,
+  canManage,
+}: {
+  course: import('@exam/types').Course;
+  semesterPublicId: string;
+  deptPublicId: string;
+  canManage: boolean;
+}) {
+  const qc = useQueryClient();
+  const [expanded, setExpanded] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [code, setCode] = useState(course.code);
+  const [name, setName] = useState(course.name);
+  const [credit, setCredit] = useState(String(course.credit));
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const save = useMutation({
+    mutationFn: () =>
+      updateCourse(course.publicId, {
+        code: code.trim(),
+        name: name.trim(),
+        credit: Number(credit),
+      }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['org-courses', semesterPublicId] });
+      toast.success('Course updated');
+      setEditing(false);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not update course'),
+  });
+
+  const remove = useMutation({
+    mutationFn: () => deleteCourse(course.publicId),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['org-courses', semesterPublicId] });
+      toast.success('Course deleted');
+      setConfirmDelete(false);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not delete course'),
+  });
+
+  return (
+    <li className="rounded-md border">
+      {editing ? (
+        <form
+          className="flex flex-wrap items-center gap-2 p-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (code.trim() && name.trim()) save.mutate();
+          }}
+        >
+          <Input
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder="Code"
+            className="h-8 w-28"
+            autoFocus
+          />
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Course name"
+            className="h-8 flex-1"
+          />
+          <Input
+            type="number"
+            min={0}
+            value={credit}
+            onChange={(e) => setCredit(e.target.value)}
+            className="h-8 w-16"
+          />
+          <Button type="submit" size="sm" className="h-8" disabled={save.isPending}>
+            {save.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Check className="size-4" />
+            )}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8"
+            onClick={() => {
+              setEditing(false);
+              setCode(course.code);
+              setName(course.name);
+              setCredit(String(course.credit));
+            }}
+          >
+            Cancel
+          </Button>
+        </form>
+      ) : (
+        <div className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+          <button
+            type="button"
+            className="flex min-w-0 flex-1 items-center gap-2 text-left"
+            onClick={() => setExpanded((v) => !v)}
+          >
+            {expanded ? (
+              <ChevronUp className="text-muted-foreground size-4 shrink-0" />
+            ) : (
+              <ChevronDown className="text-muted-foreground size-4 shrink-0" />
+            )}
+            <span className="truncate">
+              <span className="font-mono text-xs">{course.code}</span> — {course.name}
+            </span>
+          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            <span className="text-muted-foreground mr-1 text-xs">
+              {course.credit} cr · {course._count.parts} part
+              {course._count.parts === 1 ? '' : 's'}
+            </span>
+            {canManage && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  onClick={() => setEditing(true)}
+                  title="Edit course"
+                >
+                  <Pencil className="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-destructive hover:bg-destructive/10 size-7"
+                  onClick={() => setConfirmDelete(true)}
+                  title="Delete course"
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {expanded && !editing && (
+        <CoursePartsPanel
+          coursePublicId={course.publicId}
+          deptPublicId={deptPublicId}
+          semesterPublicId={semesterPublicId}
+          canManage={canManage}
+        />
+      )}
+
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete “{course.code}”?</DialogTitle>
+            <DialogDescription>
+              {course.code} — {course.name} and its {course._count.parts} part
+              {course._count.parts === 1 ? '' : 's'} (with any question banks and exams) will be
+              removed (soft delete).
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDelete(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => remove.mutate()}
+              disabled={remove.isPending}
+            >
+              {remove.isPending && <Loader2 className="size-4 animate-spin" />} Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </li>
+  );
+}
+
+// ── Parts of a course + per-part teacher assignment ──
+function CoursePartsPanel({
+  coursePublicId,
+  deptPublicId,
+  semesterPublicId,
+  canManage,
+}: {
+  coursePublicId: string;
+  deptPublicId: string;
+  semesterPublicId: string;
+  canManage: boolean;
+}) {
+  const qc = useQueryClient();
+  const [newPart, setNewPart] = useState('');
+  const [weight, setWeight] = useState('100');
+
+  const partsQuery = useQuery({
+    queryKey: ['org-course-parts', coursePublicId],
+    queryFn: () => fetchCourseParts(coursePublicId),
+  });
+  const parts = partsQuery.data ?? [];
+
+  const invalidate = async () => {
+    await qc.invalidateQueries({ queryKey: ['org-course-parts', coursePublicId] });
+    await qc.invalidateQueries({ queryKey: ['org-courses', semesterPublicId] });
+  };
+
+  const create = useMutation({
+    mutationFn: () =>
+      createCoursePart({
+        coursePublicId,
+        name: newPart.trim(),
+        marksWeight: Number(weight),
+      }),
+    onSuccess: async () => {
+      await invalidate();
+      toast.success('Part added');
+      setNewPart('');
+      setWeight('100');
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not add part'),
+  });
+
+  return (
+    <div className="bg-muted/30 space-y-2 border-t px-3 py-3">
+      <p className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">
+        Parts &amp; assigned teachers
+      </p>
+      {partsQuery.isLoading ? (
+        <Skeleton className="h-10 w-full" />
+      ) : parts.length === 0 ? (
+        <p className="text-muted-foreground text-sm">No parts yet. Add one below.</p>
+      ) : (
+        <ul className="space-y-2">
+          {parts.map((p) => (
+            <PartRow
+              key={p.publicId}
+              part={p}
+              deptPublicId={deptPublicId}
+              onChanged={invalidate}
+              canManage={canManage}
+            />
+          ))}
+        </ul>
+      )}
+
+      {canManage && (
+        <form
+          className="flex flex-wrap items-center gap-2 pt-1"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (newPart.trim()) create.mutate();
+          }}
+        >
+          <Input
+            value={newPart}
+            onChange={(e) => setNewPart(e.target.value)}
+            placeholder="Part name, e.g. Theory / Lab"
+            className="h-8 flex-1"
+          />
+          <Input
+            type="number"
+            min={0}
+            max={100}
+            value={weight}
+            onChange={(e) => setWeight(e.target.value)}
+            className="h-8 w-20"
+            title="Marks weight (%)"
+          />
+          <Button type="submit" size="sm" className="h-8" disabled={create.isPending}>
+            {create.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Plus className="size-4" />
+            )}{' '}
+            Part
+          </Button>
+        </form>
+      )}
+    </div>
+  );
+}
+
+function PartRow({
+  part,
+  deptPublicId,
+  onChanged,
+  canManage,
+}: {
+  part: CoursePart;
+  deptPublicId: string;
+  onChanged: () => Promise<void>;
+  canManage: boolean;
+}) {
+  const [assigning, setAssigning] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(part.name);
+  const [weight, setWeight] = useState(String(part.marksWeight));
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const assign = useMutation({
+    mutationFn: (teacherPublicId: string | null) => assignTeacher(part.publicId, teacherPublicId),
+    onSuccess: async () => {
+      await onChanged();
+      toast.success('Teacher assignment updated');
+      setAssigning(false);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not assign teacher'),
+  });
+
+  const save = useMutation({
+    mutationFn: () =>
+      updateCoursePart(part.publicId, { name: name.trim(), marksWeight: Number(weight) }),
+    onSuccess: async () => {
+      await onChanged();
+      toast.success('Part updated');
+      setEditing(false);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not update part'),
+  });
+
+  const remove = useMutation({
+    mutationFn: () => deleteCoursePart(part.publicId),
+    onSuccess: async () => {
+      await onChanged();
+      toast.success('Part deleted');
+      setConfirmDelete(false);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not delete part'),
+  });
+
+  return (
+    <li className="bg-card rounded-md border p-2.5">
+      {editing ? (
+        <form
+          className="flex flex-wrap items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (name.trim()) save.mutate();
+          }}
+        >
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="h-8 flex-1"
+            autoFocus
+          />
+          <Input
+            type="number"
+            min={0}
+            max={100}
+            value={weight}
+            onChange={(e) => setWeight(e.target.value)}
+            className="h-8 w-20"
+          />
+          <Button type="submit" size="sm" className="h-8" disabled={save.isPending}>
+            {save.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Check className="size-4" />
+            )}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8"
+            onClick={() => {
+              setEditing(false);
+              setName(part.name);
+              setWeight(String(part.marksWeight));
+            }}
+          >
+            Cancel
+          </Button>
+        </form>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-sm font-medium">
+              {part.name}{' '}
+              <span className="text-muted-foreground text-xs font-normal">
+                · {part.marksWeight}% · {part._count.exams} exam
+                {part._count.exams === 1 ? '' : 's'}
+              </span>
+            </p>
+            <p className="text-muted-foreground mt-0.5 flex items-center gap-1 text-xs">
+              <UserCog className="size-3" />
+              {part.assignedTeacher
+                ? `${part.assignedTeacher.user.displayName}${part.assignedTeacher.designation ? ` · ${part.assignedTeacher.designation}` : ''}`
+                : 'No teacher assigned'}
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            {canManage && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7"
+                  onClick={() => setAssigning((v) => !v)}
+                >
+                  <UserCog className="size-3.5" /> {part.assignedTeacher ? 'Change' : 'Assign'}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  onClick={() => setEditing(true)}
+                  title="Edit part"
+                >
+                  <Pencil className="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-destructive hover:bg-destructive/10 size-7"
+                  onClick={() => setConfirmDelete(true)}
+                  title="Delete part"
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {assigning && canManage && (
+        <TeacherSelector
+          departmentPublicId={deptPublicId}
+          currentTeacherPublicId={part.assignedTeacher?.publicId ?? null}
+          pending={assign.isPending}
+          onPick={(teacherPublicId) => assign.mutate(teacherPublicId)}
+        />
+      )}
+
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete part “{part.name}”?</DialogTitle>
+            <DialogDescription>
+              This part{part._count.exams > 0 ? `, its ${part._count.exams} exam(s)` : ''} and any
+              question banks will be removed (soft delete).
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDelete(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => remove.mutate()}
+              disabled={remove.isPending}
+            >
+              {remove.isPending && <Loader2 className="size-4 animate-spin" />} Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </li>
   );
 }
 
@@ -1899,6 +2542,7 @@ function TeachersTab({ deptPublicId, deptName }: { deptPublicId: string; deptNam
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmBulk, setConfirmBulk] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
@@ -2148,44 +2792,69 @@ function TeachersTab({ deptPublicId, deptName }: { deptPublicId: string; deptNam
                     onDone={() => setEditingId(null)}
                   />
                 ) : (
-                  <tr key={t.publicId} className="border-b last:border-0">
-                    {canManage && (
-                      <td className="py-2.5 pr-3">
+                  <Fragment key={t.publicId}>
+                    <tr className="border-b last:border-0">
+                      {canManage && (
+                        <td className="py-2.5 pr-3">
+                          <button
+                            type="button"
+                            onClick={() => toggleSelect(t.publicId)}
+                            className={`flex size-4 items-center justify-center rounded border ${selected.has(t.publicId) ? 'bg-primary border-primary text-primary-foreground' : 'border-input'}`}
+                          >
+                            {selected.has(t.publicId) && <Check className="size-3" />}
+                          </button>
+                        </td>
+                      )}
+                      <td className="py-2.5 pr-3 font-medium">
                         <button
                           type="button"
-                          onClick={() => toggleSelect(t.publicId)}
-                          className={`flex size-4 items-center justify-center rounded border ${selected.has(t.publicId) ? 'bg-primary border-primary text-primary-foreground' : 'border-input'}`}
+                          className="hover:text-primary inline-flex items-center gap-1.5 text-left"
+                          onClick={() =>
+                            setExpandedId((id) => (id === t.publicId ? null : t.publicId))
+                          }
+                          title="Show assigned courses"
                         >
-                          {selected.has(t.publicId) && <Check className="size-3" />}
+                          {expandedId === t.publicId ? (
+                            <ChevronUp className="text-muted-foreground size-3.5" />
+                          ) : (
+                            <ChevronDown className="text-muted-foreground size-3.5" />
+                          )}
+                          {t.user.displayName}
                         </button>
                       </td>
+                      <td className="text-muted-foreground py-2.5 pr-3">{t.user.email ?? '—'}</td>
+                      <td className="text-muted-foreground py-2.5 pr-3">{t.designation ?? '—'}</td>
+                      {canManage && (
+                        <td className="py-2.5">
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-1.5"
+                              onClick={() => setEditingId(t.publicId)}
+                            >
+                              <Pencil className="size-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive hover:bg-destructive/10 h-7 px-1.5"
+                              onClick={() => setConfirmDeleteId(t.publicId)}
+                            >
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                    {expandedId === t.publicId && (
+                      <tr>
+                        <td colSpan={canManage ? 5 : 3} className="pb-3">
+                          <TeacherAssignmentsView teacherPublicId={t.publicId} />
+                        </td>
+                      </tr>
                     )}
-                    <td className="py-2.5 pr-3 font-medium">{t.user.displayName}</td>
-                    <td className="text-muted-foreground py-2.5 pr-3">{t.user.email ?? '—'}</td>
-                    <td className="text-muted-foreground py-2.5 pr-3">{t.designation ?? '—'}</td>
-                    {canManage && (
-                      <td className="py-2.5">
-                        <div className="flex gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 px-1.5"
-                            onClick={() => setEditingId(t.publicId)}
-                          >
-                            <Pencil className="size-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-destructive hover:bg-destructive/10 h-7 px-1.5"
-                            onClick={() => setConfirmDeleteId(t.publicId)}
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
-                        </div>
-                      </td>
-                    )}
-                  </tr>
+                  </Fragment>
                 ),
               )}
             </tbody>
@@ -2202,6 +2871,47 @@ function TeachersTab({ deptPublicId, deptName }: { deptPublicId: string; deptNam
         }}
       />
     </Card>
+  );
+}
+
+// The course parts a teacher is assigned to — shown when a teacher row is expanded.
+function TeacherAssignmentsView({ teacherPublicId }: { teacherPublicId: string }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['org-teacher-assignments', teacherPublicId],
+    queryFn: () => fetchTeacherAssignments(teacherPublicId),
+  });
+  const assignments: TeacherAssignment[] = data ?? [];
+
+  return (
+    <div className="bg-muted/40 rounded-md border p-3">
+      <p className="text-muted-foreground mb-2 text-xs font-semibold uppercase tracking-wide">
+        Assigned courses
+      </p>
+      {isLoading ? (
+        <Skeleton className="h-8 w-full" />
+      ) : assignments.length === 0 ? (
+        <p className="text-muted-foreground text-sm">
+          Not assigned to any course parts yet. Assign from Syllabus &amp; Courses.
+        </p>
+      ) : (
+        <ul className="space-y-1.5">
+          {assignments.map((a) => (
+            <li
+              key={a.publicId}
+              className="flex flex-wrap items-center justify-between gap-2 text-sm"
+            >
+              <span>
+                <span className="font-mono text-xs">{a.courseCode}</span> — {a.courseName}
+                <span className="text-muted-foreground"> · {a.name}</span>
+              </span>
+              <span className="text-muted-foreground text-xs">
+                {a.semesterLabel} · {a.examCount} exam{a.examCount === 1 ? '' : 's'}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

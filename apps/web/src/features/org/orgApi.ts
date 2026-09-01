@@ -107,6 +107,18 @@ export const deleteTeacher = (id: string) => api.del(`/org/teachers/${id}`);
 export const fetchTeachersSelector = (department: string) =>
   api.get<TeacherOption[]>(`/org/teachers/selector${qs({ department })}`);
 
+// ── A teacher's course-part assignments (teaching load) ──
+export interface TeacherAssignment {
+  publicId: string;
+  name: string;
+  courseCode: string;
+  courseName: string;
+  semesterLabel: string;
+  examCount: number;
+}
+export const fetchTeacherAssignments = (teacherPublicId: string) =>
+  api.get<TeacherAssignment[]>(`/org/teachers/${teacherPublicId}/assignments`);
+
 // ── Teacher / student Excel export (browser download) ──
 export async function downloadExport(path: string, filename: string) {
   const res = await fetch(`/api/v1${path}`, { credentials: 'include' });

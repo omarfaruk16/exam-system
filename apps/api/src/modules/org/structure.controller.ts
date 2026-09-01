@@ -324,6 +324,13 @@ export class StructureController {
     return this.svc.listTeachers(u, department);
   }
 
+  // A teacher's course-part assignments (their teaching load).
+  @Roles('super_admin', 'admin', 'department_head')
+  @Get('teachers/:publicId/assignments')
+  teacherAssignments(@CurrentUser() u: AuthUser, @Param('publicId') id: string) {
+    return this.svc.listTeacherAssignments(u, id);
+  }
+
   // Assign the semester a batch currently sits in (advance it as the batch progresses).
   @Put('batches/:publicId/semester')
   assignBatchSemester(

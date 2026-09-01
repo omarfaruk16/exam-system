@@ -676,6 +676,42 @@ export class StructureService {
     }));
   }
 
+  /** The course parts a given teacher is assigned to (their teaching load). */
+  async listTeacherAssignments(actor: AuthUser, teacherPublicId: string) {
+    const teacher = await this.prisma.db.teacher.findFirst({
+      where: { publicId: teacherPublicId },
+      select: { id: true, departmentId: true, department: { select: { facultyId: true } } },
+    });
+    if (!teacher) throw new NotFoundException('Teacher not found');
+    this.acl.assertDepartment(actor, teacher.departmentId, teacher.department.facultyId);
+
+    const parts = await this.prisma.db.coursePart.findMany({
+      where: { assignedTeacherId: teacher.id, deletedAt: null },
+      select: {
+        publicId: true,
+        name: true,
+        course: {
+          select: {
+            code: true,
+            name: true,
+            semester: { select: { number: true, name: true } },
+          },
+        },
+        _count: { select: { exams: { where: { deletedAt: null } } } },
+      },
+      orderBy: [{ course: { code: 'asc' } }, { name: 'asc' }],
+    });
+
+    return parts.map((p) => ({
+      publicId: p.publicId,
+      name: p.name,
+      courseCode: p.course.code,
+      courseName: p.course.name,
+      semesterLabel: p.course.semester.name ?? `Semester ${p.course.semester.number}`,
+      examCount: p._count.exams,
+    }));
+  }
+
   /** Admin teacher list — all teachers, optionally filtered by department. */
   async listTeachersAdmin(actor: AuthUser, departmentPublicId?: string) {
     const scope = this.deptScopeId(actor);
