@@ -86,3 +86,41 @@ export interface CreateQuestionInput {
 
 export const createQuestion = (input: CreateQuestionInput) =>
   api.post<BankQuestion>('/questions', input);
+
+/** Download all questions in a chapter as an xlsx file and trigger browser save. */
+export async function downloadExport(bankPublicId: string, chapterName: string): Promise<void> {
+  const { blob, filename } = await api.blob(
+    `/questions/export?bank=${encodeURIComponent(bankPublicId)}`,
+  );
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename || `${chapterName.replace(/[^a-z0-9]/gi, '_')}_questions.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/** Download the blank question template xlsx. */
+export async function downloadTemplate(): Promise<void> {
+  const { blob, filename } = await api.blob('/questions/template');
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename || 'question_template.xlsx';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/** Upload an xlsx file to import questions into a chapter. */
+export const importQuestions = (bankPublicId: string, file: File): Promise<{ jobId: string }> => {
+  const form = new FormData();
+  form.append('file', file);
+  return api.upload<{ jobId: string }>(
+    `/questions/import?bank=${encodeURIComponent(bankPublicId)}`,
+    form,
+  );
+};
+
+/** Poll import job status. */
+export const fetchImportStatus = (jobId: string) =>
+  api.get<import('@exam/types').ImportJobState>(`/questions/import/${jobId}`);

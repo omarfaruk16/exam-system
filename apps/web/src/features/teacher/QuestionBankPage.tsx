@@ -1,6 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { BankQuestion, PartOption } from '@exam/types';
-import { BookOpen, ChevronDown, ChevronRight, Loader2, Plus } from 'lucide-react';
+import type { BankQuestion, ImportJobState, PartOption, QuestionBankSummary } from '@exam/types';
+import {
+  BookOpen,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  FileDown,
+  Loader2,
+  Plus,
+  Upload,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -12,9 +21,13 @@ import { cn } from '@/lib/utils';
 import {
   createBank,
   createQuestion,
+  downloadExport,
+  downloadTemplate,
   fetchBankQuestions,
   fetchBanks,
+  fetchImportStatus,
   fetchMyParts,
+  importQuestions,
 } from '@/features/authoring/authoringApi';
 
 export function QuestionBankPage() {
@@ -192,15 +205,21 @@ function BankView({ part }: { part: PartOption }) {
           </p>
         </Card>
       ) : activeBankId ? (
-        <BankQuestions bankId={activeBankId} />
+        <BankQuestions
+          bankId={activeBankId}
+          bank={banks.find((b) => b.publicId === activeBankId)!}
+        />
       ) : null}
     </div>
   );
 }
 
-function BankQuestions({ bankId }: { bankId: string }) {
+function BankQuestions({ bankId, bank }: { bankId: string; bank: QuestionBankSummary }) {
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
+  const [importJobId, setImportJobId] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [templateDl, setTemplateDl] = useState(false);
 
   const questionsQuery = useQuery({
     queryKey: ['bank-questions', bankId],
@@ -208,16 +227,137 @@ function BankQuestions({ bankId }: { bankId: string }) {
   });
   const questions = questionsQuery.data ?? [];
 
+  // Poll import job until done
+  const jobQuery = useQuery({
+    queryKey: ['import-job', importJobId],
+    queryFn: () => fetchImportStatus(importJobId!),
+    enabled: Boolean(importJobId),
+    refetchInterval: (q) => {
+      const s = q.state.data as ImportJobState | undefined;
+      if (!s) return 1500;
+      return s.status === 'completed' || s.status === 'failed' ? false : 1500;
+    },
+  });
+  const jobState = jobQuery.data as ImportJobState | undefined;
+
+  // When job completes, refresh questions
+  const prevStatus = useState<string | null>(null);
+  if (jobState?.status === 'completed' && prevStatus[0] !== 'completed') {
+    prevStatus[1]('completed');
+    void qc.invalidateQueries({ queryKey: ['bank-questions', bankId] });
+  }
+  if (jobState?.status === 'failed' && prevStatus[0] !== 'failed') {
+    prevStatus[1]('failed');
+  }
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      await downloadExport(bankId, bank.name);
+    } catch {
+      toast.error('Export failed');
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function handleTemplate() {
+    setTemplateDl(true);
+    try {
+      await downloadTemplate();
+    } catch {
+      toast.error('Could not download template');
+    } finally {
+      setTemplateDl(false);
+    }
+  }
+
+  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.name.endsWith('.xlsx')) {
+      toast.error('Only .xlsx files are supported');
+      return;
+    }
+    try {
+      const { jobId } = await importQuestions(bankId, file);
+      setImportJobId(jobId);
+      prevStatus[1](null);
+      toast.info('Importing questions…');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Import failed');
+    }
+  }
+
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-muted-foreground text-sm">
           {questions.length} question{questions.length !== 1 ? 's' : ''}
         </p>
-        <Button size="sm" onClick={() => setShowCreate((v) => !v)}>
-          <Plus className="size-4" /> New question
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Template download */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 text-xs"
+            onClick={handleTemplate}
+            disabled={templateDl}
+            title="Download blank xlsx template"
+          >
+            {templateDl ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <FileDown className="size-3.5" />
+            )}
+            Template
+          </Button>
+
+          {/* Export */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs"
+            onClick={handleExport}
+            disabled={exporting || questions.length === 0}
+            title="Export questions to xlsx"
+          >
+            {exporting ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Download className="size-3.5" />
+            )}
+            Export
+          </Button>
+
+          {/* Import */}
+          <label className="cursor-pointer">
+            <Button variant="outline" size="sm" className="pointer-events-none h-8 text-xs" asChild>
+              <span>
+                <Upload className="size-3.5" /> Import xlsx
+              </span>
+            </Button>
+            <input
+              type="file"
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              className="sr-only"
+              onChange={handleImport}
+            />
+          </label>
+
+          {/* New question */}
+          <Button size="sm" className="h-8" onClick={() => setShowCreate((v) => !v)}>
+            <Plus className="size-4" /> New question
+          </Button>
+        </div>
       </div>
+
+      {/* Import status banner */}
+      {importJobId && jobState && (
+        <ImportStatusBanner state={jobState} onDismiss={() => setImportJobId(null)} />
+      )}
 
       {showCreate && (
         <Card className="p-4">
@@ -241,7 +381,9 @@ function BankQuestions({ bankId }: { bankId: string }) {
       ) : questions.length === 0 && !showCreate ? (
         <Card className="flex flex-col items-center gap-2 py-12 text-center">
           <p className="text-sm font-medium">No questions yet</p>
-          <p className="text-muted-foreground text-xs">Click "New question" to add one.</p>
+          <p className="text-muted-foreground text-xs">
+            Click "New question" to add one, or import from an xlsx file.
+          </p>
         </Card>
       ) : (
         <ul className="space-y-2">
@@ -249,6 +391,63 @@ function BankQuestions({ bankId }: { bankId: string }) {
             <QuestionCard key={q.publicId} q={q} index={i} />
           ))}
         </ul>
+      )}
+    </div>
+  );
+}
+
+function ImportStatusBanner({
+  state,
+  onDismiss,
+}: {
+  state: ImportJobState;
+  onDismiss: () => void;
+}) {
+  const done = state.status === 'completed' || state.status === 'failed';
+  const summary = state.summary;
+
+  return (
+    <div
+      className={cn(
+        'flex flex-wrap items-start justify-between gap-2 rounded-lg border px-4 py-3 text-sm',
+        state.status === 'failed'
+          ? 'border-destructive/30 bg-destructive/10'
+          : state.status === 'completed'
+            ? 'border-success/30 bg-success/10'
+            : 'border-amber-400/30 bg-amber-50 dark:bg-amber-950/20',
+      )}
+    >
+      <div className="space-y-1">
+        {!done && (
+          <p className="flex items-center gap-1.5 font-medium">
+            <Loader2 className="size-3.5 animate-spin" /> Importing questions…
+          </p>
+        )}
+        {done && summary && (
+          <p className="font-medium">
+            Import {state.status === 'completed' ? 'complete' : 'finished with errors'} —{' '}
+            {summary.imported} of {summary.total} question{summary.total !== 1 ? 's' : ''} added
+          </p>
+        )}
+        {summary && summary.errors.length > 0 && (
+          <ul className="text-destructive mt-1 space-y-0.5 text-xs">
+            {summary.errors.slice(0, 5).map((e, i) => (
+              <li key={i}>
+                Row {e.row}: {e.message}
+              </li>
+            ))}
+            {summary.errors.length > 5 && <li>…and {summary.errors.length - 5} more errors</li>}
+          </ul>
+        )}
+      </div>
+      {done && (
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="text-muted-foreground hover:text-foreground text-xs"
+        >
+          Dismiss
+        </button>
       )}
     </div>
   );

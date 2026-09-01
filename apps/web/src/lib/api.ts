@@ -66,4 +66,45 @@ export const api = {
     }),
   del: <T>(path: string, opts?: RequestOptions): Promise<T> =>
     request<T>(path, { method: 'DELETE', headers: opts?.headers }),
+
+  /** Download a binary file. Returns a Blob (e.g. for xlsx export). */
+  blob: async (path: string): Promise<{ blob: Blob; filename: string }> => {
+    const res = await fetch(`${API_BASE}${path}`, { credentials: 'include' });
+    if (!res.ok) {
+      const text = await res.text();
+      let message = res.statusText;
+      try {
+        const body = JSON.parse(text) as { message?: string | string[] };
+        message = Array.isArray(body.message) ? body.message.join(', ') : (body.message ?? message);
+      } catch {
+        /* ignore */
+      }
+      throw new ApiError(res.status, message);
+    }
+    const cd = res.headers.get('Content-Disposition') ?? '';
+    const match = cd.match(/filename="?([^";\n]+)"?/);
+    const filename = match?.[1] ?? 'download.xlsx';
+    return { blob: await res.blob(), filename };
+  },
+
+  /** POST a FormData payload (file upload). Returns parsed JSON. */
+  upload: async <T>(path: string, form: FormData): Promise<T> => {
+    const res = await fetch(`${API_BASE}${path}`, {
+      method: 'POST',
+      credentials: 'include',
+      // No Content-Type — browser sets it with multipart boundary automatically
+      headers: { Accept: 'application/json' },
+      body: form,
+    });
+    const text = await res.text();
+    const data = text ? (JSON.parse(text) as unknown) : null;
+    if (!res.ok) {
+      const body = (data ?? undefined) as ApiErrorBody | undefined;
+      const message = Array.isArray(body?.message)
+        ? body!.message.join(', ')
+        : (body?.message ?? res.statusText);
+      throw new ApiError(res.status, message, body);
+    }
+    return data as T;
+  },
 };

@@ -8,9 +8,11 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { ImportJobState } from '@exam/types';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -50,6 +52,35 @@ export class QuestionController {
   @Post('questions')
   createQuestion(@CurrentUser() u: AuthUser, @Ip() ip: string, @Body() dto: CreateQuestionDto) {
     return this.questions.createQuestion(u, ip, dto);
+  }
+
+  @Roles('teacher', 'admin', 'super_admin')
+  @Get('questions/template')
+  async downloadTemplate(@Res() res: Response): Promise<void> {
+    const { buffer, filename } = await this.questions.templateBuffer();
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
+  @Roles('teacher', 'admin', 'super_admin')
+  @Get('questions/export')
+  async exportQuestions(
+    @Res() res: Response,
+    @CurrentUser() u: AuthUser,
+    @Query('bank') bankPublicId: string,
+  ): Promise<void> {
+    if (!bankPublicId) throw new BadRequestException('bank query param is required');
+    const { buffer, filename } = await this.questions.exportQuestions(u, bankPublicId);
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
   }
 
   @Roles('teacher', 'admin', 'super_admin')

@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import ExcelJS from 'exceljs';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { AuthUser } from '../../common/types/auth';
 import { AuditService } from '../audit/audit.service';
@@ -231,6 +232,125 @@ export class QuestionService {
       select: questionSelect,
       orderBy: [{ bank: { createdAt: 'asc' } }, { createdAt: 'asc' }],
     });
+  }
+
+  // ─────────────────────────── Export / Template ───────────────────────────
+
+  private buildWorkbook(
+    mcqRows: {
+      text: string;
+      marks: number;
+      options: { text: string; isCorrect: boolean; order: number }[];
+      explanation: string | null;
+    }[],
+    writtenRows: { text: string; marks: number; modelAnswer: string | null }[],
+  ): ExcelJS.Workbook {
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Exam System';
+
+    // ── MCQ sheet ──
+    const mcq = wb.addWorksheet('MCQ');
+    mcq.columns = [
+      { header: 'question', key: 'question', width: 60 },
+      { header: 'marks', key: 'marks', width: 8 },
+      { header: 'optionA', key: 'optionA', width: 30 },
+      { header: 'optionB', key: 'optionB', width: 30 },
+      { header: 'optionC', key: 'optionC', width: 30 },
+      { header: 'optionD', key: 'optionD', width: 30 },
+      { header: 'optionE', key: 'optionE', width: 30 },
+      { header: 'correct', key: 'correct', width: 10 },
+      { header: 'explanation', key: 'explanation', width: 50 },
+    ];
+    const letters = ['A', 'B', 'C', 'D', 'E'];
+    for (const q of mcqRows) {
+      const sorted = [...q.options].sort((a, b) => a.order - b.order);
+      const correctIdx = sorted.findIndex((o) => o.isCorrect);
+      const row: Record<string, string | number> = {
+        question: q.text,
+        marks: q.marks,
+        correct: letters[correctIdx] ?? 'A',
+        explanation: q.explanation ?? '',
+      };
+      sorted.forEach((o, i) => {
+        row[`option${letters[i]}`] = o.text;
+      });
+      mcq.addRow(row);
+    }
+    // Style header row
+    mcq.getRow(1).font = { bold: true };
+    mcq.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E8FF' },
+    };
+
+    // ── Written sheet ──
+    const written = wb.addWorksheet('Written');
+    written.columns = [
+      { header: 'question', key: 'question', width: 60 },
+      { header: 'marks', key: 'marks', width: 8 },
+      { header: 'modelAnswer', key: 'modelAnswer', width: 60 },
+    ];
+    for (const q of writtenRows) {
+      written.addRow({ question: q.text, marks: q.marks, modelAnswer: q.modelAnswer ?? '' });
+    }
+    written.getRow(1).font = { bold: true };
+    written.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFFFE0D0' },
+    };
+
+    return wb;
+  }
+
+  /** Build and return a blank template workbook (no question rows). */
+  async templateBuffer(): Promise<{ buffer: Buffer; filename: string }> {
+    const wb = this.buildWorkbook([], []);
+    const buffer = Buffer.from(await wb.xlsx.writeBuffer());
+    return { buffer, filename: 'question_template.xlsx' };
+  }
+
+  /** Export all questions in a bank as an xlsx workbook. */
+  async exportQuestions(
+    user: AuthUser,
+    bankPublicId: string,
+  ): Promise<{ buffer: Buffer; filename: string }> {
+    const partPublicId = await this.bankPartPublicId(bankPublicId);
+    await this.access.requireAuthorablePart(user, partPublicId).catch(async (e) => {
+      const ctx = await this.access.loadActiveCoursePart(partPublicId);
+      if (this.isAdmin(user)) return this.access.assertAdminScope(user, ctx);
+      throw e;
+    });
+
+    const bank = await this.prisma.db.questionBank.findFirstOrThrow({
+      where: { publicId: bankPublicId },
+      select: { name: true },
+    });
+
+    const questions = await this.prisma.db.question.findMany({
+      where: { bank: { publicId: bankPublicId }, deletedAt: null },
+      select: {
+        type: true,
+        text: true,
+        marks: true,
+        explanation: true,
+        modelAnswer: true,
+        options: {
+          select: { text: true, isCorrect: true, order: true },
+          orderBy: { order: 'asc' },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const mcqRows = questions.filter((q) => q.type === 'mcq') as typeof questions;
+    const writtenRows = questions.filter((q) => q.type === 'written') as typeof questions;
+
+    const wb = this.buildWorkbook(mcqRows, writtenRows);
+    const buffer = Buffer.from(await wb.xlsx.writeBuffer());
+    const safeName = bank.name.replace(/[^a-z0-9]/gi, '_');
+    return { buffer, filename: `${safeName}_questions.xlsx` };
   }
 
   async updateQuestion(user: AuthUser, ip: string, publicId: string, dto: UpdateQuestionDto) {
