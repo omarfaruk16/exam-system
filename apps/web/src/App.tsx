@@ -22,7 +22,6 @@ import { ExamResultsPage } from '@/features/teacher/ExamResultsPage';
 import { ResultPage } from '@/features/student/ResultPage';
 import { StudentResultsPage } from '@/features/student/StudentResultsPage';
 import { OrgLayout } from '@/features/org/OrgLayout';
-import { OrgStructurePage } from '@/features/org/OrgStructurePage';
 import { DepartmentsListPage } from '@/features/org/DepartmentsListPage';
 import { DepartmentProfilePage } from '@/features/org/DepartmentProfilePage';
 import { FacultyDashboardPage } from '@/features/org/FacultyDashboardPage';
@@ -103,7 +102,6 @@ export function App() {
         <Route path="/" element={<DashboardPage user={user} />} />
         <Route path="/org" element={<OrgLayout />}>
           <Route index element={<DepartmentsListPage />} />
-          <Route path="structure" element={<OrgStructurePage />} />
           <Route path="batches" element={<BatchesPage />} />
           <Route path="students" element={<StudentsPage />} />
           <Route path="teachers" element={<TeachersPage />} />

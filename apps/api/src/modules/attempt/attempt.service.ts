@@ -122,16 +122,51 @@ export class AttemptService {
         durationMinutes: true,
         totalMarks: true,
         status: true,
+        startAt: true,
         endAt: true,
         settings: true,
         coursePart: { select: { course: { select: { semesterId: true } } } },
       },
     });
     if (!exam) throw new NotFoundException('Exam not found');
-    if (exam.status !== 'live') throw new ForbiddenException('This exam is not currently open');
     if (student.currentSemesterId !== exam.coursePart.course.semesterId) {
       throw new ForbiddenException('You are not enrolled in this exam');
     }
+
+    // Lazy activation: if the scheduled start time has passed but the 15s sweep
+    // hasn't flipped the exam yet, transition published→live on demand so the
+    // student never waits for the background job. Race-safe via updateMany guard.
+    const now = new Date();
+    if (
+      exam.status === 'published' &&
+      exam.startAt.getTime() <= now.getTime() &&
+      exam.endAt.getTime() > now.getTime()
+    ) {
+      const flipped = await this.prisma.db.exam.updateMany({
+        where: { id: exam.id, status: 'published' },
+        data: { status: 'live' },
+      });
+      if (flipped.count > 0) {
+        exam.status = 'live';
+        await this.audit.record({
+          actorUserId: null,
+          action: 'exam.auto_live',
+          entity: 'Exam',
+          entityId: exam.publicId,
+          before: { status: 'published' },
+          after: { status: 'live' },
+        });
+      } else {
+        // Someone else flipped it concurrently — re-read the current status.
+        const fresh = await this.prisma.db.exam.findUniqueOrThrow({
+          where: { id: exam.id },
+          select: { status: true },
+        });
+        exam.status = fresh.status;
+      }
+    }
+
+    if (exam.status !== 'live') throw new ForbiddenException('This exam is not currently open');
 
     // Create or resume — the unique (examId, studentId) constraint blocks a duplicate attempt.
     let attempt = await this.prisma.db.examAttempt.findFirst({

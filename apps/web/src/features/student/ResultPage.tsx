@@ -14,6 +14,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { MathText } from '@/components/ui/math-text';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { fetchAttemptResult, pollReport, requestReport } from './resultsApi';
@@ -21,6 +22,13 @@ import { fetchAttemptResult, pollReport, requestReport } from './resultsApi';
 export function ResultPage() {
   const { attemptPublicId } = useParams<{ attemptPublicId: string }>();
   const navigate = useNavigate();
+
+  // Return to the immediate previous page (teacher's exam roster, results list,
+  // or my-exams). Falls back to /my-exams on a fresh load with no history.
+  const goBack = () => {
+    if (window.history.length > 1) navigate(-1);
+    else navigate('/my-exams');
+  };
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['result', attemptPublicId],
@@ -34,7 +42,7 @@ export function ResultPage() {
   if (error || !data) {
     return (
       <div className="mx-auto w-full max-w-3xl">
-        <BackLink onClick={() => navigate('/my-exams')} />
+        <BackLink onClick={goBack} />
         <Card className="flex flex-col items-center gap-2 py-16 text-center">
           <AlertCircle className="text-destructive size-8" />
           <p className="font-medium">Result unavailable</p>
@@ -50,7 +58,7 @@ export function ResultPage() {
   if (!data.showMarks) {
     return (
       <div className="mx-auto w-full max-w-3xl">
-        <BackLink onClick={() => navigate('/my-exams')} />
+        <BackLink onClick={goBack} />
         <Card className="flex flex-col items-center gap-4 py-20 text-center">
           <div className="bg-muted flex size-14 items-center justify-center rounded-full">
             <Award className="text-muted-foreground size-7" />
@@ -69,7 +77,7 @@ export function ResultPage() {
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6">
-      <BackLink onClick={() => navigate('/my-exams')} />
+      <BackLink onClick={goBack} />
 
       {/* Score header */}
       <Card className="p-6">
@@ -262,9 +270,9 @@ function QuestionRow({ q, index }: { q: AttemptResultQuestion; index: number }) 
             </div>
 
             {/* Question text — 2-line clamp, expandable */}
-            <p className={cn('mt-2 text-sm leading-relaxed', !expanded && 'line-clamp-2')}>
-              {q.snapshotText}
-            </p>
+            <div className={cn('mt-2 text-sm leading-relaxed', !expanded && 'line-clamp-2')}>
+              <MathText text={q.snapshotText ?? ''} />
+            </div>
             {q.snapshotText && q.snapshotText.length > 120 && (
               <button
                 type="button"
@@ -299,14 +307,18 @@ function QuestionRow({ q, index }: { q: AttemptResultQuestion; index: number }) 
                 )}
               >
                 <span className="mt-0.5 font-medium">{isCorrect ? '✓' : '✗'}</span>
-                <span>{selectedOption?.text ?? q.selectedOptionId}</span>
+                <span>
+                  {selectedOption ? <MathText text={selectedOption.text} /> : q.selectedOptionId}
+                </span>
               </div>
             )}
             {/* Correct answer revealed when student was wrong */}
             {isWrong && correctOption && (
               <div className="border-success/40 bg-success/10 text-success flex items-start gap-2 rounded-lg border px-3 py-2 text-sm">
                 <span className="mt-0.5 font-medium">✓</span>
-                <span>{correctOption.text}</span>
+                <span>
+                  <MathText text={correctOption.text} />
+                </span>
               </div>
             )}
           </div>
@@ -316,7 +328,9 @@ function QuestionRow({ q, index }: { q: AttemptResultQuestion; index: number }) 
         {!isMcq && q.writtenText && (
           <div className="bg-muted/40 ml-11 mt-4 rounded-lg border p-3">
             <p className="text-muted-foreground mb-1 text-xs font-medium">Your answer</p>
-            <p className="whitespace-pre-wrap text-sm">{q.writtenText}</p>
+            <div className="whitespace-pre-wrap text-sm">
+              <MathText text={q.writtenText} />
+            </div>
           </div>
         )}
 
@@ -324,7 +338,9 @@ function QuestionRow({ q, index }: { q: AttemptResultQuestion; index: number }) 
         {q.feedback && (
           <div className="border-primary/20 bg-primary/5 ml-11 mt-3 rounded-lg border px-3 py-2 text-sm">
             <p className="text-muted-foreground mb-0.5 text-xs font-medium">Teacher feedback</p>
-            <p>{q.feedback}</p>
+            <div>
+              <MathText text={q.feedback} />
+            </div>
           </div>
         )}
 
@@ -332,7 +348,9 @@ function QuestionRow({ q, index }: { q: AttemptResultQuestion; index: number }) 
         {isMcq && q.explanation && (
           <div className="bg-muted/40 ml-11 mt-3 rounded-lg border px-3 py-2 text-sm">
             <p className="text-muted-foreground mb-0.5 text-xs font-medium">Explanation</p>
-            <p>{q.explanation}</p>
+            <div>
+              <MathText text={q.explanation} />
+            </div>
           </div>
         )}
       </div>
@@ -348,7 +366,7 @@ function BackLink({ onClick }: { onClick: () => void }) {
       onClick={onClick}
       className="text-muted-foreground hover:text-foreground mb-4 inline-flex items-center gap-1.5 text-sm"
     >
-      <ArrowLeft className="size-4" /> Back to my exams
+      <ArrowLeft className="size-4" /> Back
     </button>
   );
 }

@@ -18,12 +18,14 @@ export class ExamSchedulerProcessor extends WorkerHost implements OnModuleInit {
 
   async onModuleInit(): Promise<void> {
     // Fixed jobId dedups across instances — only one repeatable schedule ever exists.
+    // Sweep every 15s so a published→live flip lands within ~15s of startAt. The
+    // student's start() call also flips it lazily, so the sweep is mostly a safety net.
     await this.queue.add(
       'sweep',
       {},
-      { repeat: { every: 60_000 }, jobId: 'exam-sweep', removeOnComplete: true, removeOnFail: 100 },
+      { repeat: { every: 15_000 }, jobId: 'exam-sweep', removeOnComplete: true, removeOnFail: 100 },
     );
-    this.logger.log('Exam scheduler repeatable job registered (every 60s)');
+    this.logger.log('Exam scheduler repeatable job registered (every 15s)');
   }
 
   async process(): Promise<{ toLive: number; toEnded: number }> {

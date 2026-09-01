@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { MathText } from '@/components/ui/math-text';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiError } from '@/lib/api';
@@ -145,15 +146,19 @@ export function GradingWorkspace() {
           <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
             {current.studentName} · {current.studentId}
           </p>
-          <h2 className="text-foreground mb-4 mt-1 text-lg leading-relaxed">
-            {current.questionText}
-          </h2>
+          <div className="text-foreground mb-4 mt-1 text-lg leading-relaxed">
+            <MathText text={current.questionText} />
+          </div>
 
           <div className="bg-muted/40 mb-6 rounded-lg border p-4">
             <p className="text-muted-foreground mb-1 text-xs font-medium">Student's answer</p>
-            <p className="whitespace-pre-wrap">
-              {current.writtenText || <span className="text-muted-foreground italic">(blank)</span>}
-            </p>
+            <div className="whitespace-pre-wrap">
+              {current.writtenText ? (
+                <MathText text={current.writtenText} />
+              ) : (
+                <span className="text-muted-foreground italic">(blank)</span>
+              )}
+            </div>
           </div>
 
           <div className="grid gap-4">

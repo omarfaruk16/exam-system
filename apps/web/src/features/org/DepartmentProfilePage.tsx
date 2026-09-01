@@ -47,7 +47,9 @@ import {
   createSemester,
   createStudent,
   createTeacher,
+  deleteBatch,
   deleteDepartment,
+  deleteSemester,
   deleteStudent,
   downloadExport,
   fetchBatches,
@@ -58,7 +60,9 @@ import {
   fetchStudents,
   deleteTeacher,
   fetchTeachersAdmin,
+  updateBatch,
   updateDepartment,
+  updateSemester,
   updateStudent,
   updateTeacher,
 } from './orgApi';
@@ -105,7 +109,7 @@ export function DepartmentProfilePage() {
 
   if (deptsQuery.isLoading) {
     return (
-      <div className="mx-auto w-full max-w-6xl space-y-4">
+      <div className="w-full space-y-4">
         <Skeleton className="h-40 w-full rounded-2xl" />
         <Skeleton className="h-10 w-full" />
         <Skeleton className="h-64 w-full rounded-xl" />
@@ -130,7 +134,7 @@ export function DepartmentProfilePage() {
   const facultyCount = teachersQuery.data?.length ?? 0;
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="w-full">
       {/* Header banner */}
       <div className="from-primary/25 relative overflow-hidden rounded-2xl border bg-gradient-to-br to-transparent p-6">
         <button
@@ -541,6 +545,9 @@ function SemesterCourses({ semester }: { semester: Semester }) {
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [credit, setCredit] = useState('3');
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState(semester.name ?? '');
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const coursesQuery = useQuery({
     queryKey: ['org-courses', semester.publicId],
     queryFn: () => fetchCourses(semester.publicId),
@@ -564,20 +571,137 @@ function SemesterCourses({ semester }: { semester: Semester }) {
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not add course'),
   });
 
+  const rename = useMutation({
+    mutationFn: () => updateSemester(semester.publicId, { name: editName.trim() }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['org-semesters'] });
+      toast.success('Semester renamed');
+      setEditing(false);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not rename'),
+  });
+
+  const remove = useMutation({
+    mutationFn: () => deleteSemester(semester.publicId),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['org-semesters'] });
+      toast.success('Semester deleted');
+      setConfirmDelete(false);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not delete'),
+  });
+
   const label = semester.name ?? `Semester ${semester.number}`;
   const courses = coursesQuery.data ?? [];
 
   return (
     <div className="rounded-lg border">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between px-4 py-3 text-left"
-      >
-        <span className="font-medium">{label}</span>
-        <span className="text-muted-foreground text-xs">
-          {semester._count.courses} course{semester._count.courses === 1 ? '' : 's'}
-        </span>
-      </button>
+      <div className="flex w-full items-center justify-between gap-2 px-4 py-3">
+        {editing ? (
+          <form
+            className="flex flex-1 items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (editName.trim()) rename.mutate();
+            }}
+          >
+            <Input
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              className="h-8 max-w-xs"
+              autoFocus
+            />
+            <Button type="submit" size="sm" className="h-8" disabled={rename.isPending}>
+              {rename.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Check className="size-4" />
+              )}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-8"
+              onClick={() => {
+                setEditing(false);
+                setEditName(semester.name ?? '');
+              }}
+            >
+              Cancel
+            </Button>
+          </form>
+        ) : (
+          <>
+            <button
+              onClick={() => setOpen((v) => !v)}
+              className="flex flex-1 items-center gap-2 text-left"
+            >
+              {open ? (
+                <ChevronDown className="text-muted-foreground size-4 shrink-0" />
+              ) : (
+                <ChevronLeft className="text-muted-foreground size-4 shrink-0 rotate-180" />
+              )}
+              <span className="font-medium">{label}</span>
+            </button>
+            <div className="flex items-center gap-1">
+              <span className="text-muted-foreground mr-1 text-xs">
+                {semester._count.courses} course{semester._count.courses === 1 ? '' : 's'}
+              </span>
+              {canManage && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7"
+                    onClick={() => {
+                      setEditName(semester.name ?? label);
+                      setEditing(true);
+                    }}
+                    title="Rename semester"
+                  >
+                    <Pencil className="size-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-destructive hover:bg-destructive/10 size-7"
+                    onClick={() => setConfirmDelete(true)}
+                    title="Delete semester"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                </>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete “{label}”?</DialogTitle>
+            <DialogDescription>
+              This semester and its {semester._count.courses} course
+              {semester._count.courses === 1 ? '' : 's'} will be removed (soft delete). Exams and
+              question banks under it become inaccessible.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDelete(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => remove.mutate()}
+              disabled={remove.isPending}
+            >
+              {remove.isPending && <Loader2 className="size-4 animate-spin" />} Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {open && (
         <div className="border-t px-4 py-3">
           {coursesQuery.isLoading ? (
@@ -725,6 +849,10 @@ function BatchRow({ batch, canManage }: { batch: Batch; canManage: boolean }) {
   const qc = useQueryClient();
   const [expanded, setExpanded] = useState(false);
   const [assigning, setAssigning] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState(batch.name);
+  const [editYear, setEditYear] = useState(String(batch.year));
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const semestersQuery = useQuery({
     queryKey: ['org-semesters', batch.program.publicId],
@@ -742,47 +870,164 @@ function BatchRow({ batch, canManage }: { batch: Batch; canManage: boolean }) {
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not update'),
   });
 
+  const rename = useMutation({
+    mutationFn: () =>
+      updateBatch(batch.publicId, { name: editName.trim(), year: Number(editYear) }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['org-batches'] });
+      toast.success('Session updated');
+      setEditing(false);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not update session'),
+  });
+
+  const remove = useMutation({
+    mutationFn: () => deleteBatch(batch.publicId),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['org-batches'] });
+      toast.success('Session deleted');
+      setConfirmDelete(false);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not delete session'),
+  });
+
   return (
     <li className="py-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p className="font-medium">
-            {batch.name} <span className="text-muted-foreground font-normal">· {batch.year}</span>
-          </p>
-          <p className="text-muted-foreground text-xs">
-            {batch.program.name} · {batch._count.students} student
-            {batch._count.students === 1 ? '' : 's'}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs">
-            {batch.currentSemester ? (
-              <span className="bg-primary/10 text-primary rounded-full px-2 py-0.5 font-medium">
-                {batch.currentSemester.name ?? `Semester ${batch.currentSemester.number}`}
+        {editing ? (
+          <form
+            className="flex flex-1 flex-wrap items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (editName.trim()) rename.mutate();
+            }}
+          >
+            <Input
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              className="h-8 max-w-[16rem]"
+              placeholder="Session name"
+              autoFocus
+            />
+            <Input
+              type="number"
+              value={editYear}
+              onChange={(e) => setEditYear(e.target.value)}
+              className="h-8 w-24"
+              placeholder="Year"
+            />
+            <Button type="submit" size="sm" className="h-8" disabled={rename.isPending}>
+              {rename.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Check className="size-4" />
+              )}{' '}
+              Save
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-8"
+              onClick={() => {
+                setEditing(false);
+                setEditName(batch.name);
+                setEditYear(String(batch.year));
+              }}
+            >
+              Cancel
+            </Button>
+          </form>
+        ) : (
+          <>
+            <div>
+              <p className="font-medium">
+                {batch.name}{' '}
+                <span className="text-muted-foreground font-normal">· {batch.year}</span>
+              </p>
+              <p className="text-muted-foreground text-xs">
+                {batch.program.name} · {batch._count.students} student
+                {batch._count.students === 1 ? '' : 's'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs">
+                {batch.currentSemester ? (
+                  <span className="bg-primary/10 text-primary rounded-full px-2 py-0.5 font-medium">
+                    {batch.currentSemester.name ?? `Semester ${batch.currentSemester.number}`}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">No semester</span>
+                )}
               </span>
-            ) : (
-              <span className="text-muted-foreground">No semester</span>
-            )}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8"
-            onClick={() => setAssigning((v) => !v)}
-          >
-            {batch.currentSemester ? 'Change semester' : 'Set semester'}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8"
-            onClick={() => setExpanded((v) => !v)}
-          >
-            {expanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
-            Students
-          </Button>
-        </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8"
+                onClick={() => setAssigning((v) => !v)}
+              >
+                {batch.currentSemester ? 'Change semester' : 'Set semester'}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8"
+                onClick={() => setExpanded((v) => !v)}
+              >
+                {expanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                Students
+              </Button>
+              {canManage && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8"
+                    onClick={() => setEditing(true)}
+                    title="Edit session"
+                  >
+                    <Pencil className="size-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-destructive hover:bg-destructive/10 size-8"
+                    onClick={() => setConfirmDelete(true)}
+                    title="Delete session"
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </>
+              )}
+            </div>
+          </>
+        )}
       </div>
+
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete session “{batch.name}”?</DialogTitle>
+            <DialogDescription>
+              {batch._count.students > 0
+                ? `This session has ${batch._count.students} student${batch._count.students === 1 ? '' : 's'}. Deleting it (soft delete) will detach them. This cannot be easily undone.`
+                : 'This session will be removed (soft delete).'}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDelete(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => remove.mutate()}
+              disabled={remove.isPending}
+            >
+              {remove.isPending && <Loader2 className="size-4 animate-spin" />} Delete session
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {assigning && (
         <select

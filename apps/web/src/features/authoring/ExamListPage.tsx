@@ -61,6 +61,18 @@ export function ExamListPage() {
     items: (data ?? []).filter((e) => b.statuses.includes(e.status)),
   })).filter((b) => b.items.length > 0);
 
+  // "Starting soon" — published exams whose start time is within the next hour
+  // (or already due but not yet flipped live), soonest first.
+  const SOON_WINDOW_MS = 60 * 60 * 1000;
+  const startingSoon = (data ?? [])
+    .filter((e) => {
+      if (e.status !== 'published' && e.status !== 'live') return false;
+      const startMs = new Date(e.startAt).getTime();
+      const endMs = new Date(e.endAt).getTime();
+      return e.status === 'live' || (startMs - nowMs <= SOON_WINDOW_MS && endMs > nowMs);
+    })
+    .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+
   return (
     <div className="mx-auto w-full max-w-4xl">
       <header className="mb-6 flex items-start justify-between gap-4">
@@ -75,6 +87,48 @@ export function ExamListPage() {
           New Exam
         </Button>
       </header>
+
+      {startingSoon.length > 0 && (
+        <div className="border-primary/30 bg-primary/5 mb-6 rounded-xl border p-4">
+          <h2 className="text-primary mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide">
+            <CalendarClock className="size-3.5" /> Starting soon
+          </h2>
+          <ul className="space-y-2.5">
+            {startingSoon.map((e) => {
+              const startMs = new Date(e.startAt).getTime();
+              const isLive = e.status === 'live';
+              return (
+                <li
+                  key={e.publicId}
+                  className="flex flex-wrap items-center justify-between gap-2 text-sm"
+                >
+                  <button
+                    className="hover:text-primary text-left font-medium"
+                    onClick={() =>
+                      navigate(isAdmin ? `/review/${e.publicId}` : `/exams/${e.publicId}/build`)
+                    }
+                  >
+                    {e.title}
+                    <span className="text-muted-foreground ml-2 font-normal">
+                      {e.courseCode} · {e.part}
+                    </span>
+                  </button>
+                  {isLive ? (
+                    <span className="text-success flex items-center gap-1.5 text-xs font-medium">
+                      <span className="bg-success inline-block size-2 animate-pulse rounded-full" />
+                      Live now
+                    </span>
+                  ) : nowMs < startMs ? (
+                    <StartCountdown startAtMs={startMs} nowMs={nowMs} />
+                  ) : (
+                    <span className="text-warning text-xs">Opening…</span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="space-y-3">

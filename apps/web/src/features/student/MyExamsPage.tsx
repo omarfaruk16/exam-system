@@ -174,9 +174,7 @@ export function MyExamsPage() {
                   exam={e}
                   nowMs={nowMs}
                   onAction={
-                    e.attempt && e.status === 'results_published' && e.showMarksAfterSubmit
-                      ? () => navigate(`/results/${e.attempt!.publicId}`)
-                      : undefined
+                    e.attempt ? () => navigate(`/results/${e.attempt!.publicId}`) : undefined
                   }
                 />
               ))}
@@ -252,16 +250,22 @@ function ExamCard({
   const startAtMs = new Date(exam.startAt).getTime();
   const beforeStart = nowMs < startAtMs;
 
+  // The exam's scheduled time is over once it has ended, is being graded, or
+  // results are published. Only then do we reveal marks + correct answers.
+  const examOver = status === 'ended' || status === 'grading' || isResultsPublished;
+
   const completionState = (() => {
-    if (!hasAttempt && (status === 'ended' || status === 'grading' || isResultsPublished)) {
-      return 'did-not-attempt';
-    }
+    if (!hasAttempt && examOver) return 'did-not-attempt';
     if (!submitted) return null;
+    // Submitted early while the exam is still running — hold until it ends so
+    // correct answers aren't leaked to students who are still taking it.
+    if (!examOver) return 'awaiting-release';
+    // Teacher chose to withhold marks until they explicitly publish results.
     if (!showMarksAfterSubmit && !isResultsPublished) return 'awaiting-release';
-    if (isResultsPublished && showMarksAfterSubmit) return 'results-available';
+    // Written parts still being graded — reveal once grading completes.
     if (attempt?.gradingStatus === 'awaiting_manual') return 'awaiting-grading';
     if (attempt?.gradingStatus === 'grading') return 'grading-in-progress';
-    return 'awaiting-release';
+    return 'results-available';
   })();
 
   const canStart = isLive && !submitted && Boolean(onAction);

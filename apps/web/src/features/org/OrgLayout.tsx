@@ -4,8 +4,7 @@ import { cn } from '@/lib/utils';
 
 const tabs = [
   { to: '/org', label: 'Departments', end: true, adminOnly: false },
-  { to: '/org/structure', label: 'Full structure', end: false, adminOnly: true },
-  { to: '/org/batches', label: 'Batches', end: false, adminOnly: false },
+  { to: '/org/batches', label: 'Sessions', end: false, adminOnly: false },
   { to: '/org/students', label: 'Students', end: false, adminOnly: false },
   { to: '/org/teachers', label: 'Teachers', end: false, adminOnly: false },
   { to: '/org/imports', label: 'Bulk import', end: false, adminOnly: true },
@@ -17,7 +16,7 @@ export function OrgLayout() {
   const visible = tabs.filter((t) => isAdmin || !t.adminOnly);
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="w-full">
       <header className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight">Organization</h1>
         <p className="text-muted-foreground mt-1 text-sm">

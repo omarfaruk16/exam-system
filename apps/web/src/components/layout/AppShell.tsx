@@ -30,7 +30,9 @@ export function AppShell({ user }: { user: SessionUser }) {
           user={user}
           onMenu={() => setMobileOpen(true)}
         />
-        <main className="mx-auto w-full max-w-6xl px-4 py-8 lg:px-8">
+        {/* Fluid width: grows with the viewport, capped generously on very wide
+            screens so text lines never become unreadably long. */}
+        <main className="mx-auto w-full max-w-[1600px] px-4 py-8 lg:px-8 2xl:max-w-[1920px] 2xl:px-12">
           <Outlet />
         </main>
       </div>

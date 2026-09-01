@@ -1,4 +1,5 @@
 import type { PaperQuestion } from '@exam/types';
+import { MathText } from '@/components/ui/math-text';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import type { AnswerValue } from './util';
@@ -38,7 +39,9 @@ export function QuestionView({ question, index, value, disabled, onChange }: Pro
         </span>
       </div>
 
-      <p className="text-foreground mb-6 text-lg leading-relaxed">{question.text}</p>
+      <div className="text-foreground mb-6 text-lg leading-relaxed">
+        <MathText text={question.text} />
+      </div>
 
       {written ? (
         <div>
@@ -84,7 +87,9 @@ export function QuestionView({ question, index, value, disabled, onChange }: Pro
                     <span className="text-muted-foreground font-semibold">
                       {String.fromCharCode(65 + i)}.
                     </span>
-                    <span>{opt.text}</span>
+                    <span>
+                      <MathText text={opt.text} />
+                    </span>
                   </span>
                 </label>
               );
