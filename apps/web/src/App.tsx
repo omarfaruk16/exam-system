@@ -17,11 +17,13 @@ import { GradingExamsPage } from '@/features/teacher/GradingExamsPage';
 import { GradingWorkspace } from '@/features/teacher/GradingWorkspace';
 import { MyCoursesPage } from '@/features/teacher/MyCoursesPage';
 import { MarksMatrixPage } from '@/features/teacher/MarksMatrixPage';
+import { FinalMarkingPage } from '@/features/marking/FinalMarkingPage';
 import { QuestionBankPage } from '@/features/teacher/QuestionBankPage';
 import { ResultsPortalPage } from '@/features/teacher/ResultsPortalPage';
 import { ExamResultsPage } from '@/features/teacher/ExamResultsPage';
 import { ResultPage } from '@/features/student/ResultPage';
 import { StudentResultsPage } from '@/features/student/StudentResultsPage';
+import { StudentTranscriptPage } from '@/features/student/StudentTranscriptPage';
 import { OrgLayout } from '@/features/org/OrgLayout';
 import { DepartmentsListPage } from '@/features/org/DepartmentsListPage';
 import { DepartmentProfilePage } from '@/features/org/DepartmentProfilePage';
@@ -128,6 +130,7 @@ export function App() {
         <Route path="/exams/:examPublicId/edit" element={<ExamFormPage />} />
         <Route path="/exams/:examPublicId/build" element={<ExamBuilderPage />} />
         <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/final-marking" element={<FinalMarkingPage />} />
         <Route path="/users" element={<UsersPage />} />
         <Route path="/audit" element={<PlaceholderPage title="Audit Log" icon={ScrollText} />} />
         <Route
@@ -143,6 +146,7 @@ export function App() {
         <Route path="/exam-results/:examPublicId" element={<ExamResultsPage />} />
 
         <Route path="/my-exams" element={<MyExamsPage />} />
+        <Route path="/my-record" element={<StudentTranscriptPage />} />
         <Route path="/results/:attemptPublicId" element={<ResultPage />} />
         <Route path="/results" element={<StudentResultsPage />} />
         <Route path="*" element={<NotFoundPage />} />

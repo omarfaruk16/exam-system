@@ -6,3 +6,5 @@ export * from './exam-taking';
 export * from './grading';
 export * from './authoring';
 export * from './org';
+export * from './marking';
+export * from './student';

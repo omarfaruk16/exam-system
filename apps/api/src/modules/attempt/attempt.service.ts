@@ -611,4 +611,159 @@ export class AttemptService {
       })),
     };
   }
+
+  /**
+   * The student's full academic history (transcript): their programme + every exam they
+   * attempted, grouped Semester → Course → Exam, with the marks they are allowed to see.
+   * Reads ExamAttempt by studentId (indexed) joined up the hierarchy — one query set.
+   */
+  async getMyAcademicHistory(user: AuthUser) {
+    const student = await this.prisma.db.student.findFirst({
+      where: { userId: user.id, deletedAt: null },
+      select: {
+        id: true,
+        publicId: true,
+        studentId: true,
+        rollNumber: true,
+        registrationNumber: true,
+        user: { select: { displayName: true } },
+        batch: {
+          select: {
+            name: true,
+            year: true,
+            program: {
+              select: {
+                name: true,
+                department: { select: { name: true, faculty: { select: { name: true } } } },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!student) {
+      return { enrolled: false as const, student: null, program: null, semesters: [] };
+    }
+
+    const attempts = await this.prisma.db.examAttempt.findMany({
+      where: { studentId: student.id },
+      select: {
+        status: true,
+        submittedAt: true,
+        exam: {
+          select: {
+            publicId: true,
+            title: true,
+            startAt: true,
+            totalMarks: true,
+            status: true,
+            settings: true,
+            coursePart: {
+              select: {
+                name: true,
+                course: {
+                  select: {
+                    code: true,
+                    name: true,
+                    semester: { select: { number: true, name: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
+        result: { select: { finalScore: true, percentage: true, rank: true } },
+      },
+      orderBy: { exam: { startAt: 'desc' } },
+    });
+
+    const POST_EXAM = ['ended', 'grading', 'results_published'];
+    // Group Semester → Course → exams.
+    interface ExamRow {
+      publicId: string;
+      title: string;
+      part: string;
+      date: string;
+      status: string;
+      totalMarks: number;
+      score: number | null;
+      percentage: number | null;
+      rank: number | null;
+      attended: boolean;
+    }
+    interface CourseGroup {
+      code: string;
+      name: string;
+      exams: ExamRow[];
+    }
+    interface SemGroup {
+      key: string;
+      number: number;
+      label: string;
+      courses: Map<string, CourseGroup>;
+    }
+    const sems = new Map<string, SemGroup>();
+
+    for (const a of attempts) {
+      const ex = a.exam;
+      const sem = ex.coursePart.course.semester;
+      const semLabel = sem.name?.trim() ? sem.name : `Semester ${sem.number}`;
+      const semKey = `${sem.number}::${semLabel}`;
+      let sg = sems.get(semKey);
+      if (!sg) {
+        sg = { key: semKey, number: sem.number, label: semLabel, courses: new Map() };
+        sems.set(semKey, sg);
+      }
+      const courseKey = ex.coursePart.course.code;
+      let cg = sg.courses.get(courseKey);
+      if (!cg) {
+        cg = { code: ex.coursePart.course.code, name: ex.coursePart.course.name, exams: [] };
+        sg.courses.set(courseKey, cg);
+      }
+      // Marks are visible once the exam is over and (unless withheld) released to the student.
+      const settings = (ex.settings as { showMarksAfterSubmit?: boolean } | null) ?? {};
+      const marksVisible =
+        POST_EXAM.includes(ex.status) &&
+        (settings.showMarksAfterSubmit !== false || ex.status === 'results_published');
+      cg.exams.push({
+        publicId: ex.publicId,
+        title: ex.title,
+        part: ex.coursePart.name,
+        date: ex.startAt.toISOString(),
+        status: ex.status,
+        totalMarks: ex.totalMarks,
+        score: marksVisible ? (a.result?.finalScore ?? null) : null,
+        percentage: marksVisible ? (a.result?.percentage ?? null) : null,
+        rank: marksVisible ? (a.result?.rank ?? null) : null,
+        attended: a.status !== 'in_progress' || Boolean(a.submittedAt),
+      });
+    }
+
+    const semesters = [...sems.values()]
+      .sort((a, b) => a.number - b.number)
+      .map((sg) => ({
+        number: sg.number,
+        label: sg.label,
+        courses: [...sg.courses.values()].sort((a, b) => a.code.localeCompare(b.code)),
+      }));
+
+    const prog = student.batch.program;
+    return {
+      enrolled: true as const,
+      student: {
+        name: student.user.displayName,
+        studentId: student.studentId,
+        rollNumber: student.rollNumber,
+        registrationNumber: student.registrationNumber,
+      },
+      program: {
+        name: prog.name,
+        department: prog.department.name,
+        faculty: prog.department.faculty.name,
+        batch: student.batch.name,
+        year: student.batch.year,
+      },
+      semesters,
+    };
+  }
 }

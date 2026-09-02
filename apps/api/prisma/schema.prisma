@@ -178,10 +178,11 @@ model CoursePart {
   updatedAt         DateTime  @updatedAt
   deletedAt         DateTime?
 
-  course          Course         @relation(fields: [courseId], references: [id])
-  assignedTeacher Teacher?       @relation(fields: [assignedTeacherId], references: [id])
+  course          Course             @relation(fields: [courseId], references: [id])
+  assignedTeacher Teacher?           @relation(fields: [assignedTeacherId], references: [id])
   questionBanks   QuestionBank[]
   exams           Exam[]
+  partResults     CoursePartResult[]
 
   @@unique([courseId, name])
   @@index([courseId])
@@ -228,11 +229,13 @@ model Student {
   updatedAt          DateTime  @updatedAt
   deletedAt          DateTime?
 
-  user     User          @relation(fields: [userId], references: [id])
-  batch    Batch         @relation(fields: [batchId], references: [id])
-  attempts ExamAttempt[]
+  user        User               @relation(fields: [userId], references: [id])
+  batch       Batch              @relation(fields: [batchId], references: [id])
+  attempts    ExamAttempt[]
+  partResults CoursePartResult[]
 
   @@index([batchId])
+  @@index([deletedAt])
 }
 
 model Teacher {
@@ -245,12 +248,13 @@ model Teacher {
   updatedAt    DateTime  @updatedAt
   deletedAt    DateTime?
 
-  user          User           @relation(fields: [userId], references: [id])
-  department    Department     @relation(fields: [departmentId], references: [id])
-  courseParts   CoursePart[]
-  createdBanks  QuestionBank[]
-  createdExams  Exam[]
-  gradedAnswers Answer[]
+  user           User               @relation(fields: [userId], references: [id])
+  department     Department         @relation(fields: [departmentId], references: [id])
+  courseParts    CoursePart[]
+  createdBanks   QuestionBank[]
+  createdExams   Exam[]
+  gradedAnswers  Answer[]
+  finalizedParts CoursePartResult[] @relation("FinalizedPartResults")
 
   @@index([departmentId])
 }
@@ -481,6 +485,8 @@ model ExamAttempt {
   @@unique([examId, studentId])
   @@index([examId, studentId])
   @@index([examId, status])
+  // A student's full attempt history (academic transcript) filters by studentId alone.
+  @@index([studentId])
   @@index([createdAt])
 }
 
@@ -523,4 +529,36 @@ model ExamResult {
   updatedAt  DateTime @updatedAt
 
   attempt ExamAttempt @relation(fields: [attemptId], references: [id])
+}
+
+// ─────────────────────── Course-part rollup (final marks) ───────────────────────
+// A materialized per-(student, course-part) summary across ALL that part's graded exams.
+// Written when a teacher "sends the final report" (and refreshable), so the admin final-
+// marking page and teacher summaries read ONE indexed row per student instead of
+// re-aggregating ExamResult across every exam on each page load. Aggregates are on exam
+// PERCENTAGES so exams with different total marks combine fairly.
+model CoursePartResult {
+  id                   Int       @id @default(autoincrement())
+  publicId             String    @unique @default(uuid())
+  coursePartId         Int
+  studentId            Int
+  examsCounted         Int       @default(0) // number of graded exams the student sat in this part
+  examsTotal           Int       @default(0) // number of graded exams in the part (attended or not)
+  averageAll           Float? // mean % across all counted exams
+  bestOne              Float? // best single exam %
+  bestTwoAverage       Float? // mean of the top two exam %s (= bestOne when only one)
+  finalizedAt          DateTime? // set when a teacher submits the final report to admin
+  finalizedByTeacherId Int?
+  computedAt           DateTime  @default(now())
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  coursePart  CoursePart @relation(fields: [coursePartId], references: [id])
+  student     Student    @relation(fields: [studentId], references: [id])
+  finalizedBy Teacher?   @relation("FinalizedPartResults", fields: [finalizedByTeacherId], references: [id])
+
+  @@unique([coursePartId, studentId])
+  @@index([coursePartId])
+  @@index([studentId])
+  @@index([finalizedAt])
 }

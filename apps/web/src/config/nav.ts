@@ -6,9 +6,11 @@ import {
   ClipboardList,
   FileCheck2,
   GraduationCap,
+  Layers,
   LayoutDashboard,
   ListChecks,
   ScrollText,
+  Table2,
   Users,
   type LucideIcon,
 } from 'lucide-react';
@@ -30,6 +32,7 @@ const BY_ROLE: Record<RoleName, NavItem[]> = {
     { label: 'Question Bank', path: '/questions', icon: ListChecks },
     { label: 'Review', path: '/review', icon: ClipboardCheck },
     { label: 'Results', path: '/exam-results', icon: ClipboardList },
+    { label: 'Final Marking', path: '/final-marking', icon: Table2 },
     { label: 'Reports', path: '/reports', icon: BarChart3 },
     { label: 'Users', path: '/users', icon: Users },
     { label: 'Audit Log', path: '/audit', icon: ScrollText },
@@ -41,6 +44,7 @@ const BY_ROLE: Record<RoleName, NavItem[]> = {
     { label: 'Question Bank', path: '/questions', icon: ListChecks },
     { label: 'Review', path: '/review', icon: ClipboardCheck },
     { label: 'Results', path: '/exam-results', icon: ClipboardList },
+    { label: 'Final Marking', path: '/final-marking', icon: Table2 },
     { label: 'Reports', path: '/reports', icon: BarChart3 },
     { label: 'Audit Log', path: '/audit', icon: ScrollText },
   ],
@@ -50,6 +54,7 @@ const BY_ROLE: Record<RoleName, NavItem[]> = {
     { label: 'Question Bank', path: '/questions', icon: ListChecks },
     { label: 'Review', path: '/review', icon: ClipboardCheck },
     { label: 'Results', path: '/exam-results', icon: ClipboardList },
+    { label: 'Final Marking', path: '/final-marking', icon: Table2 },
     { label: 'Reports', path: '/reports', icon: BarChart3 },
   ],
   teacher: [
@@ -65,6 +70,7 @@ const BY_ROLE: Record<RoleName, NavItem[]> = {
     HOME,
     { label: 'My Exams', path: '/my-exams', icon: GraduationCap },
     { label: 'My Results', path: '/results', icon: BarChart3 },
+    { label: 'My Record', path: '/my-record', icon: Layers },
   ],
 };
 

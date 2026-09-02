@@ -14,6 +14,8 @@ import { ExamController } from './exam.controller';
 import { ExamSchedulerProcessor } from './exam-scheduler.processor';
 import { ExamSchedulerService } from './exam-scheduler.service';
 import { ExamService } from './exam.service';
+import { MarkingController } from './marking.controller';
+import { MarkingService } from './marking.service';
 import { QuestionController } from './question.controller';
 import { QuestionImportProcessor } from './question-import.processor';
 import { QuestionImportService } from './question-import.service';
@@ -39,13 +41,14 @@ export class ExamModule {
           }),
         }),
       ],
-      controllers: [QuestionController, ExamController],
+      controllers: [QuestionController, ExamController, MarkingController],
       providers: [
         ExamAccessService,
         QuestionService,
         ExamService,
         ExamSchedulerService,
         QuestionImportService,
+        MarkingService,
         // Embedded workers by default; RUN_EMBEDDED_WORKERS=false moves them to worker.ts.
         ...(runEmbeddedWorker ? [ExamSchedulerProcessor, QuestionImportProcessor] : []),
       ],

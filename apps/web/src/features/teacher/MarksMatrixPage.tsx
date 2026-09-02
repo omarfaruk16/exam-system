@@ -1,19 +1,41 @@
-import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, TableProperties } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft, CheckCircle2, Loader2, Send, TableProperties } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { fetchMarksMatrix } from '@/features/authoring/authoringApi';
+import { fetchPartSummary, finalizePart } from '@/features/marking/markingApi';
 
 export function MarksMatrixPage() {
   const { partPublicId } = useParams<{ partPublicId: string }>();
   const navigate = useNavigate();
+  const qc = useQueryClient();
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['marks-matrix', partPublicId],
     queryFn: () => fetchMarksMatrix(partPublicId!),
     enabled: Boolean(partPublicId),
+  });
+
+  // Finalized state (whether the final report has been sent to admin).
+  const summaryQuery = useQuery({
+    queryKey: ['part-summary', partPublicId],
+    queryFn: () => fetchPartSummary(partPublicId!),
+    enabled: Boolean(partPublicId),
+  });
+
+  const finalize = useMutation({
+    mutationFn: () => finalizePart(partPublicId!),
+    onSuccess: async (res) => {
+      toast.success(
+        `Final report sent to admin — ${res.students} students, ${res.examsTotal} exams`,
+      );
+      await qc.invalidateQueries({ queryKey: ['part-summary', partPublicId] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not send the final report'),
   });
 
   if (isLoading) {
@@ -65,7 +87,42 @@ export function MarksMatrixPage() {
             {part.batch && <> · Session {part.batch}</>}
           </p>
         </div>
+
+        {/* Send final report to admin (item 2). Final marks are the % aggregates below. */}
+        {exams.length > 0 && (
+          <div className="flex flex-col items-end gap-1.5">
+            <Button onClick={() => finalize.mutate()} disabled={finalize.isPending}>
+              {finalize.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Send className="size-4" />
+              )}
+              {summaryQuery.data?.finalized ? 'Re-send final report' : 'Send final report to admin'}
+            </Button>
+            {summaryQuery.data?.finalized && summaryQuery.data.finalizedAt && (
+              <span className="text-success inline-flex items-center gap-1 text-xs">
+                <CheckCircle2 className="size-3.5" /> Sent{' '}
+                {new Date(summaryQuery.data.finalizedAt).toLocaleDateString('en-GB', {
+                  day: '2-digit',
+                  month: 'short',
+                  year: 'numeric',
+                })}
+              </span>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* What "final report" sends: per-student % aggregates across this part's exams. */}
+      {exams.length > 0 && (
+        <p className="text-muted-foreground mb-4 text-xs">
+          Sending the final report submits each student’s{' '}
+          <span className="font-medium">average of all exams</span>,{' '}
+          <span className="font-medium">best one</span>, and{' '}
+          <span className="font-medium">average of the best two</span> (as percentages) to the admin
+          final-marking sheet.
+        </p>
+      )}
 
       {exams.length === 0 ? (
         <Card className="flex flex-col items-center gap-3 py-16 text-center">

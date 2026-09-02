@@ -39,6 +39,12 @@ export class AttemptController {
   }
 
   @Roles('student')
+  @Get('me/history')
+  myHistory(@CurrentUser() u: AuthUser) {
+    return this.attempts.getMyAcademicHistory(u);
+  }
+
+  @Roles('student')
   @Post('exams/:examPublicId/start')
   @HttpCode(200)
   start(@CurrentUser() u: AuthUser, @Ip() ip: string, @Param('examPublicId') examPublicId: string) {
