@@ -1,7 +1,28 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { Env } from '../../common/config/env.validation';
 import { PrismaService } from '../../common/prisma/prisma.service';
 
+/** The formal letterhead every report shares. */
+export interface ReportHeader {
+  institution: string; // "University of Rajshahi"
+  department: string;
+  program: string; // degree / programme name
+  semester: string; // e.g. "Semester 3" or its given name
+  courseName: string;
+  courseCode: string;
+  partName: string;
+  batch: string; // batch/session name(s) sitting this exam
+  examDate: string; // formatted date of the exam
+  duration: string; // e.g. "1 hr 30 min"
+  examSequence: number; // "Exam N" for this course part
+  title: string;
+  teacher: string;
+  totalMarks: number;
+}
+
 export interface OverallRow {
+  rollNumber: string | null;
   studentId: string;
   name: string;
   status: 'attempted' | 'absent';
@@ -11,13 +32,7 @@ export interface OverallRow {
   rank: number | null;
 }
 export interface OverallData {
-  exam: {
-    title: string;
-    courseCode: string;
-    partName: string;
-    semesterNumber: number;
-    totalMarks: number;
-  };
+  header: ReportHeader;
   questions: { questionPublicId: string; order: number; maxMarks: number; label: string }[];
   rows: OverallRow[];
 }
@@ -33,8 +48,8 @@ export interface IndividualQuestion {
   explanation: string | null;
 }
 export interface IndividualData {
-  exam: { title: string; courseCode: string; totalMarks: number };
-  student: { studentId: string; name: string };
+  header: ReportHeader;
+  student: { studentId: string; name: string; rollNumber: string | null };
   attempt: {
     submittedAt: string | null;
     totalScore: number;
@@ -53,31 +68,137 @@ interface ExamSettings {
   showExplanation?: boolean;
 }
 
-@Injectable()
-export class ReportDataService {
-  constructor(private readonly prisma: PrismaService) {}
-
-  /** Overall mark sheet — reads ExamResult (with breakdown) + the enrolled roster. Never scans Answer. */
-  async buildOverall(examId: number): Promise<OverallData> {
-    const exam = await this.prisma.db.exam.findUniqueOrThrow({
-      where: { id: examId },
-      select: {
-        title: true,
-        totalMarks: true,
-        coursePart: {
-          select: {
-            name: true,
-            course: {
-              select: {
-                code: true,
-                semesterId: true,
-                semester: { select: { number: true } },
+/** Snapshot of an exam + all its course/department context, enough to print the letterhead. */
+const examHeaderSelect = {
+  id: true,
+  title: true,
+  totalMarks: true,
+  startAt: true,
+  durationMinutes: true,
+  coursePartId: true,
+  createdBy: { select: { user: { select: { displayName: true } } } },
+  coursePart: {
+    select: {
+      name: true,
+      assignedTeacher: { select: { user: { select: { displayName: true } } } },
+      course: {
+        select: {
+          code: true,
+          name: true,
+          semesterId: true,
+          semester: {
+            select: {
+              number: true,
+              name: true,
+              program: {
+                select: {
+                  name: true,
+                  department: { select: { name: true } },
+                },
               },
             },
           },
         },
       },
+    },
+  },
+} as const;
+
+function formatDuration(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h && m) return `${h} hr ${m} min`;
+  if (h) return `${h} hr`;
+  return `${m} min`;
+}
+
+function formatExamDate(d: Date): string {
+  return d.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'Asia/Dhaka',
+  });
+}
+
+@Injectable()
+export class ReportDataService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService<Env, true>,
+  ) {}
+
+  /** Builds the shared letterhead: institution, department, course, batch, teacher, exam #. */
+  private async buildHeader(exam: {
+    id: number;
+    title: string;
+    totalMarks: number;
+    startAt: Date;
+    durationMinutes: number;
+    coursePartId: number;
+    createdBy: { user: { displayName: string } };
+    coursePart: {
+      name: string;
+      assignedTeacher: { user: { displayName: string } } | null;
+      course: {
+        code: string;
+        name: string;
+        semesterId: number;
+        semester: {
+          number: number;
+          name: string | null;
+          program: { name: string; department: { name: string } };
+        };
+      };
+    };
+  }): Promise<ReportHeader> {
+    const course = exam.coursePart.course;
+    const sem = course.semester;
+
+    // Batch(es) currently sitting in this semester — usually one, join if more.
+    const batches = await this.prisma.db.batch.findMany({
+      where: { currentSemesterId: course.semesterId, deletedAt: null },
+      select: { name: true },
+      orderBy: { name: 'asc' },
     });
+
+    // "Exam N of this part" — position by start time among this part's exams.
+    const examSequence = await this.prisma.db.exam.count({
+      where: {
+        coursePartId: exam.coursePartId,
+        deletedAt: null,
+        startAt: { lte: exam.startAt },
+      },
+    });
+
+    const teacher =
+      exam.coursePart.assignedTeacher?.user.displayName ?? exam.createdBy.user.displayName;
+
+    return {
+      institution: this.config.get('INSTITUTION_NAME', { infer: true }) ?? 'University of Rajshahi',
+      department: sem.program.department.name,
+      program: sem.program.name,
+      semester: sem.name?.trim() ? sem.name : `Semester ${sem.number}`,
+      courseName: course.name,
+      courseCode: course.code,
+      partName: exam.coursePart.name,
+      batch: batches.length ? batches.map((b) => b.name).join(', ') : '—',
+      examDate: formatExamDate(exam.startAt),
+      duration: formatDuration(exam.durationMinutes),
+      examSequence: Math.max(1, examSequence),
+      title: exam.title,
+      teacher,
+      totalMarks: exam.totalMarks,
+    };
+  }
+
+  /** Overall mark sheet — reads ExamResult (with breakdown) + the enrolled roster. Never scans Answer. */
+  async buildOverall(examId: number): Promise<OverallData> {
+    const exam = await this.prisma.db.exam.findUniqueOrThrow({
+      where: { id: examId },
+      select: examHeaderSelect,
+    });
+    const header = await this.buildHeader(exam);
     const eqs = await this.prisma.db.examQuestion.findMany({
       where: { examId },
       select: { order: true, snapshotMarks: true, question: { select: { publicId: true } } },
@@ -92,8 +213,8 @@ export class ReportDataService {
 
     const students = await this.prisma.db.student.findMany({
       where: { batch: { currentSemesterId: exam.coursePart.course.semesterId } },
-      select: { studentId: true, user: { select: { displayName: true } } },
-      orderBy: { studentId: 'asc' },
+      select: { studentId: true, rollNumber: true, user: { select: { displayName: true } } },
+      orderBy: [{ rollNumber: 'asc' }, { studentId: 'asc' }],
     });
     const results = await this.prisma.db.examResult.findMany({
       where: { attempt: { examId } },
@@ -116,6 +237,7 @@ export class ReportDataService {
         for (const item of bd) scores[item.questionPublicId] = item.score;
       }
       return {
+        rollNumber: s.rollNumber,
         studentId: s.studentId,
         name: s.user.displayName,
         status: r ? 'attempted' : 'absent',
@@ -126,36 +248,27 @@ export class ReportDataService {
       };
     });
 
-    return {
-      exam: {
-        title: exam.title,
-        courseCode: exam.coursePart.course.code,
-        partName: exam.coursePart.name,
-        semesterNumber: exam.coursePart.course.semester.number,
-        totalMarks: exam.totalMarks,
-      },
-      questions,
-      rows,
-    };
+    return { header, questions, rows };
   }
 
   /** Individual mark sheet — one attempt (targeted read, not a scan). Uses snapshot question text. */
   async buildIndividual(examId: number, studentPublicId: string): Promise<IndividualData> {
     const student = await this.prisma.db.student.findFirst({
       where: { publicId: studentPublicId },
-      select: { id: true, studentId: true, user: { select: { displayName: true } } },
+      select: {
+        id: true,
+        studentId: true,
+        rollNumber: true,
+        user: { select: { displayName: true } },
+      },
     });
     if (!student) throw new NotFoundException('Student not found');
 
     const exam = await this.prisma.db.exam.findUniqueOrThrow({
       where: { id: examId },
-      select: {
-        title: true,
-        totalMarks: true,
-        settings: true,
-        coursePart: { select: { course: { select: { code: true } } } },
-      },
+      select: { ...examHeaderSelect, settings: true },
     });
+    const header = await this.buildHeader(exam);
     const settings = (exam.settings as ExamSettings | null) ?? {};
 
     const attempt = await this.prisma.db.examAttempt.findFirst({
@@ -217,12 +330,12 @@ export class ReportDataService {
     });
 
     return {
-      exam: {
-        title: exam.title,
-        courseCode: exam.coursePart.course.code,
-        totalMarks: exam.totalMarks,
+      header,
+      student: {
+        studentId: student.studentId,
+        name: student.user.displayName,
+        rollNumber: student.rollNumber,
       },
-      student: { studentId: student.studentId, name: student.user.displayName },
       attempt: {
         submittedAt: attempt?.submittedAt ? attempt.submittedAt.toISOString() : null,
         totalScore: attempt?.totalScore ?? 0,

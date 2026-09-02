@@ -36,7 +36,12 @@ export class QuestionService {
 
   // ─────────────────────────────── Question bank ───────────────────────────────
   async createBank(user: AuthUser, ip: string, dto: CreateQuestionBankDto) {
-    const ctx = await this.access.requireAuthorablePart(user, dto.coursePartPublicId);
+    const ctx = await this.access.requireAuthorablePartAny(user, dto.coursePartPublicId);
+    if (ctx.teacherId == null) {
+      throw new BadRequestException(
+        'No teacher is assigned to this course part. Assign a teacher before creating a question bank.',
+      );
+    }
     return this.prisma.$transaction(async (tx) => {
       const bank = await tx.questionBank.create({
         data: {
@@ -118,22 +123,13 @@ export class QuestionService {
   }
 
   async listBanks(user: AuthUser, coursePartPublicId: string) {
-    // Access check: teacher must be assigned (admins scoped) — reuse the authoring guard's read side.
-    await this.access.requireAuthorablePart(user, coursePartPublicId).catch(async (e) => {
-      // Admins aren't "assigned", so fall back to a scope check for them.
-      const ctx = await this.access.loadActiveCoursePart(coursePartPublicId);
-      if (this.isAdmin(user)) return this.access.assertAdminScope(user, ctx);
-      throw e;
-    });
+    // Assigned teacher, or an admin / super_admin / department_head in scope.
+    await this.access.requireAuthorablePartAny(user, coursePartPublicId);
     return this.prisma.db.questionBank.findMany({
       where: { coursePart: { publicId: coursePartPublicId } },
       select: questionBankSelect,
       orderBy: { createdAt: 'desc' },
     });
-  }
-
-  private isAdmin(user: AuthUser): boolean {
-    return user.roles.some((r) => r.role === 'admin' || r.role === 'super_admin');
   }
 
   /** Resolve a bank the current teacher may author into (for the Excel import endpoint). */
@@ -143,7 +139,7 @@ export class QuestionService {
       select: { id: true, coursePart: { select: { publicId: true } } },
     });
     if (!bank) throw new NotFoundException('Question bank not found');
-    await this.access.requireAuthorablePart(user, bank.coursePart.publicId);
+    await this.access.requireAuthorablePartAny(user, bank.coursePart.publicId);
     return bank.id;
   }
 
@@ -159,7 +155,7 @@ export class QuestionService {
 
   async createQuestion(user: AuthUser, ip: string, dto: CreateQuestionDto) {
     const partPublicId = await this.bankPartPublicId(dto.bankPublicId);
-    await this.access.requireAuthorablePart(user, partPublicId);
+    await this.access.requireAuthorablePartAny(user, partPublicId);
     this.validateShape(dto.type, dto.options);
 
     const bank = await this.prisma.db.questionBank.findFirstOrThrow({
@@ -206,11 +202,7 @@ export class QuestionService {
 
   async listQuestions(user: AuthUser, bankPublicId: string) {
     const partPublicId = await this.bankPartPublicId(bankPublicId);
-    await this.access.requireAuthorablePart(user, partPublicId).catch(async (e) => {
-      const ctx = await this.access.loadActiveCoursePart(partPublicId);
-      if (this.isAdmin(user)) return this.access.assertAdminScope(user, ctx);
-      throw e;
-    });
+    await this.access.requireAuthorablePartAny(user, partPublicId);
     return this.prisma.db.question.findMany({
       where: { bank: { publicId: bankPublicId } },
       select: questionSelect,
@@ -219,11 +211,7 @@ export class QuestionService {
   }
 
   async listQuestionsByPart(user: AuthUser, coursePartPublicId: string) {
-    await this.access.requireAuthorablePart(user, coursePartPublicId).catch(async (e) => {
-      const ctx = await this.access.loadActiveCoursePart(coursePartPublicId);
-      if (this.isAdmin(user)) return this.access.assertAdminScope(user, ctx);
-      throw e;
-    });
+    await this.access.requireAuthorablePartAny(user, coursePartPublicId);
     return this.prisma.db.question.findMany({
       where: {
         bank: { coursePart: { publicId: coursePartPublicId }, deletedAt: null },
@@ -317,11 +305,7 @@ export class QuestionService {
     bankPublicId: string,
   ): Promise<{ buffer: Buffer; filename: string }> {
     const partPublicId = await this.bankPartPublicId(bankPublicId);
-    await this.access.requireAuthorablePart(user, partPublicId).catch(async (e) => {
-      const ctx = await this.access.loadActiveCoursePart(partPublicId);
-      if (this.isAdmin(user)) return this.access.assertAdminScope(user, ctx);
-      throw e;
-    });
+    await this.access.requireAuthorablePartAny(user, partPublicId);
 
     const bank = await this.prisma.db.questionBank.findFirstOrThrow({
       where: { publicId: bankPublicId },
@@ -363,7 +347,7 @@ export class QuestionService {
       },
     });
     if (!question) throw new NotFoundException('Question not found');
-    await this.access.requireAuthorablePart(user, question.bank.coursePart.publicId);
+    await this.access.requireAuthorablePartAny(user, question.bank.coursePart.publicId);
 
     // EDIT-LOCK: a question used by a published/live (or later) exam is immutable.
     const locked = await this.prisma.db.examQuestion.findFirst({

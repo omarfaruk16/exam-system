@@ -25,7 +25,7 @@ export function StudentResultsPage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto w-full max-w-4xl space-y-4">
+      <div className="w-full space-y-4">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-64 w-full rounded-xl" />
         <Skeleton className="h-48 w-full rounded-xl" />
@@ -36,7 +36,7 @@ export function StudentResultsPage() {
   const groups = data ?? [];
 
   return (
-    <div className="mx-auto w-full max-w-4xl">
+    <div className="w-full">
       <header className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight">My Results</h1>
         <p className="text-muted-foreground mt-1 text-sm">

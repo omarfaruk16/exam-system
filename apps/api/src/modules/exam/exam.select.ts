@@ -44,7 +44,9 @@ export const examSelect = {
   createdBy: { select: { publicId: true, user: { select: { displayName: true } } } },
 } satisfies Prisma.ExamSelect;
 
-// Compact projection for the authoring exam list — adds course code, part name, and a question count.
+// Compact projection for the authoring exam list — adds course code, part name, a question count,
+// and the full academic path (department → program → semester → batch) so the list can be grouped
+// batch-wise. The batch is whichever cohort currently sits in the exam's semester.
 export const examListSelect = {
   publicId: true,
   title: true,
@@ -58,7 +60,29 @@ export const examListSelect = {
   coursePart: {
     select: {
       name: true,
-      course: { select: { code: true } },
+      course: {
+        select: {
+          code: true,
+          name: true,
+          semester: {
+            select: {
+              number: true,
+              name: true,
+              program: {
+                select: {
+                  name: true,
+                  department: { select: { name: true } },
+                },
+              },
+              batches: {
+                where: { deletedAt: null },
+                select: { name: true, year: true },
+                orderBy: { year: 'desc' },
+              },
+            },
+          },
+        },
+      },
     },
   },
   createdBy: { select: { user: { select: { displayName: true } } } },

@@ -30,7 +30,7 @@ export class QuestionController {
     private readonly imports: QuestionImportService,
   ) {}
 
-  @Roles('teacher')
+  @Roles('teacher', 'admin', 'super_admin', 'department_head')
   @Post('question-banks')
   createBank(@CurrentUser() u: AuthUser, @Ip() ip: string, @Body() dto: CreateQuestionBankDto) {
     return this.questions.createBank(u, ip, dto);
@@ -48,7 +48,7 @@ export class QuestionController {
     return this.questions.listBanksByDepartment(dept);
   }
 
-  @Roles('teacher')
+  @Roles('teacher', 'admin', 'super_admin', 'department_head')
   @Post('questions')
   createQuestion(@CurrentUser() u: AuthUser, @Ip() ip: string, @Body() dto: CreateQuestionDto) {
     return this.questions.createQuestion(u, ip, dto);
@@ -95,7 +95,7 @@ export class QuestionController {
     throw new BadRequestException('Either bank or part query param is required');
   }
 
-  @Roles('teacher')
+  @Roles('teacher', 'admin', 'super_admin', 'department_head')
   @Patch('questions/:publicId')
   updateQuestion(
     @CurrentUser() u: AuthUser,
@@ -106,7 +106,7 @@ export class QuestionController {
     return this.questions.updateQuestion(u, ip, id, dto);
   }
 
-  @Roles('teacher')
+  @Roles('teacher', 'admin', 'super_admin', 'department_head')
   @Post('questions/import')
   @UseInterceptors(FileInterceptor('file'))
   async importQuestions(

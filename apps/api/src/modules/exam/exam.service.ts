@@ -84,6 +84,28 @@ export class ExamService {
     }
   }
 
+  /**
+   * Authoring guard for exam edits (build/submit): the owning teacher, OR an
+   * admin / super_admin / department_head acting within the exam's department
+   * scope. Lets admins build and manage exams exactly like the teacher panel.
+   */
+  private async assertCanAuthorExam(user: AuthUser, exam: ExamHandle): Promise<void> {
+    const isStaff = user.roles.some(
+      (r) => r.role === 'admin' || r.role === 'super_admin' || r.role === 'department_head',
+    );
+    const isTeacher = user.roles.some((r) => r.role === 'teacher');
+    if (isTeacher) {
+      const teacher = await this.access.requireTeacher(user);
+      if (exam.createdByTeacherId === teacher.id) return;
+      if (!isStaff) throw new ForbiddenException('You do not own this exam');
+    }
+    if (isStaff) {
+      this.access.assertAdminScope(user, exam);
+      return;
+    }
+    throw new ForbiddenException('You do not own this exam');
+  }
+
   private assertTransition(from: ExamStatus, to: ExamStatus): void {
     if (!canTransition(from, to)) {
       throw new BadRequestException(`Invalid exam transition: ${from} → ${to}`);
@@ -203,21 +225,32 @@ export class ExamService {
       select: examListSelect,
       orderBy: [{ createdAt: 'desc' }],
     });
-    return exams.map((e) => ({
-      publicId: e.publicId,
-      title: e.title,
-      courseCode: e.coursePart.course.code,
-      part: e.coursePart.name,
-      startAt: e.startAt.toISOString(),
-      endAt: e.endAt.toISOString(),
-      durationMinutes: e.durationMinutes,
-      totalMarks: e.totalMarks,
-      questionCount: e._count.examQuestions,
-      status: e.status,
-      reviewNote: e.reviewNote,
-      updatedAt: e.updatedAt.toISOString(),
-      createdByName: e.createdBy.user.displayName,
-    }));
+    return exams.map((e) => {
+      const course = e.coursePart.course;
+      const sem = course.semester;
+      const batches = sem.batches;
+      return {
+        publicId: e.publicId,
+        title: e.title,
+        courseCode: course.code,
+        courseName: course.name,
+        part: e.coursePart.name,
+        semesterLabel: sem.name?.trim() ? sem.name : `Semester ${sem.number}`,
+        semesterNumber: sem.number,
+        programName: sem.program.name,
+        departmentName: sem.program.department.name,
+        batch: batches.length ? batches.map((b) => b.name).join(', ') : null,
+        startAt: e.startAt.toISOString(),
+        endAt: e.endAt.toISOString(),
+        durationMinutes: e.durationMinutes,
+        totalMarks: e.totalMarks,
+        questionCount: e._count.examQuestions,
+        status: e.status,
+        reviewNote: e.reviewNote,
+        updatedAt: e.updatedAt.toISOString(),
+        createdByName: e.createdBy.user.displayName,
+      };
+    });
   }
 
   /** The course parts the current teacher is assigned to — feeds the New Exam / bank pickers. */
@@ -228,17 +261,254 @@ export class ExamService {
       select: {
         publicId: true,
         name: true,
-        course: { select: { code: true, name: true } },
+        course: {
+          select: {
+            code: true,
+            name: true,
+            semester: {
+              select: {
+                number: true,
+                name: true,
+                // Batches currently sitting in this semester see this course's exams.
+                batches: {
+                  where: { deletedAt: null },
+                  select: { name: true, year: true },
+                  orderBy: { year: 'desc' },
+                },
+              },
+            },
+          },
+        },
       },
       orderBy: [{ createdAt: 'desc' }],
     });
-    return parts.map((p) => ({
-      publicId: p.publicId,
-      partName: p.name,
-      courseCode: p.course.code,
-      courseTitle: p.course.name,
-      label: `${p.course.code} · ${p.course.name} · ${p.name}`,
-    }));
+    return parts.map((p) => {
+      const batches = p.course.semester.batches;
+      const semLabel = p.course.semester.name?.trim()
+        ? p.course.semester.name
+        : `Semester ${p.course.semester.number}`;
+      return {
+        publicId: p.publicId,
+        partName: p.name,
+        courseCode: p.course.code,
+        courseTitle: p.course.name,
+        semesterLabel: semLabel,
+        currentBatch: batches.length ? batches.map((b) => b.name).join(', ') : null,
+        label: `${p.course.code} · ${p.course.name} · ${p.name}`,
+      };
+    });
+  }
+
+  /**
+   * Course parts the user may author into — feeds the admin/teacher Question Bank
+   * and New-Exam pickers. Teachers see their assigned parts; admins/super-admins
+   * see every part (faculty-scoped admins are confined to their faculty);
+   * department heads see their department's parts.
+   */
+  async listAuthorableParts(user: AuthUser) {
+    const isSuper = user.roles.some((r) => r.role === 'super_admin');
+    const isAdmin = user.roles.some((r) => r.role === 'admin');
+    const headDeptIds = user.roles
+      .filter((r) => r.role === 'department_head' && r.scopeDepartmentId !== null)
+      .map((r) => r.scopeDepartmentId as number);
+    const isTeacher = user.roles.some((r) => r.role === 'teacher');
+
+    const where: Prisma.CoursePartWhereInput = { deletedAt: null };
+    if (isSuper) {
+      // every part
+    } else if (isAdmin) {
+      const facultyIds = user.roles
+        .filter((r) => r.role === 'admin' && r.scopeFacultyId !== null)
+        .map((r) => r.scopeFacultyId as number);
+      if (facultyIds.length) {
+        where.course = {
+          semester: { program: { department: { facultyId: { in: facultyIds } } } },
+        };
+      }
+    } else if (headDeptIds.length) {
+      where.course = { semester: { program: { departmentId: { in: headDeptIds } } } };
+    } else if (isTeacher) {
+      const teacher = await this.access.requireTeacher(user);
+      where.assignedTeacherId = teacher.id;
+    } else {
+      return [];
+    }
+
+    const parts = await this.prisma.db.coursePart.findMany({
+      where,
+      select: {
+        publicId: true,
+        name: true,
+        course: {
+          select: {
+            code: true,
+            name: true,
+            semester: {
+              select: {
+                number: true,
+                name: true,
+                program: { select: { name: true } },
+                batches: {
+                  where: { deletedAt: null },
+                  select: { name: true },
+                  orderBy: { year: 'desc' },
+                },
+              },
+            },
+          },
+        },
+      },
+      orderBy: [{ course: { code: 'asc' } }, { name: 'asc' }],
+    });
+
+    return parts.map((p) => {
+      const sem = p.course.semester;
+      const semLabel = sem.name?.trim() ? sem.name : `Semester ${sem.number}`;
+      return {
+        publicId: p.publicId,
+        partName: p.name,
+        courseCode: p.course.code,
+        courseTitle: p.course.name,
+        semesterLabel: semLabel,
+        currentBatch: sem.batches.length ? sem.batches.map((b) => b.name).join(', ') : null,
+        label: `${p.course.code} · ${p.course.name} · ${p.name} (${sem.program.name} · ${semLabel})`,
+      };
+    });
+  }
+
+  /**
+   * A marks matrix for one course part: every graded exam (columns) × every
+   * enrolled student (rows), with per-student average, best, and best-two
+   * average. Visible to the assigned teacher and to admins/heads in scope.
+   */
+  async getPartMarksMatrix(user: AuthUser, partPublicId: string) {
+    const ctx = await this.access.loadActiveCoursePart(partPublicId);
+    if (this.isAdmin(user) || user.roles.some((r) => r.role === 'department_head')) {
+      this.access.assertAdminScope(user, ctx);
+    } else {
+      const teacher = await this.access.requireTeacher(user);
+      if (ctx.assignedTeacherId !== teacher.id) {
+        throw new ForbiddenException('You are not assigned to this course part');
+      }
+    }
+
+    const part = await this.prisma.db.coursePart.findUniqueOrThrow({
+      where: { id: ctx.coursePartId },
+      select: {
+        publicId: true,
+        name: true,
+        course: {
+          select: {
+            code: true,
+            name: true,
+            semesterId: true,
+            semester: {
+              select: {
+                number: true,
+                name: true,
+                batches: {
+                  where: { deletedAt: null },
+                  select: { name: true, year: true },
+                  orderBy: { year: 'desc' },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Only exams that have computed marks belong in the matrix.
+    const exams = await this.prisma.db.exam.findMany({
+      where: {
+        coursePartId: ctx.coursePartId,
+        deletedAt: null,
+        status: { in: ['ended', 'grading', 'results_published'] },
+      },
+      select: { id: true, publicId: true, title: true, startAt: true, totalMarks: true },
+      orderBy: { startAt: 'asc' },
+    });
+
+    const students = await this.prisma.db.student.findMany({
+      where: { batch: { currentSemesterId: part.course.semesterId }, deletedAt: null },
+      select: {
+        publicId: true,
+        studentId: true,
+        rollNumber: true,
+        user: { select: { displayName: true } },
+      },
+      orderBy: [{ rollNumber: 'asc' }, { studentId: 'asc' }],
+    });
+
+    const examIds = exams.map((e) => e.id);
+    const results = examIds.length
+      ? await this.prisma.db.examResult.findMany({
+          where: { attempt: { examId: { in: examIds } } },
+          select: {
+            finalScore: true,
+            attempt: { select: { examId: true, student: { select: { publicId: true } } } },
+          },
+        })
+      : [];
+    // (studentPublicId, examId) → finalScore
+    const scoreByKey = new Map<string, number>();
+    for (const r of results) {
+      scoreByKey.set(`${r.attempt.student.publicId}:${r.attempt.examId}`, r.finalScore);
+    }
+
+    const round1 = (n: number) => Math.round(n * 10) / 10;
+    const hasBestTwo = exams.length > 2;
+
+    const rows = students.map((s) => {
+      const scores: Record<string, number | null> = {};
+      const achieved: number[] = [];
+      for (const e of exams) {
+        const v = scoreByKey.get(`${s.publicId}:${e.id}`);
+        const val = v ?? null;
+        scores[e.publicId] = val;
+        if (val != null) achieved.push(val);
+      }
+      const sorted = [...achieved].sort((a, b) => b - a);
+      const average = achieved.length
+        ? round1(achieved.reduce((a, b) => a + b, 0) / achieved.length)
+        : null;
+      const best = sorted.length ? sorted[0] : null;
+      const topTwo = sorted.slice(0, 2);
+      const bestTwoAverage = topTwo.length
+        ? round1(topTwo.reduce((a, b) => a + b, 0) / topTwo.length)
+        : null;
+      return {
+        studentPublicId: s.publicId,
+        studentId: s.studentId,
+        name: s.user.displayName,
+        rollNumber: s.rollNumber,
+        scores,
+        attemptedCount: achieved.length,
+        average,
+        best,
+        bestTwoAverage,
+      };
+    });
+
+    const sem = part.course.semester;
+    return {
+      part: {
+        publicId: part.publicId,
+        courseCode: part.course.code,
+        courseName: part.course.name,
+        partName: part.name,
+        semesterLabel: sem.name?.trim() ? sem.name : `Semester ${sem.number}`,
+        batch: sem.batches.length ? sem.batches.map((b) => b.name).join(', ') : null,
+      },
+      exams: exams.map((e) => ({
+        publicId: e.publicId,
+        title: e.title,
+        date: e.startAt.toISOString(),
+        totalMarks: e.totalMarks,
+      })),
+      rows,
+      hasBestTwo,
+    };
   }
 
   async getExam(user: AuthUser, publicId: string) {
@@ -458,7 +728,7 @@ export class ExamService {
   // ─────────────────────────── Exam questions ───────────────────────────
   async addQuestion(user: AuthUser, ip: string, examPublicId: string, dto: AddExamQuestionDto) {
     const exam = await this.loadExam(examPublicId);
-    await this.assertOwner(user, exam);
+    await this.assertCanAuthorExam(user, exam);
     if (exam.status !== 'draft') {
       throw new BadRequestException('Questions can only be changed while the exam is a draft');
     }
@@ -501,7 +771,7 @@ export class ExamService {
     examQuestionPublicId: string,
   ) {
     const exam = await this.loadExam(examPublicId);
-    await this.assertOwner(user, exam);
+    await this.assertCanAuthorExam(user, exam);
     if (exam.status !== 'draft') {
       throw new BadRequestException('Questions can only be changed while the exam is a draft');
     }
@@ -528,7 +798,7 @@ export class ExamService {
   /** Reorder the exam's questions. `order` is the full list of examQuestion publicIds, new order. */
   async reorderQuestions(user: AuthUser, ip: string, examPublicId: string, order: string[]) {
     const exam = await this.loadExam(examPublicId);
-    await this.assertOwner(user, exam);
+    await this.assertCanAuthorExam(user, exam);
     if (exam.status !== 'draft') {
       throw new BadRequestException('Questions can only be reordered while the exam is a draft');
     }
@@ -568,7 +838,7 @@ export class ExamService {
   // ─────────────────────────── State transitions ───────────────────────────
   async submit(user: AuthUser, ip: string, publicId: string) {
     const exam = await this.loadExam(publicId);
-    await this.assertOwner(user, exam); // owning teacher only (test e)
+    await this.assertCanAuthorExam(user, exam); // owning teacher or admin/head in scope
     this.assertTransition(exam.status, 'in_review'); // draft→in_review (test d rejects others)
     const count = await this.prisma.db.examQuestion.count({ where: { examId: exam.id } });
     if (count === 0) throw new BadRequestException('Add at least one question before submitting');

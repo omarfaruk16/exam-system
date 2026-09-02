@@ -17,7 +17,7 @@ export function ReportsPage() {
   const others = exams.filter((e) => e.status !== 'results_published');
 
   return (
-    <div className="mx-auto w-full max-w-4xl">
+    <div className="w-full">
       <header className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
         <p className="text-muted-foreground mt-1 text-sm">

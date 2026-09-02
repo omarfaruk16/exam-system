@@ -5,6 +5,7 @@ import type {
   ExamListItem,
   ExamQuestionItem,
   ExamSettings,
+  MarksMatrix,
   PartOption,
   QuestionBankSummary,
 } from '@exam/types';
@@ -27,6 +28,12 @@ export const fetchExamQuestions = (publicId: string) =>
   api.get<ExamQuestionItem[]>(`/exams/${publicId}/questions`);
 
 export const fetchMyParts = () => api.get<PartOption[]>('/exams/my/parts');
+
+/** Parts the current user may author into — teacher (assigned) or admin/head (in scope). */
+export const fetchAuthorableParts = () => api.get<PartOption[]>('/exams/authorable/parts');
+
+export const fetchMarksMatrix = (partPublicId: string) =>
+  api.get<MarksMatrix>(`/exams/parts/${encodeURIComponent(partPublicId)}/marks-matrix`);
 
 export interface ExamMetadataInput {
   title: string;
@@ -86,6 +93,17 @@ export interface CreateQuestionInput {
 
 export const createQuestion = (input: CreateQuestionInput) =>
   api.post<BankQuestion>('/questions', input);
+
+export type UpdateQuestionInput = {
+  text?: string;
+  marks?: number;
+  explanation?: string;
+  modelAnswer?: string;
+  options?: { text: string; isCorrect: boolean; order: number }[];
+};
+
+export const updateQuestion = (publicId: string, input: UpdateQuestionInput) =>
+  api.patch<BankQuestion>(`/questions/${publicId}`, input);
 
 /** Download all questions in a chapter as an xlsx file and trigger browser save. */
 export async function downloadExport(bankPublicId: string, chapterName: string): Promise<void> {

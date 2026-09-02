@@ -70,7 +70,7 @@ export function MyExamsPage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto w-full max-w-4xl space-y-4">
+      <div className="w-full space-y-4">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-32 w-full rounded-xl" />
         <Skeleton className="h-48 w-full rounded-xl" />
@@ -81,7 +81,7 @@ export function MyExamsPage() {
   const { upcoming, inProgress, completed } = groupExams(exams);
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-8">
+    <div className="w-full space-y-8">
       {/* ── Header ── */}
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">My Exams</h1>

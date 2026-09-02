@@ -24,7 +24,7 @@ export function ExamResultsPage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto w-full max-w-6xl space-y-4">
+      <div className="w-full space-y-4">
         <Skeleton className="h-5 w-32" />
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-72 w-full rounded-xl" />
@@ -46,7 +46,7 @@ export function ExamResultsPage() {
   const { exam, counts, rows } = data;
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="w-full">
       <button
         onClick={() => navigate('/exam-results')}
         className="text-muted-foreground hover:text-foreground mb-4 inline-flex items-center gap-1.5 text-sm"

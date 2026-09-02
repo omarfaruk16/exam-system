@@ -40,6 +40,20 @@ export class ExamController {
     return this.exams.listMyParts(u);
   }
 
+  // Parts the current user may author into (teacher: assigned; admin/head: in scope).
+  @Roles('teacher', 'admin', 'super_admin', 'department_head')
+  @Get('authorable/parts')
+  authorableParts(@CurrentUser() u: AuthUser) {
+    return this.exams.listAuthorableParts(u);
+  }
+
+  // Marks matrix for a course part (all exams × all students + aggregates).
+  @Roles('teacher', 'admin', 'super_admin', 'department_head')
+  @Get('parts/:partPublicId/marks-matrix')
+  partMarksMatrix(@CurrentUser() u: AuthUser, @Param('partPublicId') partPublicId: string) {
+    return this.exams.getPartMarksMatrix(u, partPublicId);
+  }
+
   @Roles('teacher', 'admin', 'super_admin', 'department_head')
   @Post()
   create(@CurrentUser() u: AuthUser, @Ip() ip: string, @Body() dto: CreateExamDto) {
@@ -81,7 +95,7 @@ export class ExamController {
     return this.exams.updateExam(u, ip, id, dto);
   }
 
-  @Roles('teacher')
+  @Roles('teacher', 'admin', 'super_admin', 'department_head')
   @Post(':publicId/questions')
   addQuestion(
     @CurrentUser() u: AuthUser,
@@ -92,7 +106,7 @@ export class ExamController {
     return this.exams.addQuestion(u, ip, id, dto);
   }
 
-  @Roles('teacher')
+  @Roles('teacher', 'admin', 'super_admin', 'department_head')
   @Patch(':publicId/questions/reorder')
   reorderQuestions(
     @CurrentUser() u: AuthUser,
@@ -103,7 +117,7 @@ export class ExamController {
     return this.exams.reorderQuestions(u, ip, id, dto.order);
   }
 
-  @Roles('teacher')
+  @Roles('teacher', 'admin', 'super_admin', 'department_head')
   @Delete(':publicId/questions/:examQuestionPublicId')
   removeQuestion(
     @CurrentUser() u: AuthUser,
@@ -115,7 +129,7 @@ export class ExamController {
   }
 
   // ── lifecycle: teacher-driven ──
-  @Roles('teacher')
+  @Roles('teacher', 'admin', 'super_admin', 'department_head')
   @Post(':publicId/submit')
   @HttpCode(200)
   submit(@CurrentUser() u: AuthUser, @Ip() ip: string, @Param('publicId') id: string) {

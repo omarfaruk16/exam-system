@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ExamListItem } from '@exam/types';
-import { CalendarClock, FileText, Loader2, Plus, Trash2 } from 'lucide-react';
+import { CalendarClock, FileText, Loader2, Plus, Trash2, Users } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChangesRequestedBanner } from '../shared/ChangesRequestedBanner';
-import { StartCountdown } from '../shared/ExamCountdown';
+import { StartCountdown, LiveCountdown } from '../shared/ExamCountdown';
 import { StatusPill } from '../shared/StatusPill';
 import { useServerNow } from '../shared/useServerNow';
 import { useSession } from '@/lib/session';
@@ -25,25 +25,77 @@ import { deleteExam, fetchExams, reviseExam } from './authoringApi';
 
 const ADMIN_EDITABLE_STATUSES = ['draft', 'in_review', 'approved', 'changes_requested'];
 
-interface Bucket {
+// ── Batch → Program → Semester grouping ──────────────────────────────────────
+interface SemesterGroup {
   key: string;
   label: string;
-  statuses: string[];
+  semesterNumber: number;
+  items: ExamListItem[];
+}
+interface ProgramGroup {
+  key: string;
+  label: string;
+  semesters: SemesterGroup[];
+}
+interface BatchGroup {
+  key: string;
+  label: string;
+  programs: ProgramGroup[];
 }
 
-// Order matters — actionable buckets first, terminal ones last.
-const BUCKETS: Bucket[] = [
-  { key: 'changes', label: 'Needs changes', statuses: ['changes_requested'] },
-  { key: 'draft', label: 'Drafts', statuses: ['draft'] },
-  { key: 'review', label: 'In review', statuses: ['in_review'] },
-  { key: 'approved', label: 'Approved', statuses: ['approved'] },
-  { key: 'live', label: 'Published & live', statuses: ['published', 'live'] },
-  {
-    key: 'done',
-    label: 'Ended & archived',
-    statuses: ['ended', 'grading', 'results_published', 'archived', 'rejected'],
-  },
-];
+const NO_BATCH = 'No session assigned yet';
+
+/**
+ * Nest the flat exam list as Batch → Program → Semester so staff browse exams by
+ * cohort. Batches sort newest-first (the "No session" bucket last), programmes
+ * alphabetically, semesters by number, and exams within a semester newest-first.
+ */
+function groupByBatch(exams: ExamListItem[]): BatchGroup[] {
+  const batches = new Map<string, Map<string, Map<string, ExamListItem[]>>>();
+  for (const e of exams) {
+    const b = e.batch ?? NO_BATCH;
+    const p = e.programName;
+    const s = `${e.semesterNumber}::${e.semesterLabel}`;
+    if (!batches.has(b)) batches.set(b, new Map());
+    const progs = batches.get(b)!;
+    if (!progs.has(p)) progs.set(p, new Map());
+    const sems = progs.get(p)!;
+    if (!sems.has(s)) sems.set(s, []);
+    sems.get(s)!.push(e);
+  }
+
+  const batchKeys = [...batches.keys()].sort((a, b) => {
+    if (a === NO_BATCH) return 1;
+    if (b === NO_BATCH) return -1;
+    return b.localeCompare(a); // newest session first
+  });
+
+  return batchKeys.map((b) => {
+    const progs = batches.get(b)!;
+    const programs: ProgramGroup[] = [...progs.keys()]
+      .sort((a, c) => a.localeCompare(c))
+      .map((p) => {
+        const sems = progs.get(p)!;
+        const semesters: SemesterGroup[] = [...sems.entries()]
+          .map(([sk, items]) => {
+            const sep = sk.indexOf('::');
+            const num = sk.slice(0, sep);
+            const label = sk.slice(sep + 2);
+            return {
+              key: sk,
+              label,
+              semesterNumber: Number(num),
+              items: items.sort(
+                (x, y) => new Date(y.startAt).getTime() - new Date(x.startAt).getTime(),
+              ),
+            };
+          })
+          .sort((x, y) => x.semesterNumber - y.semesterNumber);
+        return { key: p, label: p, semesters };
+      });
+    return { key: b, label: b, programs };
+  });
+}
 
 export function ExamListPage() {
   const navigate = useNavigate();
@@ -56,10 +108,7 @@ export function ExamListPage() {
   const { data: user } = useSession();
   const isAdmin = (user?.roles ?? []).some((r) => r.role === 'admin' || r.role === 'super_admin');
 
-  const grouped = BUCKETS.map((b) => ({
-    ...b,
-    items: (data ?? []).filter((e) => b.statuses.includes(e.status)),
-  })).filter((b) => b.items.length > 0);
+  const grouped = groupByBatch(data ?? []);
 
   // "Starting soon" — published exams whose start time is within the next hour
   // (or already due but not yet flipped live), soonest first.
@@ -74,7 +123,7 @@ export function ExamListPage() {
     .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
 
   return (
-    <div className="mx-auto w-full max-w-4xl">
+    <div className="w-full">
       <header className="mb-6 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Exams</h1>
@@ -114,10 +163,11 @@ export function ExamListPage() {
                     </span>
                   </button>
                   {isLive ? (
-                    <span className="text-success flex items-center gap-1.5 text-xs font-medium">
-                      <span className="bg-success inline-block size-2 animate-pulse rounded-full" />
-                      Live now
-                    </span>
+                    <LiveCountdown
+                      endAtMs={new Date(e.endAt).getTime()}
+                      nowMs={nowMs}
+                      className="text-xs"
+                    />
                   ) : nowMs < startMs ? (
                     <StartCountdown startAtMs={startMs} nowMs={nowMs} />
                   ) : (
@@ -140,13 +190,41 @@ export function ExamListPage() {
         <EmptyState onCreate={() => navigate('/exams/new')} />
       ) : (
         <div className="space-y-8">
-          {grouped.map((b) => (
-            <section key={b.key} className="space-y-3">
-              <h2 className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">
-                {b.label}
-              </h2>
-              {b.items.map((exam) => (
-                <ExamCard key={exam.publicId} exam={exam} isAdmin={isAdmin} nowMs={nowMs} />
+          {grouped.map((batch) => (
+            <section key={batch.key} className="space-y-4">
+              {/* Batch (session) header */}
+              <div className="flex items-center gap-2">
+                <Users className="text-primary size-4 shrink-0" />
+                <h2 className="text-base font-semibold tracking-tight">{batch.label}</h2>
+                <span className="text-muted-foreground text-xs">
+                  {batch.programs.reduce(
+                    (n, p) => n + p.semesters.reduce((m, s) => m + s.items.length, 0),
+                    0,
+                  )}{' '}
+                  exam
+                  {batch.programs.reduce(
+                    (n, p) => n + p.semesters.reduce((m, s) => m + s.items.length, 0),
+                    0,
+                  ) === 1
+                    ? ''
+                    : 's'}
+                </span>
+              </div>
+
+              {batch.programs.map((program) => (
+                <div key={program.key} className="border-border/60 space-y-3 border-l-2 pl-4">
+                  <h3 className="text-foreground/90 text-sm font-medium">{program.label}</h3>
+                  {program.semesters.map((sem) => (
+                    <div key={sem.key} className="space-y-2.5">
+                      <h4 className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">
+                        {sem.label}
+                      </h4>
+                      {sem.items.map((exam) => (
+                        <ExamCard key={exam.publicId} exam={exam} isAdmin={isAdmin} nowMs={nowMs} />
+                      ))}
+                    </div>
+                  ))}
+                </div>
               ))}
             </section>
           ))}
@@ -230,10 +308,10 @@ function ExamCard({
               <p className="text-warning mt-2 text-xs">Opening — going live any moment…</p>
             ))}
           {exam.status === 'live' && (
-            <p className="text-success mt-2 flex items-center gap-1.5 text-xs font-medium">
-              <span className="bg-success inline-block size-2 rounded-full" />
-              Live now — students can start
-            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+              <LiveCountdown endAtMs={new Date(exam.endAt).getTime()} nowMs={nowMs} />
+              <span className="text-muted-foreground">students can start</span>
+            </div>
           )}
         </div>
 

@@ -16,6 +16,7 @@ import { ExamBuilderPage } from '@/features/authoring/ExamBuilderPage';
 import { GradingExamsPage } from '@/features/teacher/GradingExamsPage';
 import { GradingWorkspace } from '@/features/teacher/GradingWorkspace';
 import { MyCoursesPage } from '@/features/teacher/MyCoursesPage';
+import { MarksMatrixPage } from '@/features/teacher/MarksMatrixPage';
 import { QuestionBankPage } from '@/features/teacher/QuestionBankPage';
 import { ResultsPortalPage } from '@/features/teacher/ResultsPortalPage';
 import { ExamResultsPage } from '@/features/teacher/ExamResultsPage';
@@ -134,6 +135,7 @@ export function App() {
           element={<PlaceholderPage title="Department" icon={Building2} />}
         />
         <Route path="/courses" element={<MyCoursesPage />} />
+        <Route path="/courses/:partPublicId/marks" element={<MarksMatrixPage />} />
         <Route path="/questions" element={<QuestionBankPage />} />
         <Route path="/grading" element={<GradingExamsPage />} />
         <Route path="/grading/:examPublicId" element={<GradingWorkspace />} />

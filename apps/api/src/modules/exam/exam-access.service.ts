@@ -105,4 +105,39 @@ export class ExamAccessService {
   assertAdminScope(user: AuthUser, ctx: { departmentId: number; facultyId: number }): void {
     this.acl.assertDepartment(user, ctx.departmentId, ctx.facultyId);
   }
+
+  /**
+   * Unified authoring guard: allows either the teacher assigned to the part OR an
+   * admin / super_admin / department_head acting within their scope. Returns a
+   * `teacherId` to attribute created rows to (the assigned teacher) — this is null
+   * for staff when no teacher is assigned; callers that must set a creator should
+   * reject a null teacherId. Used so admins can author question banks/questions and
+   * build exams exactly like the assigned teacher.
+   */
+  async requireAuthorablePartAny(
+    user: AuthUser,
+    coursePartPublicId: string,
+  ): Promise<CoursePartContext & { teacherId: number | null }> {
+    const ctx = await this.loadActiveCoursePart(coursePartPublicId);
+    const isStaff = user.roles.some(
+      (r) => r.role === 'admin' || r.role === 'super_admin' || r.role === 'department_head',
+    );
+    const isTeacher = user.roles.some((r) => r.role === 'teacher');
+
+    if (isTeacher) {
+      const teacher = await this.requireTeacher(user);
+      if (ctx.assignedTeacherId === teacher.id) return { ...ctx, teacherId: teacher.id };
+      // A teacher who isn't assigned may still act if they ALSO hold a staff role in scope.
+      if (!isStaff) {
+        throw new ForbiddenException('You are not assigned to this course part');
+      }
+    }
+
+    if (isStaff) {
+      this.assertAdminScope(user, ctx);
+      return { ...ctx, teacherId: ctx.assignedTeacherId };
+    }
+
+    throw new ForbiddenException('You are not assigned to this course part');
+  }
 }

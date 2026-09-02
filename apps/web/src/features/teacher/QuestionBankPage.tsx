@@ -7,6 +7,7 @@ import {
   Download,
   FileDown,
   Loader2,
+  Pencil,
   Plus,
   Upload,
 } from 'lucide-react';
@@ -23,17 +24,18 @@ import {
   createQuestion,
   downloadExport,
   downloadTemplate,
+  fetchAuthorableParts,
   fetchBankQuestions,
   fetchBanks,
   fetchImportStatus,
-  fetchMyParts,
   importQuestions,
+  updateQuestion,
 } from '@/features/authoring/authoringApi';
 
 export function QuestionBankPage() {
   const { data: parts, isLoading } = useQuery({
-    queryKey: ['my-offering-parts'],
-    queryFn: fetchMyParts,
+    queryKey: ['authorable-parts'],
+    queryFn: fetchAuthorableParts,
   });
   const [selectedPartId, setSelectedPartId] = useState<string>('');
 
@@ -44,11 +46,11 @@ export function QuestionBankPage() {
   const selectedPart = parts?.find((p) => p.publicId === selectedPartId);
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <div className="w-full">
       <header className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight">Question Bank</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          Manage chapters and questions for your assigned course parts. Each chapter groups related
+          Manage chapters and questions for your course parts. Each chapter groups related
           questions. Use $…$ for inline math and $$…$$ for display math.
         </p>
       </header>
@@ -388,7 +390,13 @@ function BankQuestions({ bankId, bank }: { bankId: string; bank: QuestionBankSum
       ) : (
         <ul className="space-y-2">
           {questions.map((q, i) => (
-            <QuestionCard key={q.publicId} q={q} index={i} />
+            <QuestionCard
+              key={q.publicId}
+              q={q}
+              index={i}
+              bankPublicId={bankId}
+              onSaved={() => qc.invalidateQueries({ queryKey: ['bank-questions', bankId] })}
+            />
           ))}
         </ul>
       )}
@@ -453,43 +461,80 @@ function ImportStatusBanner({
   );
 }
 
-function QuestionCard({ q, index }: { q: BankQuestion; index: number }) {
+function QuestionCard({
+  q,
+  index,
+  bankPublicId,
+  onSaved,
+}: {
+  q: BankQuestion;
+  index: number;
+  bankPublicId: string;
+  onSaved: () => void;
+}) {
   const [expanded, setExpanded] = useState(false);
+  const [editing, setEditing] = useState(false);
+
+  if (editing) {
+    return (
+      <li className="bg-card rounded-lg border p-4">
+        <QuestionForm
+          bankPublicId={bankPublicId}
+          question={q}
+          onSaved={() => {
+            onSaved();
+            setEditing(false);
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      </li>
+    );
+  }
 
   return (
     <li className="bg-card rounded-lg border">
-      <button
-        type="button"
-        className="flex w-full items-start gap-3 p-4 text-left"
-        onClick={() => setExpanded((v) => !v)}
-      >
-        <span className="bg-muted mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
-          {index + 1}
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="mb-1 flex flex-wrap items-center gap-2">
-            <span
-              className={cn(
-                'rounded-full px-2 py-0.5 text-[10px] font-medium uppercase',
-                q.type === 'mcq'
-                  ? 'bg-blue-500/10 text-blue-700 dark:text-blue-300'
-                  : 'bg-purple-500/10 text-purple-700 dark:text-purple-300',
-              )}
-            >
-              {q.type}
-            </span>
-            <span className="text-muted-foreground text-xs">{q.marks} marks</span>
+      <div className="flex items-start gap-2 p-4">
+        <button
+          type="button"
+          className="flex flex-1 items-start gap-3 text-left"
+          onClick={() => setExpanded((v) => !v)}
+        >
+          <span className="bg-muted mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
+            {index + 1}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              <span
+                className={cn(
+                  'rounded-full px-2 py-0.5 text-[10px] font-medium uppercase',
+                  q.type === 'mcq'
+                    ? 'bg-blue-500/10 text-blue-700 dark:text-blue-300'
+                    : 'bg-purple-500/10 text-purple-700 dark:text-purple-300',
+                )}
+              >
+                {q.type}
+              </span>
+              <span className="text-muted-foreground text-xs">{q.marks} marks</span>
+            </div>
+            <p className="text-sm leading-snug">
+              <MathText text={q.text} />
+            </p>
           </div>
-          <p className="text-sm leading-snug">
-            <MathText text={q.text} />
-          </p>
-        </div>
-        {expanded ? (
-          <ChevronDown className="text-muted-foreground mt-0.5 size-4 shrink-0" />
-        ) : (
-          <ChevronRight className="text-muted-foreground mt-0.5 size-4 shrink-0" />
-        )}
-      </button>
+          {expanded ? (
+            <ChevronDown className="text-muted-foreground mt-0.5 size-4 shrink-0" />
+          ) : (
+            <ChevronRight className="text-muted-foreground mt-0.5 size-4 shrink-0" />
+          )}
+        </button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 shrink-0 px-2 text-xs"
+          onClick={() => setEditing(true)}
+        >
+          <Pencil className="size-3.5" /> Edit
+        </Button>
+      </div>
 
       {expanded && (
         <div className="space-y-2 border-t px-4 pb-4 pt-3">
@@ -533,20 +578,35 @@ const EMPTY_OPTIONS = ['', '', '', ''];
 
 function QuestionForm({
   bankPublicId,
+  question,
   onSaved,
   onCancel,
 }: {
   bankPublicId: string;
+  /** When provided, the form edits this question instead of creating a new one. */
+  question?: BankQuestion;
   onSaved: () => void;
   onCancel: () => void;
 }) {
-  const [type, setType] = useState<QType>('mcq');
-  const [text, setText] = useState('');
-  const [marks, setMarks] = useState('1');
-  const [explanation, setExplanation] = useState('');
-  const [modelAnswer, setModelAnswer] = useState('');
-  const [options, setOptions] = useState<string[]>(EMPTY_OPTIONS);
-  const [correctIndex, setCorrectIndex] = useState(0);
+  const isEdit = Boolean(question);
+  const initialOptions = question?.options?.length
+    ? [...question.options].sort((a, b) => a.order - b.order).map((o) => o.text)
+    : EMPTY_OPTIONS;
+  const initialCorrect = question?.options?.length
+    ? Math.max(
+        0,
+        [...question.options].sort((a, b) => a.order - b.order).findIndex((o) => o.isCorrect),
+      )
+    : 0;
+
+  // The question type is fixed on edit (the API keys explanation/options off it).
+  const [type, setType] = useState<QType>((question?.type as QType) ?? 'mcq');
+  const [text, setText] = useState(question?.text ?? '');
+  const [marks, setMarks] = useState(question ? String(question.marks) : '1');
+  const [explanation, setExplanation] = useState(question?.explanation ?? '');
+  const [modelAnswer, setModelAnswer] = useState(question?.modelAnswer ?? '');
+  const [options, setOptions] = useState<string[]>(initialOptions);
+  const [correctIndex, setCorrectIndex] = useState(initialCorrect);
   const [attempted, setAttempted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -557,8 +617,26 @@ function QuestionForm({
   const validMarks = marksNum > 0;
   const validOptions = type !== 'mcq' || (nonEmptyCount >= 2 && !!filledOptions[correctIndex]);
 
-  const create = useMutation({
+  const save = useMutation({
     mutationFn: () => {
+      if (isEdit && question) {
+        const payload =
+          type === 'mcq'
+            ? {
+                text: text.trim(),
+                marks: marksNum,
+                explanation: explanation.trim() || undefined,
+                options: filledOptions
+                  .map((t, i) => ({ text: t, isCorrect: i === correctIndex, order: i }))
+                  .filter((o) => o.text.length > 0),
+              }
+            : {
+                text: text.trim(),
+                marks: marksNum,
+                modelAnswer: modelAnswer.trim() || undefined,
+              };
+        return updateQuestion(question.publicId, payload);
+      }
       const payload =
         type === 'mcq'
           ? {
@@ -581,7 +659,7 @@ function QuestionForm({
       return createQuestion(payload);
     },
     onSuccess: () => {
-      toast.success('Question added');
+      toast.success(isEdit ? 'Question updated' : 'Question added');
       onSaved();
     },
     onError: (e) => setError(e instanceof Error ? e.message : 'Could not save question'),
@@ -591,13 +669,13 @@ function QuestionForm({
     setAttempted(true);
     if (!validText || !validMarks || !validOptions) return;
     setError(null);
-    create.mutate();
+    save.mutate();
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold">New question</p>
+        <p className="text-sm font-semibold">{isEdit ? 'Edit question' : 'New question'}</p>
         <button
           type="button"
           onClick={onCancel}
@@ -607,18 +685,21 @@ function QuestionForm({
         </button>
       </div>
 
-      {/* Type */}
+      {/* Type — locked while editing */}
       <div className="flex w-fit items-center gap-1 rounded-md border p-0.5">
         {(['mcq', 'written'] as QType[]).map((t) => (
           <button
             key={t}
             type="button"
-            onClick={() => setType(t)}
+            disabled={isEdit}
+            onClick={() => !isEdit && setType(t)}
             className={cn(
               'rounded px-3 py-1 text-xs font-medium transition-colors',
               type === t
                 ? 'bg-primary text-primary-foreground'
                 : 'text-muted-foreground hover:text-foreground',
+              isEdit && type !== t && 'opacity-40',
+              isEdit && 'cursor-not-allowed',
             )}
           >
             {t === 'mcq' ? 'MCQ' : 'Written'}
@@ -732,8 +813,9 @@ function QuestionForm({
         <Button type="button" variant="outline" size="sm" onClick={onCancel}>
           Cancel
         </Button>
-        <Button size="sm" onClick={submit} disabled={create.isPending}>
-          {create.isPending && <Loader2 className="size-4 animate-spin" />} Add to bank
+        <Button size="sm" onClick={submit} disabled={save.isPending}>
+          {save.isPending && <Loader2 className="size-4 animate-spin" />}{' '}
+          {isEdit ? 'Save changes' : 'Add to bank'}
         </Button>
       </div>
     </div>

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { PartOption } from '@exam/types';
-import { BookOpen, FileCheck2, Plus } from 'lucide-react';
+import { BookOpen, FileCheck2, Plus, TableProperties, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -15,7 +15,7 @@ export function MyCoursesPage() {
   });
 
   return (
-    <div className="mx-auto w-full max-w-3xl">
+    <div className="w-full">
       <header className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight">My Courses</h1>
         <p className="text-muted-foreground mt-1 text-sm">
@@ -47,6 +47,7 @@ export function MyCoursesPage() {
               part={part}
               onCreateExam={() => navigate('/exams/new')}
               onViewExams={() => navigate('/exams')}
+              onViewMarks={() => navigate(`/courses/${part.publicId}/marks`)}
             />
           ))}
         </div>
@@ -59,10 +60,12 @@ function CoursePartCard({
   part,
   onCreateExam,
   onViewExams,
+  onViewMarks,
 }: {
   part: PartOption;
   onCreateExam: () => void;
   onViewExams: () => void;
+  onViewMarks: () => void;
 }) {
   return (
     <Card className="p-5">
@@ -76,9 +79,29 @@ function CoursePartCard({
           </div>
           <p className="text-muted-foreground mt-1 text-sm">
             Part: <span className="text-foreground font-medium">{part.partName}</span>
+            {part.semesterLabel && (
+              <>
+                {' · '}
+                <span className="text-foreground font-medium">{part.semesterLabel}</span>
+              </>
+            )}
+          </p>
+          <p className="mt-1.5 flex items-center gap-1.5 text-sm">
+            <Users className="text-muted-foreground size-3.5 shrink-0" />
+            {part.currentBatch ? (
+              <span className="text-foreground">
+                Current batch: <span className="font-medium">{part.currentBatch}</span>
+              </span>
+            ) : (
+              <span className="text-muted-foreground italic">No batch in this semester yet</span>
+            )}
           </p>
         </div>
-        <div className="flex shrink-0 gap-2">
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={onViewMarks}>
+            <TableProperties className="size-4" />
+            Marks sheet
+          </Button>
           <Button variant="outline" size="sm" onClick={onViewExams}>
             <FileCheck2 className="size-4" />
             View exams

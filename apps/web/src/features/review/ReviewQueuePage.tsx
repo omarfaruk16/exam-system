@@ -16,7 +16,7 @@ export function ReviewQueuePage() {
   );
 
   return (
-    <div className="mx-auto w-full max-w-4xl">
+    <div className="w-full">
       <header className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight">Review queue</h1>
         <p className="text-muted-foreground mt-1 text-sm">

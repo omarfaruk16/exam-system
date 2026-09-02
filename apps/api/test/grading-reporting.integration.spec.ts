@@ -111,7 +111,7 @@ beforeAll(async () => {
   grading = new GradingService(prisma, attemptGrading);
   written = new WrittenGradingService(prisma, audit, access, attemptGrading);
   results = new ResultsService(prisma, audit);
-  reportData = new ReportDataService(prisma);
+  reportData = new ReportDataService(prisma, config);
   reportService = new ReportService(reportQueue, prisma, access, config, redis);
 
   const t1u = await prisma.db.user.findFirstOrThrow({

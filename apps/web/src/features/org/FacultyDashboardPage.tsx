@@ -50,7 +50,7 @@ export function FacultyDashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto w-full max-w-5xl space-y-4">
+      <div className="w-full space-y-4">
         <Skeleton className="h-5 w-32" />
         <Skeleton className="h-10 w-64" />
         <div className="grid grid-cols-4 gap-3">
@@ -75,7 +75,7 @@ export function FacultyDashboardPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <div className="w-full">
       <button
         onClick={() => navigate('/org')}
         className="text-muted-foreground hover:text-foreground mb-4 inline-flex items-center gap-1.5 text-sm"

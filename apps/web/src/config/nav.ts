@@ -27,6 +27,7 @@ const BY_ROLE: Record<RoleName, NavItem[]> = {
     HOME,
     { label: 'Organization', path: '/org', icon: Building2 },
     { label: 'Exams', path: '/exams', icon: FileCheck2 },
+    { label: 'Question Bank', path: '/questions', icon: ListChecks },
     { label: 'Review', path: '/review', icon: ClipboardCheck },
     { label: 'Results', path: '/exam-results', icon: ClipboardList },
     { label: 'Reports', path: '/reports', icon: BarChart3 },
@@ -37,6 +38,7 @@ const BY_ROLE: Record<RoleName, NavItem[]> = {
     HOME,
     { label: 'Organization', path: '/org', icon: Building2 },
     { label: 'Exams', path: '/exams', icon: FileCheck2 },
+    { label: 'Question Bank', path: '/questions', icon: ListChecks },
     { label: 'Review', path: '/review', icon: ClipboardCheck },
     { label: 'Results', path: '/exam-results', icon: ClipboardList },
     { label: 'Reports', path: '/reports', icon: BarChart3 },
@@ -45,6 +47,7 @@ const BY_ROLE: Record<RoleName, NavItem[]> = {
   department_head: [
     HOME,
     { label: 'Organization', path: '/org', icon: Building2 },
+    { label: 'Question Bank', path: '/questions', icon: ListChecks },
     { label: 'Review', path: '/review', icon: ClipboardCheck },
     { label: 'Results', path: '/exam-results', icon: ClipboardList },
     { label: 'Reports', path: '/reports', icon: BarChart3 },

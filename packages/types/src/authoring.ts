@@ -9,12 +9,55 @@ export interface ExamSettings {
   negativeMarkValue: number;
 }
 
+/** Per-course-part marks matrix: every exam × every student, with aggregates. */
+export interface MarksMatrixExam {
+  publicId: string;
+  title: string;
+  date: string; // ISO startAt
+  totalMarks: number;
+}
+export interface MarksMatrixRow {
+  studentPublicId: string;
+  studentId: string;
+  name: string;
+  rollNumber: string | null;
+  /** examPublicId → score (null = absent / no result). */
+  scores: Record<string, number | null>;
+  /** Count of exams the student actually has a score for. */
+  attemptedCount: number;
+  average: number | null; // mean of achieved scores
+  best: number | null; // highest single score
+  bestTwoAverage: number | null; // mean of top two scores (only when >2 exams exist)
+}
+export interface MarksMatrix {
+  part: {
+    publicId: string;
+    courseCode: string;
+    courseName: string;
+    partName: string;
+    semesterLabel: string;
+    batch: string | null;
+  };
+  exams: MarksMatrixExam[];
+  rows: MarksMatrixRow[];
+  /** True when there are more than two exams, so best-two-average is meaningful. */
+  hasBestTwo: boolean;
+}
+
 /** One card in the authoring exam list. */
 export interface ExamListItem {
   publicId: string;
   title: string;
   courseCode: string;
+  courseName: string;
   part: string;
+  /** Given semester name or "Semester N". */
+  semesterLabel: string;
+  semesterNumber: number;
+  programName: string;
+  departmentName: string;
+  /** Batch(es) currently sitting the exam's semester, joined; null if none assigned. */
+  batch: string | null;
   startAt: string;
   endAt: string;
   durationMinutes: number;
@@ -164,5 +207,9 @@ export interface PartOption {
   partName: string;
   courseCode: string;
   courseTitle: string;
+  /** Human semester label (given name or "Semester N"). */
+  semesterLabel?: string;
+  /** Batch(es) currently sitting in this course's semester, joined; null if none assigned. */
+  currentBatch?: string | null;
   label: string;
 }
