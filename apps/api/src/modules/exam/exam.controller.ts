@@ -47,6 +47,13 @@ export class ExamController {
     return this.exams.listAuthorableParts(u);
   }
 
+  // Conducted exams for the Results portal, tagged with the batch that sat each one.
+  @Roles('teacher', 'admin', 'super_admin', 'department_head')
+  @Get('my/conducted-results')
+  conductedResults(@CurrentUser() u: AuthUser) {
+    return this.exams.getMyConductedExams(u);
+  }
+
   // Marks matrix for a course part (all exams × all students + aggregates).
   @Roles('teacher', 'admin', 'super_admin', 'department_head')
   @Get('parts/:partPublicId/marks-matrix')

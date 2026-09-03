@@ -69,6 +69,32 @@ export interface ExamListItem {
   createdByName: string;
 }
 
+/**
+ * A conducted exam for the Results portal, tagged with the batch that sat it and whether that
+ * batch is the current cohort — powers the "current session by default, filter to previous
+ * sessions" view (GET /exams/my/conducted-results).
+ */
+export interface TeacherConductedExam {
+  publicId: string;
+  title: string;
+  courseCode: string;
+  courseName: string;
+  part: string;
+  status: string;
+  startAt: string;
+  totalMarks: number;
+  durationMinutes: number;
+  semesterNumber: number;
+  semesterLabel: string;
+  /** The batch that actually sat this exam (null if it can't be determined). */
+  batchName: string | null;
+  batchPublicId: string | null;
+  /** True when that batch currently sits this exam's semester (the ongoing session). */
+  isCurrentBatch: boolean;
+  /** Number of students who attempted. */
+  attempted: number;
+}
+
 /** One student's row in the per-exam review roster (GET /exams/:id/results). */
 export interface ExamResultRow {
   studentPublicId: string;

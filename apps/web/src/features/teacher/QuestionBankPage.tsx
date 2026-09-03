@@ -30,6 +30,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { MathText } from '@/components/ui/math-text';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useSession } from '@/lib/session';
 import { cn } from '@/lib/utils';
 import {
   createBank,
@@ -60,6 +61,13 @@ export function QuestionBankPage() {
   const [selectedPartId, setSelectedPartId] = useState<string>('');
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<PartFilters>({});
+
+  // Only admins / heads get the Faculty→…→Course filter. A plain teacher sees just their
+  // own course parts — no faculty/department filtering needed.
+  const { data: sessionUser } = useSession();
+  const isStaff = (sessionUser?.roles ?? []).some(
+    (r) => r.role === 'admin' || r.role === 'super_admin' || r.role === 'department_head',
+  );
 
   const all = parts ?? [];
 
@@ -114,6 +122,13 @@ export function QuestionBankPage() {
     }
   }, [filteredParts, selectedPartId]);
 
+  // A plain teacher lands straight on their first course part (no filtering to do first).
+  useEffect(() => {
+    if (!isStaff && !selectedPartId && filteredParts.length > 0) {
+      setSelectedPartId(filteredParts[0]!.publicId);
+    }
+  }, [isStaff, selectedPartId, filteredParts]);
+
   const selectedPart = all.find((p) => p.publicId === selectedPartId);
 
   function selectLevel(level: FilterLevel, value: string) {
@@ -160,76 +175,81 @@ export function QuestionBankPage() {
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
           {/* Cascading filter + search + part list */}
           <aside className="w-full shrink-0 lg:w-72">
-            {/* Search */}
-            <div className="relative">
-              <Search className="text-muted-foreground absolute left-2.5 top-1/2 size-4 -translate-y-1/2" />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search course, code or part…"
-                className="h-9 pl-8"
-              />
-            </div>
+            {/* Search + Faculty→…→Course filter — admin/head only. A teacher just sees their parts. */}
+            {isStaff && (
+              <>
+                {/* Search */}
+                <div className="relative">
+                  <Search className="text-muted-foreground absolute left-2.5 top-1/2 size-4 -translate-y-1/2" />
+                  <Input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search course, code or part…"
+                    className="h-9 pl-8"
+                  />
+                </div>
 
-            {/* Cascading selectors */}
-            <div className="mt-3 space-y-2">
-              <FilterSelect
-                label="Faculty"
-                value={filters.faculty ?? ''}
-                options={faculties.map((v) => ({ value: v, label: v }))}
-                onChange={(v) => selectLevel('faculty', v)}
-                className={selectClass}
-              />
-              <FilterSelect
-                label="Department"
-                value={filters.department ?? ''}
-                options={departments.map((v) => ({ value: v, label: v }))}
-                onChange={(v) => selectLevel('department', v)}
-                disabled={!filters.faculty}
-                className={selectClass}
-              />
-              <FilterSelect
-                label="Programme"
-                value={filters.program ?? ''}
-                options={programs.map((v) => ({ value: v, label: v }))}
-                onChange={(v) => selectLevel('program', v)}
-                disabled={!filters.department}
-                className={selectClass}
-              />
-              <FilterSelect
-                label="Semester"
-                value={filters.semester ?? ''}
-                options={semesters.map((v) => ({ value: v, label: v }))}
-                onChange={(v) => selectLevel('semester', v)}
-                disabled={!filters.program}
-                className={selectClass}
-              />
-              <FilterSelect
-                label="Course"
-                value={filters.course ?? ''}
-                options={courses.map(([code, label]) => ({ value: code, label }))}
-                onChange={(v) => selectLevel('course', v)}
-                disabled={!filters.semester}
-                className={selectClass}
-              />
-            </div>
+                {/* Cascading selectors */}
+                <div className="mt-3 space-y-2">
+                  <FilterSelect
+                    label="Faculty"
+                    value={filters.faculty ?? ''}
+                    options={faculties.map((v) => ({ value: v, label: v }))}
+                    onChange={(v) => selectLevel('faculty', v)}
+                    className={selectClass}
+                  />
+                  <FilterSelect
+                    label="Department"
+                    value={filters.department ?? ''}
+                    options={departments.map((v) => ({ value: v, label: v }))}
+                    onChange={(v) => selectLevel('department', v)}
+                    disabled={!filters.faculty}
+                    className={selectClass}
+                  />
+                  <FilterSelect
+                    label="Programme"
+                    value={filters.program ?? ''}
+                    options={programs.map((v) => ({ value: v, label: v }))}
+                    onChange={(v) => selectLevel('program', v)}
+                    disabled={!filters.department}
+                    className={selectClass}
+                  />
+                  <FilterSelect
+                    label="Semester"
+                    value={filters.semester ?? ''}
+                    options={semesters.map((v) => ({ value: v, label: v }))}
+                    onChange={(v) => selectLevel('semester', v)}
+                    disabled={!filters.program}
+                    className={selectClass}
+                  />
+                  <FilterSelect
+                    label="Course"
+                    value={filters.course ?? ''}
+                    options={courses.map(([code, label]) => ({ value: code, label }))}
+                    onChange={(v) => selectLevel('course', v)}
+                    disabled={!filters.semester}
+                    className={selectClass}
+                  />
+                </div>
 
-            {hasActiveFilter && (
-              <button
-                type="button"
-                onClick={() => {
-                  setFilters({});
-                  setSearch('');
-                }}
-                className="text-muted-foreground hover:text-foreground mt-2 inline-flex items-center gap-1 text-xs"
-              >
-                <X className="size-3" /> Clear filters
-              </button>
+                {hasActiveFilter && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFilters({});
+                      setSearch('');
+                    }}
+                    className="text-muted-foreground hover:text-foreground mt-2 inline-flex items-center gap-1 text-xs"
+                  >
+                    <X className="size-3" /> Clear filters
+                  </button>
+                )}
+              </>
             )}
 
             {/* Matching parts */}
             <p className="text-muted-foreground mb-2 mt-4 text-xs font-semibold uppercase tracking-wide">
-              Course parts ({filteredParts.length})
+              {isStaff ? `Course parts (${filteredParts.length})` : 'Your course parts'}
             </p>
             {filteredParts.length === 0 ? (
               <p className="text-muted-foreground rounded-md border border-dashed px-3 py-4 text-center text-xs">

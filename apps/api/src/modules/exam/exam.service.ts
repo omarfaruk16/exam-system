@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { type ExamStatus, Prisma } from '@prisma/client';
+import type { TeacherConductedExam } from '@exam/types';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { AuthUser } from '../../common/types/auth';
 import { AuditService } from '../audit/audit.service';
@@ -249,6 +250,151 @@ export class ExamService {
         reviewNote: e.reviewNote,
         updatedAt: e.updatedAt.toISOString(),
         createdByName: e.createdBy.user.displayName,
+      };
+    });
+  }
+
+  /**
+   * Conducted exams for the Results portal, each tagged with the BATCH that actually sat it
+   * (derived from attempts; falls back to the batch currently sitting the semester) and whether
+   * that batch is the current cohort. Lets the teacher default to the current session and filter
+   * back to previous batches/semesters. Scoped like listExams (teacher=own, head=dept, admin=all).
+   */
+  async getMyConductedExams(user: AuthUser): Promise<TeacherConductedExam[]> {
+    const CONDUCTED: ExamStatus[] = ['live', 'ended', 'grading', 'results_published'];
+    let where: Prisma.ExamWhereInput;
+    if (this.isAdmin(user)) {
+      where = { deletedAt: null };
+    } else if (user.roles.some((r) => r.role === 'department_head')) {
+      const deptIds = user.roles
+        .filter((r) => r.role === 'department_head' && r.scopeDepartmentId !== null)
+        .map((r) => r.scopeDepartmentId as number);
+      where = {
+        deletedAt: null,
+        coursePart: { course: { semester: { program: { departmentId: { in: deptIds } } } } },
+      };
+    } else {
+      const teacher = await this.access.requireTeacher(user);
+      where = { deletedAt: null, createdByTeacherId: teacher.id };
+    }
+    where.status = { in: CONDUCTED };
+
+    const exams = await this.prisma.db.exam.findMany({
+      where,
+      select: {
+        id: true,
+        publicId: true,
+        title: true,
+        status: true,
+        startAt: true,
+        totalMarks: true,
+        durationMinutes: true,
+        coursePart: {
+          select: {
+            name: true,
+            course: {
+              select: {
+                code: true,
+                name: true,
+                semesterId: true,
+                semester: { select: { number: true, name: true } },
+              },
+            },
+          },
+        },
+      },
+      orderBy: [{ startAt: 'desc' }],
+    });
+    const examIds = exams.map((e) => e.id);
+    const semesterIds = [...new Set(exams.map((e) => e.coursePart.course.semesterId))];
+
+    // The batch currently sitting each semester (fallback when an exam has no attempts yet).
+    const currentBatches = semesterIds.length
+      ? await this.prisma.db.batch.findMany({
+          where: { currentSemesterId: { in: semesterIds }, deletedAt: null },
+          select: { publicId: true, name: true, currentSemesterId: true },
+        })
+      : [];
+    const currentBySem = new Map(currentBatches.map((b) => [b.currentSemesterId as number, b]));
+
+    // Which batch actually sat each exam, from the attempting students (most frequent wins).
+    const attempts = examIds.length
+      ? await this.prisma.db.examAttempt.findMany({
+          where: { examId: { in: examIds } },
+          select: {
+            examId: true,
+            student: {
+              select: {
+                batch: { select: { publicId: true, name: true, currentSemesterId: true } },
+              },
+            },
+          },
+        })
+      : [];
+    const attemptedByExam = new Map<number, number>();
+    const batchCountByExam = new Map<
+      number,
+      Map<string, { publicId: string; name: string; currentSemesterId: number | null; n: number }>
+    >();
+    for (const a of attempts) {
+      attemptedByExam.set(a.examId, (attemptedByExam.get(a.examId) ?? 0) + 1);
+      const b = a.student.batch;
+      let m = batchCountByExam.get(a.examId);
+      if (!m) {
+        m = new Map();
+        batchCountByExam.set(a.examId, m);
+      }
+      const cur = m.get(b.publicId) ?? {
+        publicId: b.publicId,
+        name: b.name,
+        currentSemesterId: b.currentSemesterId,
+        n: 0,
+      };
+      cur.n += 1;
+      m.set(b.publicId, cur);
+    }
+    const primaryBatch = (examId: number) => {
+      const m = batchCountByExam.get(examId);
+      if (!m) return null;
+      return [...m.values()].sort((x, y) => y.n - x.n)[0] ?? null;
+    };
+
+    return exams.map((e) => {
+      const course = e.coursePart.course;
+      const sem = course.semester;
+      const semLabel = sem.name?.trim() ? sem.name : `Semester ${sem.number}`;
+      const pb = primaryBatch(e.id);
+      let batchName: string | null = null;
+      let batchPublicId: string | null = null;
+      let isCurrentBatch = false;
+      if (pb) {
+        batchName = pb.name;
+        batchPublicId = pb.publicId;
+        isCurrentBatch = pb.currentSemesterId === course.semesterId;
+      } else {
+        const cb = currentBySem.get(course.semesterId);
+        if (cb) {
+          batchName = cb.name;
+          batchPublicId = cb.publicId;
+          isCurrentBatch = true;
+        }
+      }
+      return {
+        publicId: e.publicId,
+        title: e.title,
+        courseCode: course.code,
+        courseName: course.name,
+        part: e.coursePart.name,
+        status: e.status,
+        startAt: e.startAt.toISOString(),
+        totalMarks: e.totalMarks,
+        durationMinutes: e.durationMinutes,
+        semesterNumber: sem.number,
+        semesterLabel: semLabel,
+        batchName,
+        batchPublicId,
+        isCurrentBatch,
+        attempted: attemptedByExam.get(e.id) ?? 0,
       };
     });
   }

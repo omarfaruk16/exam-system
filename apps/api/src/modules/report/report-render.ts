@@ -40,7 +40,6 @@ function finishPdf(doc: PDFKit.PDFDocument, stream: import('node:fs').WriteStrea
  */
 function drawLetterhead(doc: PDFKit.PDFDocument, h: ReportHeader, docLabel: string): number {
   const left = PAGE_MARGIN;
-  const right = A4.width - PAGE_MARGIN;
   let y = PAGE_MARGIN;
 
   // Logo — centered at the very top.
@@ -80,20 +79,12 @@ function drawLetterhead(doc: PDFKit.PDFDocument, h: ReportHeader, docLabel: stri
   y = doc.y + 8;
 
   // Document label chip line (e.g. "CLASS RESULT SHEET").
-  doc
-    .font('Helvetica-Bold')
-    .fontSize(8.5)
-    .fillColor(BRAND)
-    .text(docLabel.toUpperCase(), left, y, {
-      width: CONTENT_WIDTH,
-      align: 'center',
-      characterSpacing: 1.5,
-    });
-  y = doc.y + 8;
-
-  // Divider.
-  doc.moveTo(left, y).lineTo(right, y).lineWidth(1).strokeColor(BRAND).stroke();
-  y += 12;
+  doc.font('Helvetica-Bold').fontSize(8.5).fillColor(BRAND).text(docLabel.toUpperCase(), left, y, {
+    width: CONTENT_WIDTH,
+    align: 'center',
+    characterSpacing: 1.5,
+  });
+  y = doc.y + 14;
 
   // ── Two-column meta grid: course facts | schedule facts ──
   const colGap = 24;
@@ -288,13 +279,11 @@ export async function writeOverallPdf(data: OverallData, path: string): Promise<
     doc.font(opts.head ? 'Helvetica-Bold' : 'Helvetica').fontSize(9);
     for (const c of cols) {
       const color = opts.head ? '#ffffff' : opts.danger && c.key === 'status' ? '#b00020' : INK;
-      doc
-        .fillColor(color)
-        .text(cells[c.key] ?? '', x + 5, yy + 5, {
-          width: c.w - 10,
-          align: c.align,
-          lineBreak: false,
-        });
+      doc.fillColor(color).text(cells[c.key] ?? '', x + 5, yy + 5, {
+        width: c.w - 10,
+        align: c.align,
+        lineBreak: false,
+      });
       x += c.w;
     }
     // bottom hairline
@@ -526,17 +515,25 @@ export async function writeIndividualPdf(data: IndividualData, path: string): Pr
 function drawFooters(doc: PDFKit.PDFDocument): void {
   const range = doc.bufferedPageRange();
   const generated = new Date().toLocaleString('en-GB', { timeZone: 'Asia/Dhaka' });
+  const yy = A4.height - PAGE_MARGIN + 8;
   for (let i = range.start; i < range.start + range.count; i++) {
     doc.switchToPage(i);
-    const yy = A4.height - PAGE_MARGIN + 8;
+    // The footer sits below the bottom text margin; zero that margin (and disable line
+    // breaking) so PDFKit doesn't spill it onto a brand-new blank page.
+    doc.page.margins.bottom = 0;
     doc
       .font('Helvetica')
       .fontSize(7.5)
       .fillColor(MUTED)
-      .text(`Generated ${generated}`, PAGE_MARGIN, yy, { width: CONTENT_WIDTH / 2, align: 'left' });
+      .text(`Generated ${generated}`, PAGE_MARGIN, yy, {
+        width: CONTENT_WIDTH / 2,
+        align: 'left',
+        lineBreak: false,
+      });
     doc.text(`Page ${i - range.start + 1} of ${range.count}`, PAGE_MARGIN + CONTENT_WIDTH / 2, yy, {
       width: CONTENT_WIDTH / 2,
       align: 'right',
+      lineBreak: false,
     });
   }
 }
