@@ -1,0 +1,12 @@
+# Runs the backup every night at 02:00 server time.
+# Persistent=true → if the VPS was off at 02:00, the backup runs at next boot (never skipped).
+[Unit]
+Description=Examination System — nightly database backup timer
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

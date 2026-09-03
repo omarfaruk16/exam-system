@@ -1,0 +1,22 @@
+# Nightly Postgres backup for the Examination System.
+# Install:
+#   sudo cp infra/systemd/exam-backup.service /etc/systemd/system/
+#   sudo cp infra/systemd/exam-backup.timer   /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now exam-backup.timer
+# Run once now:      sudo systemctl start exam-backup.service
+# Check last run:    systemctl status exam-backup.service ; journalctl -u exam-backup.service
+[Unit]
+Description=Examination System — Postgres backup (pg_dump, retained)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/exam-system
+# Loads POSTGRES_USER / POSTGRES_DB so the dump targets the right prod database.
+EnvironmentFile=/opt/exam-system/infra/.env
+Environment=BACKUP_DIR=/opt/exam-system/backups
+Environment=RETAIN=14
+Environment=POSTGRES_CONTAINER=exam_postgres
+ExecStart=/opt/exam-system/infra/scripts/backup.sh

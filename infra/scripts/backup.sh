@@ -47,3 +47,16 @@ if [ -n "$REMOVED" ]; then
 else
   echo "[$(ts)] backup: retention OK (<= $RETAIN backups on disk)"
 fi
+
+# Optional OFFSITE copy (3-2-1 backups): set OFFSITE_CMD to push the new dump somewhere off the
+# box — e.g.  OFFSITE_CMD='rclone copy {} remote:exam-backups'  (or an aws/scp command).
+# {} is replaced with the dump path. Runs only after a verified-good local backup.
+if [ -n "${OFFSITE_CMD:-}" ]; then
+  CMD="${OFFSITE_CMD//\{\}/$FILE}"
+  echo "[$(ts)] backup: offsite -> $CMD"
+  if eval "$CMD"; then
+    echo "[$(ts)] backup: offsite SUCCESS"
+  else
+    echo "[$(ts)] backup: offsite FAILED (local backup is still safe)"
+  fi
+fi

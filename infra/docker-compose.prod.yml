@@ -1,0 +1,162 @@
+name: exam-system
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PRODUCTION stack for e-exam.ru.ac.bd (single VPS).
+#
+# Deploy:
+#   docker compose -f infra/docker-compose.prod.yml --env-file infra/.env up -d --build
+#
+# Security posture (this file is the hardened counterpart of docker-compose.yml, which is for
+# LOCAL DEV and deliberately publishes DB ports):
+#   • Postgres / Redis / PgBouncer are NEVER published to the host — they live only on the
+#     internal Docker network, so the database is unreachable from the internet.
+#   • `web` (the SPA + same-origin /api proxy) is published on 127.0.0.1:8080 ONLY. Nothing but
+#     the host's nginx (which terminates TLS on 443) can reach it; the public sees only nginx.
+#   • The API reaches Postgres THROUGH PgBouncer (transaction pooling) via DATABASE_URL, and
+#     directly via DIRECT_URL — Prisma Migrate needs a real session, so migrations use DIRECT_URL.
+#   • Every container has capped JSON logs (no disk-fill) and restart: unless-stopped.
+# ─────────────────────────────────────────────────────────────────────────────
+
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: '10m'
+      max-file: '5'
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: exam_postgres
+    restart: unless-stopped
+    <<: *logging
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in infra/.env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in infra/.env}
+      POSTGRES_DB: ${POSTGRES_DB:-exam_prod}
+      # Enforce SCRAM password auth for all connections.
+      POSTGRES_INITDB_ARGS: '--auth-host=scram-sha-256 --auth-local=scram-sha-256'
+    # NO `ports:` — internal only. The DB is never exposed to the host or the internet.
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB:-exam_prod}']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: [internal]
+
+  redis:
+    image: redis:7-alpine
+    container_name: exam_redis
+    restart: unless-stopped
+    <<: *logging
+    # appendonly so sessions/queues survive a restart; noeviction so jobs are never silently dropped.
+    command: ['redis-server', '--appendonly', 'yes', '--maxmemory-policy', 'noeviction']
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 12
+    networks: [internal]
+
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: exam_pgbouncer
+    restart: unless-stopped
+    <<: *logging
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: ${POSTGRES_DB:-exam_prod}
+      POOL_MODE: transaction
+      AUTH_TYPE: scram-sha-256
+      MAX_CLIENT_CONN: 1000
+      DEFAULT_POOL_SIZE: 25
+      LISTEN_PORT: 6432
+    networks: [internal]
+
+  api:
+    build:
+      context: ..
+      dockerfile: infra/api.Dockerfile
+    image: exam-system-api:latest
+    container_name: exam_api
+    restart: unless-stopped
+    <<: *logging
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      API_PORT: 4100
+      API_HOST: 0.0.0.0
+      # App traffic → PgBouncer (transaction pooling). Prisma Migrate → direct session.
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:6432/${POSTGRES_DB:-exam_prod}?pgbouncer=true
+      DIRECT_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-exam_prod}?schema=public
+      REDIS_URL: redis://redis:6379
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in infra/.env (openssl rand -hex 64)}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://e-exam.ru.ac.bd}
+      WEB_APP_URL: ${WEB_APP_URL:-https://e-exam.ru.ac.bd}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-e-exam.ru.ac.bd}
+      INSTITUTION_NAME: ${INSTITUTION_NAME:-University of Rajshahi}
+      BRAND_PRIMARY: ${BRAND_PRIMARY:-#1E3A5F}
+      STORAGE_DIR: /app/apps/api/storage
+      LOG_LEVEL: ${LOG_LEVEL:-warn}
+      MAINTENANCE_MODE: ${MAINTENANCE_MODE:-false}
+      LOGIN_THROTTLE_LIMIT: ${LOGIN_THROTTLE_LIMIT:-10}
+      LOGIN_THROTTLE_TTL_SECONDS: ${LOGIN_THROTTLE_TTL_SECONDS:-900}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      APP_VERSION: ${APP_VERSION:-1.0.0}
+    volumes:
+      # Generated reports live here; keep them on a named volume so they survive redeploys.
+      - apistorage:/app/apps/api/storage
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:4100/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 40s
+    networks: [internal]
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/web.Dockerfile
+      args:
+        VITE_INSTITUTION_NAME: ${INSTITUTION_NAME:-University of Rajshahi}
+    image: exam-system-web:latest
+    container_name: exam_web
+    restart: unless-stopped
+    <<: *logging
+    depends_on:
+      - api
+    # Loopback-only: only the host's nginx (the TLS terminator) can reach it.
+    ports:
+      - '127.0.0.1:${WEB_PORT:-8080}:80'
+    networks: [internal]
+
+volumes:
+  pgdata:
+  redisdata:
+  apistorage:
+
+networks:
+  internal:
+    driver: bridge
