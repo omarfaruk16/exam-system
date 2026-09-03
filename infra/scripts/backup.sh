@@ -24,7 +24,10 @@ FILE="$BACKUP_DIR/exam_db_${STAMP}.dump"
 
 echo "[$(ts)] backup: dumping database '$DB' from container '$CONTAINER'"
 
-if docker exec "$CONTAINER" pg_dump -U "$DB_USER" -d "$DB" --format=custom >"$FILE"; then
+# Production Postgres uses password auth (scram) even for in-container connections, so pass
+# the password through. POSTGRES_PASSWORD comes from infra/.env (the systemd unit loads it).
+if docker exec -e PGPASSWORD="${POSTGRES_PASSWORD:-}" "$CONTAINER" \
+  pg_dump -U "$DB_USER" -d "$DB" --format=custom >"$FILE"; then
   SIZE=$(wc -c <"$FILE" | tr -d ' ')
   if [ "$SIZE" -gt 0 ]; then
     echo "[$(ts)] backup: SUCCESS -> $FILE (${SIZE} bytes)"

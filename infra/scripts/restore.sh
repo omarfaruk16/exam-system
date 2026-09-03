@@ -43,15 +43,15 @@ if [ "$REPLY" != "$DB" ]; then
 fi
 
 echo "[$(ts)] restore: terminating active connections to '$DB'"
-docker exec "$CONTAINER" psql -U "$DB_USER" -d postgres -v ON_ERROR_STOP=1 -c \
+docker exec -e PGPASSWORD="${POSTGRES_PASSWORD:-}" "$CONTAINER" psql -U "$DB_USER" -d postgres -v ON_ERROR_STOP=1 -c \
   "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='$DB' AND pid <> pg_backend_pid();" >/dev/null
 
 echo "[$(ts)] restore: dropping and recreating '$DB'"
-docker exec "$CONTAINER" psql -U "$DB_USER" -d postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS \"$DB\";" >/dev/null
-docker exec "$CONTAINER" psql -U "$DB_USER" -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"$DB\";" >/dev/null
+docker exec -e PGPASSWORD="${POSTGRES_PASSWORD:-}" "$CONTAINER" psql -U "$DB_USER" -d postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS \"$DB\";" >/dev/null
+docker exec -e PGPASSWORD="${POSTGRES_PASSWORD:-}" "$CONTAINER" psql -U "$DB_USER" -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"$DB\";" >/dev/null
 
 echo "[$(ts)] restore: restoring from $FILE"
-if docker exec -i "$CONTAINER" pg_restore -U "$DB_USER" -d "$DB" --no-owner --no-privileges <"$FILE"; then
+if docker exec -i -e PGPASSWORD="${POSTGRES_PASSWORD:-}" "$CONTAINER" pg_restore -U "$DB_USER" -d "$DB" --no-owner --no-privileges <"$FILE"; then
   echo "[$(ts)] restore: SUCCESS -> '$DB' restored from $FILE"
 else
   echo "[$(ts)] restore: pg_restore reported warnings/errors (review output above)"
