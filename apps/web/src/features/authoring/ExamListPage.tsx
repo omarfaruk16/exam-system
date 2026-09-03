@@ -39,39 +39,73 @@ interface ProgramGroup {
 }
 interface BatchGroup {
   key: string;
-  label: string;
+  departmentName: string;
+  batchLabel: string;
   programs: ProgramGroup[];
 }
 
 const NO_BATCH = 'No session assigned yet';
+const SEP = '|||';
 
 /**
- * Nest the flat exam list as Batch → Program → Semester so staff browse exams by
- * cohort. Batches sort newest-first (the "No session" bucket last), programmes
+ * Number every exam within its course part (Exam 1, Exam 2, …) by start time — matching the
+ * "Exam N" sequence shown on generated reports. Keyed by exam publicId.
+ */
+function computeExamNumbers(exams: ExamListItem[]): Map<string, number> {
+  const byPart = new Map<string, ExamListItem[]>();
+  for (const e of exams) {
+    const k = `${e.departmentName}${SEP}${e.batch ?? NO_BATCH}${SEP}${e.courseCode}${SEP}${e.part}`;
+    (byPart.get(k) ?? byPart.set(k, []).get(k)!).push(e);
+  }
+  const numbers = new Map<string, number>();
+  for (const list of byPart.values()) {
+    list
+      .slice()
+      .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime())
+      .forEach((e, i) => numbers.set(e.publicId, i + 1));
+  }
+  return numbers;
+}
+
+/**
+ * Nest the flat exam list as (Department + Session) → Program → Semester so staff browse
+ * exams by cohort. Sessions sort newest-first (the "No session" bucket last), programmes
  * alphabetically, semesters by number, and exams within a semester newest-first.
  */
 function groupByBatch(exams: ExamListItem[]): BatchGroup[] {
-  const batches = new Map<string, Map<string, Map<string, ExamListItem[]>>>();
+  // Top-level key = department + session, so the same session name in two departments stays split.
+  const top = new Map<
+    string,
+    { departmentName: string; batchLabel: string; progs: Map<string, Map<string, ExamListItem[]>> }
+  >();
   for (const e of exams) {
-    const b = e.batch ?? NO_BATCH;
+    const dept = e.departmentName;
+    const batchLabel = e.batch ?? NO_BATCH;
+    const key = `${dept}${SEP}${batchLabel}`;
+    if (!top.has(key)) top.set(key, { departmentName: dept, batchLabel, progs: new Map() });
+    const progs = top.get(key)!.progs;
     const p = e.programName;
     const s = `${e.semesterNumber}::${e.semesterLabel}`;
-    if (!batches.has(b)) batches.set(b, new Map());
-    const progs = batches.get(b)!;
     if (!progs.has(p)) progs.set(p, new Map());
     const sems = progs.get(p)!;
     if (!sems.has(s)) sems.set(s, []);
     sems.get(s)!.push(e);
   }
 
-  const batchKeys = [...batches.keys()].sort((a, b) => {
-    if (a === NO_BATCH) return 1;
-    if (b === NO_BATCH) return -1;
-    return b.localeCompare(a); // newest session first
+  const keys = [...top.keys()].sort((a, b) => {
+    const ea = top.get(a)!;
+    const eb = top.get(b)!;
+    // "No session" bucket last; then newest session first; then department name.
+    if (ea.batchLabel === NO_BATCH && eb.batchLabel !== NO_BATCH) return 1;
+    if (eb.batchLabel === NO_BATCH && ea.batchLabel !== NO_BATCH) return -1;
+    return (
+      eb.batchLabel.localeCompare(ea.batchLabel) ||
+      ea.departmentName.localeCompare(eb.departmentName)
+    );
   });
 
-  return batchKeys.map((b) => {
-    const progs = batches.get(b)!;
+  return keys.map((key) => {
+    const { departmentName, batchLabel, progs } = top.get(key)!;
     const programs: ProgramGroup[] = [...progs.keys()]
       .sort((a, c) => a.localeCompare(c))
       .map((p) => {
@@ -93,7 +127,7 @@ function groupByBatch(exams: ExamListItem[]): BatchGroup[] {
           .sort((x, y) => x.semesterNumber - y.semesterNumber);
         return { key: p, label: p, semesters };
       });
-    return { key: b, label: b, programs };
+    return { key, departmentName, batchLabel, programs };
   });
 }
 
@@ -109,6 +143,7 @@ export function ExamListPage() {
   const isAdmin = (user?.roles ?? []).some((r) => r.role === 'admin' || r.role === 'super_admin');
 
   const grouped = groupByBatch(data ?? []);
+  const examNumbers = computeExamNumbers(data ?? []);
 
   // "Starting soon" — published exams whose start time is within the next hour
   // (or already due but not yet flipped live), soonest first.
@@ -190,44 +225,49 @@ export function ExamListPage() {
         <EmptyState onCreate={() => navigate('/exams/new')} />
       ) : (
         <div className="space-y-8">
-          {grouped.map((batch) => (
-            <section key={batch.key} className="space-y-4">
-              {/* Batch (session) header */}
-              <div className="flex items-center gap-2">
-                <Users className="text-primary size-4 shrink-0" />
-                <h2 className="text-base font-semibold tracking-tight">{batch.label}</h2>
-                <span className="text-muted-foreground text-xs">
-                  {batch.programs.reduce(
-                    (n, p) => n + p.semesters.reduce((m, s) => m + s.items.length, 0),
-                    0,
-                  )}{' '}
-                  exam
-                  {batch.programs.reduce(
-                    (n, p) => n + p.semesters.reduce((m, s) => m + s.items.length, 0),
-                    0,
-                  ) === 1
-                    ? ''
-                    : 's'}
-                </span>
-              </div>
-
-              {batch.programs.map((program) => (
-                <div key={program.key} className="border-border/60 space-y-3 border-l-2 pl-4">
-                  <h3 className="text-foreground/90 text-sm font-medium">{program.label}</h3>
-                  {program.semesters.map((sem) => (
-                    <div key={sem.key} className="space-y-2.5">
-                      <h4 className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">
-                        {sem.label}
-                      </h4>
-                      {sem.items.map((exam) => (
-                        <ExamCard key={exam.publicId} exam={exam} isAdmin={isAdmin} nowMs={nowMs} />
-                      ))}
-                    </div>
-                  ))}
+          {grouped.map((batch) => {
+            const count = batch.programs.reduce(
+              (n, p) => n + p.semesters.reduce((m, s) => m + s.items.length, 0),
+              0,
+            );
+            return (
+              <section key={batch.key} className="space-y-4">
+                {/* Department — Session header */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Users className="text-primary size-4 shrink-0" />
+                  <h2 className="text-base font-semibold tracking-tight">
+                    {batch.departmentName}
+                    <span className="text-muted-foreground font-normal"> — {batch.batchLabel}</span>
+                  </h2>
+                  <span className="text-muted-foreground text-xs">
+                    {count} exam{count === 1 ? '' : 's'}
+                  </span>
                 </div>
-              ))}
-            </section>
-          ))}
+
+                {batch.programs.map((program) => (
+                  <div key={program.key} className="border-border/60 space-y-3 border-l-2 pl-4">
+                    <h3 className="text-foreground/90 text-sm font-medium">{program.label}</h3>
+                    {program.semesters.map((sem) => (
+                      <div key={sem.key} className="space-y-2.5">
+                        <h4 className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">
+                          {sem.label}
+                        </h4>
+                        {sem.items.map((exam) => (
+                          <ExamCard
+                            key={exam.publicId}
+                            exam={exam}
+                            examNumber={examNumbers.get(exam.publicId) ?? null}
+                            isAdmin={isAdmin}
+                            nowMs={nowMs}
+                          />
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </section>
+            );
+          })}
         </div>
       )}
     </div>
@@ -236,10 +276,12 @@ export function ExamListPage() {
 
 function ExamCard({
   exam,
+  examNumber,
   isAdmin,
   nowMs,
 }: {
   exam: ExamListItem;
+  examNumber: number | null;
   isAdmin: boolean;
   nowMs: number;
 }) {
@@ -280,6 +322,11 @@ function ExamCard({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
+            {examNumber != null && (
+              <span className="bg-primary/10 text-primary shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums">
+                Exam {examNumber}
+              </span>
+            )}
             <h3 className="truncate font-semibold">{exam.title}</h3>
             <StatusPill status={exam.status} />
           </div>

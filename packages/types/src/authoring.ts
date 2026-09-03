@@ -84,6 +84,8 @@ export interface ExamResultRow {
   score: number | null;
   percentage: number | null;
   rank: number | null;
+  /** Times the student left the exam window (proctoring signal); 0 when none. */
+  proctorViolations: number;
 }
 
 /** Per-exam review portal payload: exam header + every enrolled student's attendance and mark. */
@@ -94,6 +96,7 @@ export interface ExamResultsOverview {
     courseCode: string;
     courseName: string;
     partName: string;
+    partPublicId: string;
     semesterNumber: number;
     totalMarks: number;
     startAt: string;
@@ -209,6 +212,11 @@ export interface PartOption {
   courseTitle: string;
   /** Human semester label (given name or "Semester N"). */
   semesterLabel?: string;
+  /** Full academic hierarchy — present on the authorable-parts list (used by the admin filter). */
+  semesterNumber?: number;
+  program?: string;
+  department?: string;
+  faculty?: string;
   /** Batch(es) currently sitting in this course's semester, joined; null if none assigned. */
   currentBatch?: string | null;
   label: string;

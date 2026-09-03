@@ -18,6 +18,10 @@ export class CreateQuestionBankDto {
   @IsString() @Length(1, 120) name!: string;
 }
 
+export class UpdateQuestionBankDto {
+  @IsString() @Length(1, 120) name!: string;
+}
+
 export class QuestionOptionInput {
   @IsString() @Length(1, 500) text!: string;
   @IsBoolean() isCorrect!: boolean;

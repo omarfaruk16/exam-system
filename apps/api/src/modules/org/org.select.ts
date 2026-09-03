@@ -92,6 +92,7 @@ export const teacherOptionSelect = {
   publicId: true,
   designation: true,
   user: { select: { displayName: true, email: true } },
+  department: { select: { name: true } },
 } satisfies Prisma.TeacherSelect;
 
 /** Full teacher row for admin management pages. */

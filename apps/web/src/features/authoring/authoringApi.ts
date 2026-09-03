@@ -75,6 +75,12 @@ export const fetchBanks = (coursePartPublicId: string) =>
 export const createBank = (coursePartPublicId: string, name: string) =>
   api.post<QuestionBankSummary>('/question-banks', { coursePartPublicId, name });
 
+export const updateBank = (bankPublicId: string, name: string) =>
+  api.patch<QuestionBankSummary>(`/question-banks/${encodeURIComponent(bankPublicId)}`, { name });
+
+export const deleteBank = (bankPublicId: string) =>
+  api.del<{ status: string }>(`/question-banks/${encodeURIComponent(bankPublicId)}`);
+
 export const fetchBankQuestions = (bankPublicId: string) =>
   api.get<BankQuestion[]>(`/questions?bank=${encodeURIComponent(bankPublicId)}`);
 

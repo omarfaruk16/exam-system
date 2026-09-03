@@ -636,14 +636,14 @@ export class StructureService {
 
     let teacherId: number | null = null;
     if (dto.teacherPublicId) {
+      // Any teacher may be assigned to any part — a course part can be taught by a teacher
+      // from another department (e.g. a shared/borrowed course). Authorization is on the
+      // PART's department (checked above via assertDepartment), not the teacher's.
       const teacher = await this.prisma.db.teacher.findFirst({
-        where: { publicId: dto.teacherPublicId },
-        select: { id: true, departmentId: true },
+        where: { publicId: dto.teacherPublicId, deletedAt: null },
+        select: { id: true },
       });
       if (!teacher) throw new NotFoundException('Teacher not found');
-      if (teacher.departmentId !== part.departmentId) {
-        throw new BadRequestException('Teacher belongs to a different department');
-      }
       teacherId = teacher.id;
     }
 
@@ -659,20 +659,26 @@ export class StructureService {
 
   // ─────────────────────────────── Teachers ───────────────────────────────
 
-  /** Selector list: teachers within a department (for the assign-teacher dropdown). */
+  /**
+   * Selector list for the assign-teacher dropdown. Returns ALL teachers across every
+   * department (each tagged with its department) so a course part can be assigned a teacher
+   * from another department. The `departmentPublicId` is the part's own department and is used
+   * only to authorize the caller — it does not filter the returned list.
+   */
   async listTeachers(actor: AuthUser, departmentPublicId: string) {
     const dept = await this.departmentRef(departmentPublicId);
     this.acl.assertDepartment(actor, dept.id, dept.facultyId);
     const teachers = await this.prisma.db.teacher.findMany({
-      where: { departmentId: dept.id },
+      where: { deletedAt: null },
       select: teacherOptionSelect,
-      orderBy: { user: { displayName: 'asc' } },
+      orderBy: [{ department: { name: 'asc' } }, { user: { displayName: 'asc' } }],
     });
     return teachers.map((t) => ({
       publicId: t.publicId,
       displayName: t.user.displayName,
       email: t.user.email,
       designation: t.designation,
+      department: t.department.name,
     }));
   }
 

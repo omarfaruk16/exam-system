@@ -5,7 +5,12 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { fetchTeachersSelector } from './orgApi';
 
-/** Searchable teacher picker scoped to a department. Calls onPick with a publicId, or null to unassign. */
+/**
+ * Searchable teacher picker. Lists every teacher across all departments so a course part can
+ * be assigned a teacher from another department (each row is tagged with its home department).
+ * `departmentPublicId` is the part's own department, used only to authorize the request.
+ * Calls onPick with a publicId, or null to unassign.
+ */
 export function TeacherSelector({
   departmentPublicId,
   currentTeacherPublicId,
@@ -19,13 +24,16 @@ export function TeacherSelector({
 }) {
   const [q, setQ] = useState('');
   const { data, isLoading } = useQuery({
-    queryKey: ['org-teachers', departmentPublicId],
+    queryKey: ['org-teachers-all', departmentPublicId],
     queryFn: () => fetchTeachersSelector(departmentPublicId),
   });
   const teachers = (data ?? []).filter((t) => {
     const s = q.trim().toLowerCase();
     return (
-      !s || t.displayName.toLowerCase().includes(s) || (t.email?.toLowerCase().includes(s) ?? false)
+      !s ||
+      t.displayName.toLowerCase().includes(s) ||
+      (t.email?.toLowerCase().includes(s) ?? false) ||
+      t.department.toLowerCase().includes(s)
     );
   });
 
@@ -36,11 +44,15 @@ export function TeacherSelector({
         <Input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search by name or email…"
+          placeholder="Search by name, email or department…"
           className="h-9 pl-8"
           autoFocus
         />
       </div>
+
+      <p className="text-muted-foreground mt-2 text-xs">
+        Any teacher can be assigned — including one from another department.
+      </p>
 
       <div className="mt-2 max-h-56 space-y-1 overflow-y-auto">
         {isLoading ? (
@@ -48,9 +60,7 @@ export function TeacherSelector({
             <Loader2 className="size-4 animate-spin" /> Loading teachers…
           </p>
         ) : teachers.length === 0 ? (
-          <p className="text-muted-foreground py-3 text-sm">
-            No teachers found in this department.
-          </p>
+          <p className="text-muted-foreground py-3 text-sm">No teachers found.</p>
         ) : (
           teachers.map((t) => {
             const active = t.publicId === currentTeacherPublicId;
@@ -68,8 +78,9 @@ export function TeacherSelector({
                 <span className="min-w-0">
                   <span className="block truncate font-medium">{t.displayName}</span>
                   <span className="text-muted-foreground block truncate text-xs">
-                    {t.email ?? ''}
+                    {t.department}
                     {t.designation ? ` · ${t.designation}` : ''}
+                    {t.email ? ` · ${t.email}` : ''}
                   </span>
                 </span>
                 {active && <span className="text-primary shrink-0 text-xs">Assigned</span>}

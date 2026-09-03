@@ -13,6 +13,9 @@ export interface CoursePartResultRow {
   bestTwoAverage: number | null; // mean of the top two exam %s
 }
 
+/** Which aggregate a teacher sends to admin (and the admin marking sheet then shows). */
+export type MarkingMetric = 'averageAll' | 'bestOne' | 'bestTwoAverage';
+
 /** A teacher's preview/summary of one course part's rollup, plus finalized state. */
 export interface CoursePartSummary {
   part: {
@@ -27,10 +30,9 @@ export interface CoursePartSummary {
   rows: CoursePartResultRow[];
   finalized: boolean;
   finalizedAt: string | null;
+  /** The aggregate the teacher chose to send to admin (null until finalized). */
+  sentMetric: MarkingMetric | null;
 }
-
-/** Which aggregate the admin marking matrix shows in each cell. */
-export type MarkingMetric = 'averageAll' | 'bestOne' | 'bestTwoAverage';
 
 /** Cascading filter selections for the admin final-marking page (all optional). */
 export interface MarkingFilters {
@@ -66,6 +68,10 @@ export interface MarkingColumn {
   partName: string;
   semesterLabel: string;
   finalized: boolean;
+  /** The aggregate the part's teacher chose to send (null until finalized). */
+  sentMetric: MarkingMetric | null;
+  /** Human label for sentMetric, e.g. "Average of best two" (null until finalized). */
+  sentMetricLabel: string | null;
 }
 
 /** One student row in the admin marking matrix. */
@@ -76,12 +82,9 @@ export interface MarkingMatrixRow {
   rollNumber: string | null;
   batch: string;
   program: string;
-  /** partPublicId → the three aggregates for that part (null if no rollup). */
-  cells: Record<
-    string,
-    { averageAll: number | null; bestOne: number | null; bestTwoAverage: number | null } | null
-  >;
-  /** Mean of the chosen metric across the student's parts (overall standing). */
+  /** partPublicId → the single value the part's teacher sent (null if pending / not sat). */
+  cells: Record<string, number | null>;
+  /** Mean of the sent values across the student's parts (overall standing). */
   overall: number | null;
 }
 

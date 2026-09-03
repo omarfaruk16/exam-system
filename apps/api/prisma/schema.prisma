@@ -474,6 +474,9 @@ model ExamAttempt {
   status        AttemptStatus @default(in_progress)
   gradingStatus GradingStatus @default(pending)
   totalScore    Float?
+  // Proctoring: number of times the student left the exam window (tab switch, blur,
+  // or full-screen exit). Recorded live during the attempt; shown to the invigilator.
+  proctorViolations Int       @default(0)
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
@@ -549,6 +552,7 @@ model CoursePartResult {
   bestTwoAverage       Float? // mean of the top two exam %s (= bestOne when only one)
   finalizedAt          DateTime? // set when a teacher submits the final report to admin
   finalizedByTeacherId Int?
+  sentMetric           String? // which aggregate the teacher chose to send: averageAll | bestOne | bestTwoAverage
   computedAt           DateTime  @default(now())
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt

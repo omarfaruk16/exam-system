@@ -8,6 +8,7 @@ import {
   Lock,
   Maximize,
   RotateCcw,
+  ShieldAlert,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -22,7 +23,11 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ApiError } from '@/lib/api';
-import { autosave, startExam, submitAttempt, type AnswerPayload } from './api';
+import { autosave, recordProctorEvent, startExam, submitAttempt, type AnswerPayload } from './api';
+
+// After this many "left the exam" events (tab switch, blur, or full-screen exit) the attempt
+// is submitted automatically. Best-effort browser proctoring — see the note on the page.
+const MAX_VIOLATIONS = 3;
 import { idbGetAll, idbPut } from './idb';
 import { QuestionNavigator } from './QuestionNavigator';
 import { QuestionView } from './QuestionView';
@@ -97,6 +102,15 @@ function ExamRunner({ data }: { data: StartAttemptResponse }) {
   const [submitting, setSubmitting] = useState(false);
   const [restore, setRestore] = useState<AnswerState | null>(null);
   const [fsPrompt, setFsPrompt] = useState(false);
+  // Proctoring: how many times the student has left the exam window, and whether to show the
+  // "you left the exam" warning overlay.
+  const [violations, setViolations] = useState(0);
+  const [warn, setWarn] = useState(false);
+  const violationsRef = useRef(0);
+  const lastViolationAtRef = useRef(0);
+  // Holds the latest violation handler so the event-listener effects (declared before the
+  // handler, which depends on doSubmit) can always call the current version.
+  const onLeaveRef = useRef<(reason: string) => void>(() => {});
 
   const clock = useExamClock(attempt.deadline, serverTime);
   const disabled = locked || timeUp || submitting || Boolean(submitted);
@@ -260,10 +274,28 @@ function ExamRunner({ data }: { data: StartAttemptResponse }) {
         .catch(() => setFsPrompt(true));
     if (!document.fullscreenElement) void enter();
     const onChange = () => {
-      if (!submitted) setFsPrompt(!document.fullscreenElement);
+      if (submitted) return;
+      const left = !document.fullscreenElement;
+      setFsPrompt(left);
+      if (left) onLeaveRef.current('fullscreen'); // exiting full screen counts as leaving
     };
     document.addEventListener('fullscreenchange', onChange);
     return () => document.removeEventListener('fullscreenchange', onChange);
+  }, [submitted]);
+
+  // Proctoring: switching tab/window/app (visibility hidden or window blur) counts as leaving.
+  useEffect(() => {
+    if (submitted) return;
+    const onHide = () => {
+      if (document.hidden) onLeaveRef.current('hidden');
+    };
+    const onBlur = () => onLeaveRef.current('blur');
+    document.addEventListener('visibilitychange', onHide);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      document.removeEventListener('visibilitychange', onHide);
+      window.removeEventListener('blur', onBlur);
+    };
   }, [submitted]);
 
   // Leave full screen once the exam is over, so the result screen isn't locked in.
@@ -322,6 +354,29 @@ function ExamRunner({ data }: { data: StartAttemptResponse }) {
       setSubmitting(false);
     }
   }, [attempt.publicId, sessionId, idemKey, flush, submitting]);
+
+  // Record one "left the exam" event: dedupe rapid duplicates (a single alt-tab fires several
+  // events), bump the counter, report it to the server, then warn — or auto-submit at the cap.
+  const registerViolation = useCallback(() => {
+    if (submitted || timeUp || locked) return;
+    const now = Date.now();
+    if (now - lastViolationAtRef.current < 1200) return;
+    lastViolationAtRef.current = now;
+    const next = violationsRef.current + 1;
+    violationsRef.current = next;
+    setViolations(next);
+    void recordProctorEvent(attempt.publicId).catch(() => undefined);
+    if (next >= MAX_VIOLATIONS) {
+      toast.error('You left the exam too many times — submitting automatically.');
+      void doSubmit();
+    } else {
+      setWarn(true);
+    }
+  }, [submitted, timeUp, locked, attempt.publicId, doSubmit]);
+
+  useEffect(() => {
+    onLeaveRef.current = registerViolation;
+  }, [registerViolation]);
 
   const answeredCount = paper.questions.filter((q) =>
     isAnswered(answers[q.questionPublicId]),
@@ -497,25 +552,38 @@ function ExamRunner({ data }: { data: StartAttemptResponse }) {
         </DialogContent>
       </Dialog>
 
-      {/* Full-screen guard — blocks the exam whenever the student leaves full screen */}
-      {fsPrompt && !submitted && !timeUp && !locked && (
+      {/* Guard overlay — blocks the exam whenever the student leaves full screen or switches away */}
+      {(fsPrompt || warn) && !submitted && !timeUp && !locked && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/90 p-4">
           <div className="bg-card w-full max-w-md rounded-xl border p-6 text-center shadow-lg">
-            <Maximize className="text-warning mx-auto size-10" />
-            <h2 className="mt-3 text-xl font-semibold">Full screen required</h2>
+            {violations > 0 ? (
+              <ShieldAlert className="text-destructive mx-auto size-10" />
+            ) : (
+              <Maximize className="text-warning mx-auto size-10" />
+            )}
+            <h2 className="mt-3 text-xl font-semibold">
+              {violations > 0 ? 'You left the exam' : 'Full screen required'}
+            </h2>
             <p className="text-muted-foreground mt-1 text-sm">
-              This exam must run in full screen with no other windows. Click below to continue —
-              your saved answers are safe.
+              This exam must run in full screen with no other windows or tabs. Your saved answers
+              are safe — click below to continue.
             </p>
+            {violations > 0 && (
+              <p className="text-destructive mt-3 text-sm font-medium">
+                Recorded {violations} of {MAX_VIOLATIONS} allowed exits. At {MAX_VIOLATIONS} your
+                exam is submitted automatically.
+              </p>
+            )}
             <Button
               className="mt-4 w-full"
-              onClick={() =>
+              onClick={() => {
+                setWarn(false);
                 Promise.resolve(document.documentElement.requestFullscreen?.())
                   .then(() => setFsPrompt(false))
-                  .catch(() => undefined)
-              }
+                  .catch(() => undefined);
+              }}
             >
-              <Maximize className="size-4" /> Enter full screen
+              <Maximize className="size-4" /> Return to exam
             </Button>
           </div>
         </div>

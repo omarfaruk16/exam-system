@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Ip,
   Param,
@@ -19,7 +20,12 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import type { AuthUser } from '../../common/types/auth';
 import type { UploadedExcel } from '../import/import.types';
-import { CreateQuestionBankDto, CreateQuestionDto, UpdateQuestionDto } from './dto/question.dto';
+import {
+  CreateQuestionBankDto,
+  CreateQuestionDto,
+  UpdateQuestionBankDto,
+  UpdateQuestionDto,
+} from './dto/question.dto';
 import { QuestionImportService } from './question-import.service';
 import { QuestionService } from './question.service';
 
@@ -46,6 +52,23 @@ export class QuestionController {
   @Get('question-banks/by-department')
   listBanksByDepartment(@Query('dept') dept: string) {
     return this.questions.listBanksByDepartment(dept);
+  }
+
+  @Roles('teacher', 'admin', 'super_admin', 'department_head')
+  @Patch('question-banks/:publicId')
+  updateBank(
+    @CurrentUser() u: AuthUser,
+    @Ip() ip: string,
+    @Param('publicId') id: string,
+    @Body() dto: UpdateQuestionBankDto,
+  ) {
+    return this.questions.updateBank(u, ip, id, dto);
+  }
+
+  @Roles('teacher', 'admin', 'super_admin', 'department_head')
+  @Delete('question-banks/:publicId')
+  deleteBank(@CurrentUser() u: AuthUser, @Ip() ip: string, @Param('publicId') id: string) {
+    return this.questions.deleteBank(u, ip, id);
   }
 
   @Roles('teacher', 'admin', 'super_admin', 'department_head')

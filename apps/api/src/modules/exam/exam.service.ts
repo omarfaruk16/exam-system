@@ -347,7 +347,14 @@ export class ExamService {
               select: {
                 number: true,
                 name: true,
-                program: { select: { name: true } },
+                program: {
+                  select: {
+                    name: true,
+                    department: {
+                      select: { name: true, faculty: { select: { name: true } } },
+                    },
+                  },
+                },
                 batches: {
                   where: { deletedAt: null },
                   select: { name: true },
@@ -370,6 +377,10 @@ export class ExamService {
         courseCode: p.course.code,
         courseTitle: p.course.name,
         semesterLabel: semLabel,
+        semesterNumber: sem.number,
+        program: sem.program.name,
+        department: sem.program.department.name,
+        faculty: sem.program.department.faculty.name,
         currentBatch: sem.batches.length ? sem.batches.map((b) => b.name).join(', ') : null,
         label: `${p.course.code} · ${p.course.name} · ${p.name} (${sem.program.name} · ${semLabel})`,
       };
@@ -580,6 +591,7 @@ export class ExamService {
         status: true,
         coursePart: {
           select: {
+            publicId: true,
             name: true,
             course: {
               select: {
@@ -612,6 +624,7 @@ export class ExamService {
         status: true,
         gradingStatus: true,
         submittedAt: true,
+        proctorViolations: true,
         student: { select: { publicId: true } },
         result: { select: { finalScore: true, percentage: true, rank: true } },
       },
@@ -634,6 +647,7 @@ export class ExamService {
         score: a?.result?.finalScore ?? null,
         percentage: a?.result?.percentage ?? null,
         rank: a?.result?.rank ?? null,
+        proctorViolations: a?.proctorViolations ?? 0,
       };
     });
 
@@ -645,6 +659,7 @@ export class ExamService {
         courseCode: full.coursePart.course.code,
         courseName: full.coursePart.course.name,
         partName: full.coursePart.name,
+        partPublicId: full.coursePart.publicId,
         semesterNumber: full.coursePart.course.semester.number,
         totalMarks: full.totalMarks,
         startAt: full.startAt.toISOString(),

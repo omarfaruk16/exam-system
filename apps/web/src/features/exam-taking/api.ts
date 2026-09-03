@@ -31,3 +31,7 @@ export const submitAttempt = (attemptId: string, sessionId: string, idempotencyK
 export const fetchServerTime = () => api.get<ServerTime>('/time');
 
 export const fetchMyExams = () => api.get<MyExamListItem[]>('/me/exams');
+
+/** Proctoring: report that the student left the exam window; returns the running violation count. */
+export const recordProctorEvent = (attemptId: string) =>
+  api.post<{ violations: number }>(`/attempts/${attemptId}/proctor-event`);

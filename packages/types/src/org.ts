@@ -87,6 +87,8 @@ export interface TeacherOption {
   displayName: string;
   email: string | null;
   designation: string | null;
+  /** The teacher's home department (a part may borrow a teacher from another department). */
+  department: string;
 }
 
 export interface TeacherRow {

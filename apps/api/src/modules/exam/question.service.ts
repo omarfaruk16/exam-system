@@ -7,6 +7,7 @@ import type {
   CreateQuestionBankDto,
   CreateQuestionDto,
   QuestionOptionInput,
+  UpdateQuestionBankDto,
   UpdateQuestionDto,
 } from './dto/question.dto';
 import { ExamAccessService } from './exam-access.service';
@@ -126,9 +127,81 @@ export class QuestionService {
     // Assigned teacher, or an admin / super_admin / department_head in scope.
     await this.access.requireAuthorablePartAny(user, coursePartPublicId);
     return this.prisma.db.questionBank.findMany({
-      where: { coursePart: { publicId: coursePartPublicId } },
+      where: { coursePart: { publicId: coursePartPublicId }, deletedAt: null },
       select: questionBankSelect,
       orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /** Rename a chapter (question bank). */
+  async updateBank(user: AuthUser, ip: string, bankPublicId: string, dto: UpdateQuestionBankDto) {
+    const bank = await this.prisma.db.questionBank.findFirst({
+      where: { publicId: bankPublicId, deletedAt: null },
+      select: { id: true, coursePart: { select: { publicId: true } } },
+    });
+    if (!bank) throw new NotFoundException('Question bank not found');
+    await this.access.requireAuthorablePartAny(user, bank.coursePart.publicId);
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.questionBank.update({
+        where: { id: bank.id },
+        data: { name: dto.name },
+        select: questionBankSelect,
+      });
+      await this.audit.recordTx(tx, {
+        actorUserId: user.id,
+        action: 'questionBank.update',
+        entity: 'QuestionBank',
+        entityId: bankPublicId,
+        after: { name: dto.name },
+        ip,
+      });
+      return updated;
+    });
+  }
+
+  /**
+   * Soft-delete a chapter and its questions. Published/live exams are unaffected because
+   * their questions are snapshotted at publish time — but a question still referenced by a
+   * published or later exam blocks the delete so live papers never lose their source.
+   */
+  async deleteBank(user: AuthUser, ip: string, bankPublicId: string) {
+    const bank = await this.prisma.db.questionBank.findFirst({
+      where: { publicId: bankPublicId, deletedAt: null },
+      select: { id: true, coursePart: { select: { publicId: true } } },
+    });
+    if (!bank) throw new NotFoundException('Question bank not found');
+    await this.access.requireAuthorablePartAny(user, bank.coursePart.publicId);
+
+    const inUse = await this.prisma.db.examQuestion.findFirst({
+      where: {
+        question: { bankId: bank.id },
+        exam: { status: { in: [...LOCKED_EXAM_STATUSES] } },
+      },
+      select: { id: true },
+    });
+    if (inUse) {
+      throw new BadRequestException(
+        'This chapter has questions used in a published or live exam and cannot be deleted.',
+      );
+    }
+
+    const now = new Date();
+    return this.prisma.$transaction(async (tx) => {
+      await tx.question.updateMany({
+        where: { bankId: bank.id, deletedAt: null },
+        data: { deletedAt: now },
+      });
+      await tx.questionBank.update({ where: { id: bank.id }, data: { deletedAt: now } });
+      await this.audit.recordTx(tx, {
+        actorUserId: user.id,
+        action: 'questionBank.delete',
+        entity: 'QuestionBank',
+        entityId: bankPublicId,
+        after: { deletedAt: now.toISOString() },
+        ip,
+      });
+      return { status: 'ok' as const };
     });
   }
 
@@ -204,7 +277,7 @@ export class QuestionService {
     const partPublicId = await this.bankPartPublicId(bankPublicId);
     await this.access.requireAuthorablePartAny(user, partPublicId);
     return this.prisma.db.question.findMany({
-      where: { bank: { publicId: bankPublicId } },
+      where: { bank: { publicId: bankPublicId }, deletedAt: null },
       select: questionSelect,
       orderBy: { createdAt: 'asc' },
     });

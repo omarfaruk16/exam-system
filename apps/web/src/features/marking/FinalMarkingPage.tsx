@@ -1,21 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
-import type { MarkingFilters, MarkingMatrix, MarkingMetric } from '@exam/types';
+import type { MarkingFilters } from '@exam/types';
 import { Download, Loader2, SlidersHorizontal, TableProperties } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { fetchMarkingFilters, fetchMarkingMatrix } from './markingApi';
-
-const METRICS: { key: MarkingMetric; label: string; hint: string }[] = [
-  {
-    key: 'bestTwoAverage',
-    label: 'Best two avg',
-    hint: 'Average of each student’s two highest exam %',
-  },
-  { key: 'averageAll', label: 'Average (all)', hint: 'Mean % across all exams in the part' },
-  { key: 'bestOne', label: 'Best one', hint: 'Each student’s single highest exam %' },
-];
+import { downloadMarkingXlsx, fetchMarkingFilters, fetchMarkingMatrix } from './markingApi';
 
 // The cascading selector order — picking one clears everything to its right.
 const LEVELS = ['faculty', 'department', 'program', 'batch', 'semester', 'course'] as const;
@@ -31,7 +22,7 @@ const LEVEL_LABEL: Record<Level, string> = {
 
 export function FinalMarkingPage() {
   const [filters, setFilters] = useState<MarkingFilters>({});
-  const [metric, setMetric] = useState<MarkingMetric>('bestTwoAverage');
+  const [exporting, setExporting] = useState(false);
 
   const optionsQuery = useQuery({
     queryKey: ['marking-filters', filters],
@@ -39,8 +30,8 @@ export function FinalMarkingPage() {
   });
 
   const matrixQuery = useQuery({
-    queryKey: ['marking-matrix', filters, metric],
-    queryFn: () => fetchMarkingMatrix(filters, metric),
+    queryKey: ['marking-matrix', filters],
+    queryFn: () => fetchMarkingMatrix(filters),
   });
 
   function selectLevel(level: Level, value: string) {
@@ -88,6 +79,17 @@ export function FinalMarkingPage() {
 
   const matrix = matrixQuery.data;
 
+  async function handleExport() {
+    setExporting(true);
+    try {
+      await downloadMarkingXlsx(filters);
+    } catch {
+      toast.error('Could not export the marking sheet');
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div className="w-full">
       <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
@@ -97,13 +99,19 @@ export function FinalMarkingPage() {
             <h1 className="text-2xl font-semibold tracking-tight">Final Marking</h1>
           </div>
           <p className="text-muted-foreground mt-1 text-sm">
-            Consolidated results across every course part. Narrow the scope below; the sheet reads
-            pre-computed rollups, so it stays fast at any size.
+            Consolidated results across every course part. Each part shows the mark its teacher
+            chose to send — narrow the scope below; the sheet reads pre-computed rollups, so it
+            stays fast at any size.
           </p>
         </div>
         {matrix && matrix.rows.length > 0 && (
-          <Button variant="outline" onClick={() => exportCsv(matrix, metric)}>
-            <Download className="size-4" /> Export CSV
+          <Button variant="outline" onClick={handleExport} disabled={exporting}>
+            {exporting ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Download className="size-4" />
+            )}
+            Export xlsx
           </Button>
         )}
       </header>
@@ -140,37 +148,19 @@ export function FinalMarkingPage() {
           ))}
         </div>
 
-        {/* Metric toggle */}
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <span className="text-muted-foreground text-xs">Show</span>
-          <div className="flex flex-wrap gap-1 rounded-md border p-0.5">
-            {METRICS.map((m) => (
-              <button
-                key={m.key}
-                type="button"
-                title={m.hint}
-                onClick={() => setMetric(m.key)}
-                className={cn(
-                  'rounded px-2.5 py-1 text-xs font-medium transition-colors',
-                  metric === m.key
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                {m.label}
-              </button>
-            ))}
-          </div>
-          {matrix && (
-            <span className="text-muted-foreground ml-auto text-xs">
+        {matrix && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-muted-foreground">
               {matrix.rows.length} student{matrix.rows.length === 1 ? '' : 's'} ·{' '}
               {matrix.columns.length} part{matrix.columns.length === 1 ? '' : 's'}
-              {matrix.pendingColumns > 0 && (
-                <span className="text-warning"> · {matrix.pendingColumns} pending</span>
-              )}
             </span>
-          )}
-        </div>
+            {matrix.pendingColumns > 0 && (
+              <span className="text-warning">
+                · {matrix.pendingColumns} awaiting a teacher’s final report
+              </span>
+            )}
+          </div>
+        )}
       </Card>
 
       {/* Matrix */}
@@ -210,9 +200,8 @@ export function FinalMarkingPage() {
                         {c.courseCode} · {c.partName}
                       </div>
                       <div className="text-muted-foreground/70 flex items-center justify-end gap-1 text-[10px] font-normal">
-                        {c.semesterLabel}
                         {c.finalized ? (
-                          <span className="text-success">● final</span>
+                          <span className="text-success">● {c.sentMetricLabel}</span>
                         ) : (
                           <span className="text-warning">○ pending</span>
                         )}
@@ -235,8 +224,7 @@ export function FinalMarkingPage() {
                     <td className="px-3 py-2">{r.name}</td>
                     <td className="text-muted-foreground px-3 py-2 text-xs">{r.batch}</td>
                     {matrix.columns.map((c) => {
-                      const cell = r.cells[c.partPublicId];
-                      const v = cell ? cell[metric] : null;
+                      const v = r.cells[c.partPublicId];
                       return (
                         <td
                           key={c.partPublicId}
@@ -261,49 +249,10 @@ export function FinalMarkingPage() {
       )}
 
       <p className="text-muted-foreground mt-3 text-xs">
-        Values are percentages. “Overall” is the mean of the selected metric across the student’s
-        parts. A part shows marks once its teacher sends the final report (● final); ○ pending parts
-        are awaiting submission.
+        Values are percentages. Each column shows the mark the part’s teacher chose to send (● with
+        the metric name); ○ pending parts are awaiting the teacher’s final report. “Overall” is the
+        mean of the sent marks across the student’s parts.
       </p>
     </div>
   );
-}
-
-// ─────────────────────────── CSV export ───────────────────────────
-function exportCsv(matrix: MarkingMatrix, metric: MarkingMetric): void {
-  const head = [
-    'Roll',
-    'Student ID',
-    'Name',
-    'Session',
-    'Programme',
-    ...matrix.columns.map((c) => `${c.courseCode} ${c.partName}`),
-    'Overall',
-  ];
-  const lines = matrix.rows.map((r) => {
-    const cells = matrix.columns.map((c) => {
-      const cell = r.cells[c.partPublicId];
-      const v = cell ? cell[metric] : null;
-      return v == null ? '' : String(v);
-    });
-    return [
-      r.rollNumber ?? '',
-      r.studentId,
-      r.name,
-      r.batch,
-      r.program,
-      ...cells,
-      r.overall == null ? '' : String(r.overall),
-    ];
-  });
-  const esc = (s: string) => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
-  const csv = [head, ...lines].map((row) => row.map((x) => esc(String(x))).join(',')).join('\r\n');
-  // Prefix a UTF-8 BOM so Excel opens the file with correct encoding.
-  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `final-marking-${metric}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
 }

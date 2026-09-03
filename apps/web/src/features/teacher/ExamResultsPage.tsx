@@ -1,6 +1,15 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import type { ExamResultRow } from '@exam/types';
-import { AlertCircle, ArrowLeft, Download, FileSpreadsheet, FileText, Loader2 } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowLeft,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  Loader2,
+  ShieldAlert,
+  TableProperties,
+} from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -64,7 +73,17 @@ export function ExamResultsPage() {
             {exam.courseCode} · {exam.courseName} · {exam.partName} · Semester {exam.semesterNumber}
           </p>
         </div>
-        {examPublicId && exam.status !== 'live' && <ReportButton examPublicId={examPublicId} />}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={() => navigate(`/courses/${exam.partPublicId}/marks`)}
+          >
+            <TableProperties className="size-4" /> Marks sheet
+          </Button>
+          {examPublicId && exam.status !== 'live' && <ReportButton examPublicId={examPublicId} />}
+        </div>
       </div>
 
       {/* Summary */}
@@ -86,6 +105,7 @@ export function ExamResultsPage() {
                 <th className="px-4 py-2.5 font-medium">Name</th>
                 <th className="px-4 py-2.5 font-medium">Batch</th>
                 <th className="px-4 py-2.5 font-medium">Status</th>
+                <th className="px-4 py-2.5 text-center font-medium">Proctor</th>
                 <th className="px-4 py-2.5 text-right font-medium">Marks</th>
                 <th className="px-4 py-2.5 text-right font-medium">Rank</th>
                 <th className="px-4 py-2.5" />
@@ -128,6 +148,19 @@ function RosterRow({
       <td className="text-muted-foreground px-4 py-2.5">{row.batchName}</td>
       <td className="px-4 py-2.5">
         <AttendanceBadge row={row} />
+      </td>
+      <td className="px-4 py-2.5 text-center">
+        {row.proctorViolations > 0 ? (
+          <span
+            className="text-destructive bg-destructive/10 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium tabular-nums"
+            title={`Left the exam window ${row.proctorViolations} time(s)`}
+          >
+            <ShieldAlert className="size-3" />
+            {row.proctorViolations}
+          </span>
+        ) : (
+          <span className="text-muted-foreground text-xs">—</span>
+        )}
       </td>
       <td className="px-4 py-2.5 text-right tabular-nums">
         {row.score != null ? (

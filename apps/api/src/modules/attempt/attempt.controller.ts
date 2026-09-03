@@ -89,4 +89,13 @@ export class AttemptController {
   result(@CurrentUser() u: AuthUser, @Param('attemptPublicId') id: string) {
     return this.attempts.getResult(u, id);
   }
+
+  /** Proctoring: the student left the exam window. Capped to avoid a runaway client. */
+  @Roles('student')
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  @Post('attempts/:attemptPublicId/proctor-event')
+  @HttpCode(200)
+  proctorEvent(@CurrentUser() u: AuthUser, @Param('attemptPublicId') id: string) {
+    return this.attempts.recordProctorViolation(u, id);
+  }
 }

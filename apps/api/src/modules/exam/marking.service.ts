@@ -1,5 +1,6 @@
 import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import ExcelJS from 'exceljs';
 import type { Redis } from 'ioredis';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { REDIS_CLIENT } from '../../common/redis/redis.constants';
@@ -9,6 +10,15 @@ import { ExamAccessService } from './exam-access.service';
 
 // Exams that have computed marks (percentage in ExamResult) count toward a part's rollup.
 const GRADED_STATUSES = ['ended', 'grading', 'results_published'] as const;
+
+export type MetricKey = 'averageAll' | 'bestOne' | 'bestTwoAverage';
+export const METRIC_KEYS: MetricKey[] = ['averageAll', 'bestOne', 'bestTwoAverage'];
+export const METRIC_LABELS: Record<MetricKey, string> = {
+  averageAll: 'Average of all exams',
+  bestOne: 'Best one',
+  bestTwoAverage: 'Average of best two',
+};
+const DEFAULT_METRIC: MetricKey = 'bestTwoAverage';
 
 interface Aggregate {
   examsCounted: number;
@@ -57,7 +67,7 @@ export class MarkingService {
    */
   async refreshPart(
     coursePartId: number,
-    opts: { finalize?: boolean; teacherId?: number | null } = {},
+    opts: { finalize?: boolean; teacherId?: number | null; metric?: MetricKey } = {},
   ): Promise<{ students: number; examsTotal: number }> {
     const part = await this.prisma.db.coursePart.findUniqueOrThrow({
       where: { id: coursePartId },
@@ -96,6 +106,7 @@ export class MarkingService {
 
     const finalizedAt = opts.finalize ? new Date() : undefined;
     const finalizedByTeacherId = opts.finalize ? (opts.teacherId ?? null) : undefined;
+    const sentMetric = opts.finalize ? (opts.metric ?? DEFAULT_METRIC) : undefined;
 
     // One transaction of upserts keeps the rollup consistent.
     await this.prisma.db.$transaction(
@@ -108,7 +119,7 @@ export class MarkingService {
           bestOne: agg.bestOne,
           bestTwoAverage: agg.bestTwoAverage,
           computedAt: new Date(),
-          ...(opts.finalize ? { finalizedAt, finalizedByTeacherId } : {}),
+          ...(opts.finalize ? { finalizedAt, finalizedByTeacherId, sentMetric } : {}),
         };
         return this.prisma.db.coursePartResult.upsert({
           where: { coursePartId_studentId: { coursePartId, studentId: s.id } },
@@ -122,22 +133,26 @@ export class MarkingService {
     return { students: students.length, examsTotal };
   }
 
-  /** Teacher (assigned) or admin/head submits the part's final report to admin. */
-  async finalizePart(user: AuthUser, partPublicId: string, ip: string) {
+  /**
+   * Teacher (assigned) or admin/head submits the part's final report to admin, choosing which
+   * aggregate (average of all / best one / average of best two) the admin marking sheet shows.
+   */
+  async finalizePart(user: AuthUser, partPublicId: string, ip: string, metric: MetricKey) {
     const ctx = await this.access.requireAuthorablePartAny(user, partPublicId);
     const res = await this.refreshPart(ctx.coursePartId, {
       finalize: true,
       teacherId: ctx.teacherId,
+      metric,
     });
     await this.audit.record({
       actorUserId: user.id,
       action: 'coursePart.finalizeResults',
       entity: 'CoursePart',
       entityId: partPublicId,
-      after: res,
+      after: { ...res, metric },
       ip,
     });
-    return { status: 'ok' as const, ...res };
+    return { status: 'ok' as const, metric, ...res };
   }
 
   // ─────────────────────────── Teacher summary ───────────────────────────
@@ -210,7 +225,7 @@ export class MarkingService {
 
     const finalizedRow = await this.prisma.db.coursePartResult.findFirst({
       where: { coursePartId: ctx.coursePartId, finalizedAt: { not: null } },
-      select: { finalizedAt: true },
+      select: { finalizedAt: true, sentMetric: true },
       orderBy: { finalizedAt: 'desc' },
     });
 
@@ -248,6 +263,7 @@ export class MarkingService {
       rows,
       finalized: Boolean(finalizedRow),
       finalizedAt: finalizedRow?.finalizedAt ? finalizedRow.finalizedAt.toISOString() : null,
+      sentMetric: (finalizedRow?.sentMetric as MetricKey | null) ?? null,
     };
   }
 
@@ -425,18 +441,18 @@ export class MarkingService {
       semester?: string;
       course?: string;
     },
-    metric: 'averageAll' | 'bestOne' | 'bestTwoAverage',
   ) {
     this.assertStaff(user);
 
-    // Cache key = user scope signature + filters + metric. Short TTL; busted on finalize/refresh.
+    // Cache key = user scope signature + filters. Short TTL; busted on finalize/refresh.
+    // The admin no longer chooses a metric — each part shows the aggregate its teacher sent.
     const scopeSig = user.roles
       .map((r) => `${r.role}:${r.scopeFacultyId ?? ''}:${r.scopeDepartmentId ?? ''}`)
       .sort()
       .join('|');
-    const cacheKey = `marking:matrix:${Buffer.from(
-      JSON.stringify({ scopeSig, filters, metric }),
-    ).toString('base64')}`;
+    const cacheKey = `marking:matrix:${Buffer.from(JSON.stringify({ scopeSig, filters })).toString(
+      'base64',
+    )}`;
     try {
       const hit = await this.redis.get(cacheKey);
       if (hit) return JSON.parse(hit);
@@ -490,17 +506,20 @@ export class MarkingService {
     });
     const partIds = parts.map((p) => p.id);
 
-    // Which parts have been finalized (any rollup row stamped).
-    const finalizedPartIds = new Set(
-      partIds.length
-        ? (
-            await this.prisma.db.coursePartResult.findMany({
-              where: { coursePartId: { in: partIds }, finalizedAt: { not: null } },
-              select: { coursePartId: true },
-              distinct: ['coursePartId'],
-            })
-          ).map((r) => r.coursePartId)
-        : [],
+    // Which parts have been finalized, and which aggregate their teacher chose to send.
+    const finalizedRows = partIds.length
+      ? await this.prisma.db.coursePartResult.findMany({
+          where: { coursePartId: { in: partIds }, finalizedAt: { not: null } },
+          select: { coursePartId: true, sentMetric: true },
+          distinct: ['coursePartId'],
+        })
+      : [];
+    const finalizedPartIds = new Set(finalizedRows.map((r) => r.coursePartId));
+    const sentMetricByPart = new Map<number, MetricKey>(
+      finalizedRows.map((r) => [
+        r.coursePartId,
+        (r.sentMetric as MetricKey | null) ?? DEFAULT_METRIC,
+      ]),
     );
 
     // Read the rollup rows for those parts, optionally narrowed to one batch's students.
@@ -530,7 +549,8 @@ export class MarkingService {
 
     const partPublicById = new Map(parts.map((p) => [p.id, p.publicId]));
 
-    // Assemble the student rows.
+    // Assemble the student rows. Each cell holds the single value the part's teacher chose to
+    // send (best two / average / best one) — the admin sees only that, never a metric toggle.
     interface RowAcc {
       studentPublicId: string;
       studentId: string;
@@ -538,10 +558,7 @@ export class MarkingService {
       rollNumber: string | null;
       batch: string;
       program: string;
-      cells: Record<
-        string,
-        { averageAll: number | null; bestOne: number | null; bestTwoAverage: number | null } | null
-      >;
+      cells: Record<string, number | null>;
     }
     const byStudent = new Map<string, RowAcc>();
     for (const r of rollups) {
@@ -560,18 +577,14 @@ export class MarkingService {
         byStudent.set(key, row);
       }
       const partPublicId = partPublicById.get(r.coursePartId)!;
-      row.cells[partPublicId] = {
-        averageAll: r.averageAll,
-        bestOne: r.bestOne,
-        bestTwoAverage: r.bestTwoAverage,
-      };
+      const sent = sentMetricByPart.get(r.coursePartId);
+      // Only finalized parts (those with a chosen metric) contribute a value; others stay pending.
+      row.cells[partPublicId] = sent ? r[sent] : null;
     }
 
     const rows = [...byStudent.values()]
       .map((row) => {
-        const vals = Object.values(row.cells)
-          .map((c) => (c ? c[metric] : null))
-          .filter((v): v is number => v != null);
+        const vals = Object.values(row.cells).filter((v): v is number => v != null);
         const overall = vals.length ? round1(vals.reduce((a, b) => a + b, 0) / vals.length) : null;
         return { ...row, overall };
       })
@@ -584,16 +597,21 @@ export class MarkingService {
         );
       });
 
-    const columns = parts.map((p) => ({
-      partPublicId: p.publicId,
-      courseCode: p.course.code,
-      courseName: p.course.name,
-      partName: p.name,
-      semesterLabel: p.course.semester.name?.trim()
-        ? p.course.semester.name
-        : `Semester ${p.course.semester.number}`,
-      finalized: finalizedPartIds.has(p.id),
-    }));
+    const columns = parts.map((p) => {
+      const sent = sentMetricByPart.get(p.id) ?? null;
+      return {
+        partPublicId: p.publicId,
+        courseCode: p.course.code,
+        courseName: p.course.name,
+        partName: p.name,
+        semesterLabel: p.course.semester.name?.trim()
+          ? p.course.semester.name
+          : `Semester ${p.course.semester.number}`,
+        finalized: finalizedPartIds.has(p.id),
+        sentMetric: sent,
+        sentMetricLabel: sent ? METRIC_LABELS[sent] : null,
+      };
+    });
 
     const result = {
       columns,
@@ -607,5 +625,96 @@ export class MarkingService {
       /* ignore cache write errors */
     }
     return result;
+  }
+
+  // ─────────────────────────── xlsx export (item 3) ───────────────────────────
+
+  /** The final-marking matrix as an xlsx workbook. Reuses getFinalMarking (scope-enforced). */
+  async exportFinalMarking(
+    user: AuthUser,
+    filters: {
+      faculty?: string;
+      department?: string;
+      program?: string;
+      batch?: string;
+      semester?: string;
+      course?: string;
+    },
+  ): Promise<{ buffer: Buffer; filename: string }> {
+    const matrix = (await this.getFinalMarking(user, filters)) as {
+      columns: {
+        partPublicId: string;
+        courseCode: string;
+        partName: string;
+        semesterLabel: string;
+        finalized: boolean;
+        sentMetricLabel: string | null;
+      }[];
+      rows: {
+        studentId: string;
+        rollNumber: string | null;
+        name: string;
+        batch: string;
+        program: string;
+        cells: Record<string, number | null>;
+        overall: number | null;
+      }[];
+    };
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Exam System';
+    const ws = wb.addWorksheet('Final Marking', {
+      pageSetup: { paperSize: 9, orientation: 'landscape' },
+      views: [{ state: 'frozen', xSplit: 4, ySplit: 2 }],
+    });
+
+    // Header row (course · part) + sub-header (which aggregate the teacher sent).
+    const headerRow = ws.addRow([
+      'Roll',
+      'Student ID',
+      'Name',
+      'Session',
+      ...matrix.columns.map((c) => `${c.courseCode} ${c.partName}`),
+      'Overall',
+    ]);
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    headerRow.eachCell((c) => {
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
+      c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    });
+
+    const subRow = ws.addRow([
+      '',
+      '',
+      '',
+      '',
+      ...matrix.columns.map((c) => (c.finalized ? (c.sentMetricLabel ?? '') : 'pending')),
+      'mean %',
+    ]);
+    subRow.font = { italic: true, size: 9, color: { argb: 'FF555555' } };
+    subRow.eachCell((c) => {
+      c.alignment = { horizontal: 'center' };
+    });
+
+    for (const r of matrix.rows) {
+      ws.addRow([
+        r.rollNumber ?? '',
+        r.studentId,
+        r.name,
+        r.batch,
+        ...matrix.columns.map((c) => {
+          const v = r.cells[c.partPublicId];
+          return v == null ? '' : v;
+        }),
+        r.overall == null ? '' : r.overall,
+      ]);
+    }
+
+    ws.columns.forEach((col, i) => {
+      col.width = i === 2 ? 26 : i < 4 ? 14 : 12;
+    });
+
+    const buffer = Buffer.from(await wb.xlsx.writeBuffer());
+    return { buffer, filename: 'final-marking.xlsx' };
   }
 }

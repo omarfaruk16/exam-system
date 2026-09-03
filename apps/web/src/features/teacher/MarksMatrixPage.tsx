@@ -1,13 +1,46 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { MarkingMetric } from '@exam/types';
 import { ArrowLeft, CheckCircle2, Loader2, Send, TableProperties } from 'lucide-react';
+import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { fetchMarksMatrix } from '@/features/authoring/authoringApi';
 import { fetchPartSummary, finalizePart } from '@/features/marking/markingApi';
+
+const METRIC_OPTIONS: { key: MarkingMetric; label: string; hint: string }[] = [
+  {
+    key: 'averageAll',
+    label: 'Average of all exams',
+    hint: 'Mean of every exam the student sat, as a percentage.',
+  },
+  {
+    key: 'bestOne',
+    label: 'Best one',
+    hint: 'The student’s single highest exam percentage.',
+  },
+  {
+    key: 'bestTwoAverage',
+    label: 'Average of best two',
+    hint: 'Mean of the student’s two highest exam percentages.',
+  },
+];
+const METRIC_LABEL: Record<MarkingMetric, string> = {
+  averageAll: 'Average of all exams',
+  bestOne: 'Best one',
+  bestTwoAverage: 'Average of best two',
+};
 
 export function MarksMatrixPage() {
   const { partPublicId } = useParams<{ partPublicId: string }>();
@@ -27,16 +60,26 @@ export function MarksMatrixPage() {
     enabled: Boolean(partPublicId),
   });
 
+  const [sendOpen, setSendOpen] = useState(false);
+  const [metric, setMetric] = useState<MarkingMetric>('bestTwoAverage');
+
   const finalize = useMutation({
-    mutationFn: () => finalizePart(partPublicId!),
+    mutationFn: (m: MarkingMetric) => finalizePart(partPublicId!, m),
     onSuccess: async (res) => {
       toast.success(
-        `Final report sent to admin — ${res.students} students, ${res.examsTotal} exams`,
+        `Final report sent to admin — ${METRIC_LABEL[res.metric]} · ${res.students} students`,
       );
+      setSendOpen(false);
       await qc.invalidateQueries({ queryKey: ['part-summary', partPublicId] });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not send the final report'),
   });
+
+  // Pre-select the previously-sent metric when re-opening the dialog.
+  function openSend() {
+    if (summaryQuery.data?.sentMetric) setMetric(summaryQuery.data.sentMetric);
+    setSendOpen(true);
+  }
 
   if (isLoading) {
     return (
@@ -88,10 +131,10 @@ export function MarksMatrixPage() {
           </p>
         </div>
 
-        {/* Send final report to admin (item 2). Final marks are the % aggregates below. */}
+        {/* Send final report to admin (item 2) — choose which aggregate to send. */}
         {exams.length > 0 && (
           <div className="flex flex-col items-end gap-1.5">
-            <Button onClick={() => finalize.mutate()} disabled={finalize.isPending}>
+            <Button onClick={openSend} disabled={finalize.isPending}>
               {finalize.isPending ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
@@ -107,11 +150,65 @@ export function MarksMatrixPage() {
                   month: 'short',
                   year: 'numeric',
                 })}
+                {summaryQuery.data.sentMetric && (
+                  <span className="text-muted-foreground">
+                    · {METRIC_LABEL[summaryQuery.data.sentMetric]}
+                  </span>
+                )}
               </span>
             )}
           </div>
         )}
       </div>
+
+      {/* Which aggregate to send? */}
+      <Dialog open={sendOpen} onOpenChange={(o) => !finalize.isPending && setSendOpen(o)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send final report to admin</DialogTitle>
+            <DialogDescription>
+              Choose which mark to submit for every student in this course part. This is what the
+              admin final-marking sheet will show — you can re-send to change it later.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {METRIC_OPTIONS.map((m) => (
+              <label
+                key={m.key}
+                className={cn(
+                  'flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors',
+                  metric === m.key ? 'border-primary bg-primary/5' : 'hover:bg-muted/50',
+                )}
+              >
+                <input
+                  type="radio"
+                  name="send-metric"
+                  className="accent-primary mt-0.5 size-4 shrink-0"
+                  checked={metric === m.key}
+                  onChange={() => setMetric(m.key)}
+                />
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium">{m.label}</span>
+                  <span className="text-muted-foreground block text-xs">{m.hint}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setSendOpen(false)}
+              disabled={finalize.isPending}
+            >
+              Cancel
+            </Button>
+            <Button onClick={() => finalize.mutate(metric)} disabled={finalize.isPending}>
+              {finalize.isPending && <Loader2 className="size-4 animate-spin" />}
+              <Send className="size-4" /> Send to admin
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* What "final report" sends: per-student % aggregates across this part's exams. */}
       {exams.length > 0 && (

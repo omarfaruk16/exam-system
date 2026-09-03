@@ -260,6 +260,38 @@ export class AttemptService {
   }
 
   // ─────────────────────────────── AUTOSAVE ───────────────────────────────
+  /**
+   * Record that the student left the exam window (tab switch / blur / full-screen exit).
+   * Best-effort proctoring signal — increments the attempt's violation counter so the
+   * invigilator sees it on the results roster. Never throws for a closed attempt (the client
+   * may fire a final event as it submits); it simply reports the current count.
+   */
+  async recordProctorViolation(
+    user: AuthUser,
+    attemptPublicId: string,
+  ): Promise<{ violations: number }> {
+    const attempt = await this.prisma.db.examAttempt.findFirst({
+      where: { publicId: attemptPublicId },
+      select: {
+        id: true,
+        status: true,
+        proctorViolations: true,
+        student: { select: { userId: true } },
+      },
+    });
+    if (!attempt) throw new NotFoundException('Attempt not found');
+    if (attempt.student.userId !== user.id) throw new ForbiddenException('Not your attempt');
+    if (attempt.status !== 'in_progress') {
+      return { violations: attempt.proctorViolations };
+    }
+    const updated = await this.prisma.db.examAttempt.update({
+      where: { id: attempt.id },
+      data: { proctorViolations: { increment: 1 } },
+      select: { proctorViolations: true },
+    });
+    return { violations: updated.proctorViolations };
+  }
+
   async autosave(
     user: AuthUser,
     attemptPublicId: string,
