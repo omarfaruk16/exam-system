@@ -120,6 +120,14 @@ services:
       LOGIN_THROTTLE_TTL_SECONDS: ${LOGIN_THROTTLE_TTL_SECONDS:-900}
       SENTRY_DSN: ${SENTRY_DSN:-}
       APP_VERSION: ${APP_VERSION:-1.0.0}
+      # Outgoing email — powers "Forgot password" reset links. Leave SMTP_HOST empty to disable
+      # email (the reset link is written to the API logs instead). Set these in infra/.env.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-University Examination System <no-reply@ru.ac.bd>}
     volumes:
       # Generated reports live here; keep them on a named volume so they survive redeploys.
       - apistorage:/app/apps/api/storage
