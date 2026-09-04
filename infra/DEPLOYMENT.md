@@ -1,253 +1,346 @@
 # Production Deployment — e-exam.ru.ac.bd
 
-Hardened, single-VPS deployment of the University of Rajshahi Examination System. Everything runs
-in Docker behind an nginx TLS edge; the database is never exposed to the internet; backups run
-nightly and are easy to retrieve.
+Complete, hardened, single-VPS deployment of the University of Rajshahi Examination System. This is
+the exact, end-to-end process (every command, in order), the architecture, and the operations you'll
+use afterwards. Following it on a fresh server reproduces the live deployment.
 
-- **Host:** e-exam.ru.ac.bd (103.99.176.199) · **SSH:** port 36179 · Ubuntu/Debian, root.
+|                        |                                                                                     |
+| ---------------------- | ----------------------------------------------------------------------------------- |
+| **Domain**             | e-exam.ru.ac.bd → **103.99.176.199** (DNS A record already set)                     |
+| **SSH**                | port **36179**, user `root` (key-only after § 1)                                    |
+| **Repo**               | `https://github.com/omarfaruk16/exam-system.git` (public — the VPS pulls read-only) |
+| **App path on server** | `/opt/exam-system`                                                                  |
+| **OS**                 | Ubuntu/Debian                                                                       |
 
-> ⚠️ **The root password was shared in plain text — treat it as compromised.** § 1 switches you to
-> SSH keys and rotates it. Do this before anything else.
+> Two commands mark **💻 your Mac** vs **🖥️ the server**. Your root password is needed only for the
+> first two commands, then never again.
 
 ---
 
-## Architecture
+## 1 · Architecture
 
 ```mermaid
 flowchart TB
-    U[Students / Teachers / Admins] -->|HTTPS 443| NGINX
+    U["Students · Teachers · Admins"] -->|HTTPS 443| NGINX
 
-    subgraph VPS["VPS — 103.99.176.199 (firewall: only 36179, 80, 443 open)"]
-      NGINX["nginx edge (host)\nTLS · gzip · rate-limit\ncertbot auto-renew"]
-      subgraph DOCKER["Docker internal network (nothing below is internet-reachable)"]
-        WEB["web\nnginx: SPA + /api proxy\n127.0.0.1:8080 only"]
-        API["api (NestJS)\nsessions · BullMQ · reports"]
+    subgraph VPS["VPS 103.99.176.199 — firewall: only 36179 / 80 / 443 inbound"]
+      NGINX["nginx edge (host)\nTLS (Let's Encrypt, auto-renew)\ngzip · rate-limit · HTTP→HTTPS"]
+      subgraph DOCKER["Docker internal network — nothing below is internet-reachable"]
+        WEB["web · nginx\nserves the SPA + proxies /api\n(bound to 127.0.0.1:8080 only)"]
+        API["api · NestJS\nsessions · BullMQ workers · reports"]
         PGB["PgBouncer\ntransaction pooling"]
         PG[("Postgres 17\npgdata volume")]
-        RD[("Redis 7\nsessions · queues · cache")]
+        RD[("Redis 7\nsessions · queues · rate-limits · cache")]
       end
       BK["systemd timer\nnightly pg_dump → /opt/exam-system/backups\n14-day retention (+ optional offsite)"]
     end
 
-    NGINX -->|127.0.0.1:8080| WEB
+    NGINX -->|"127.0.0.1:8080"| WEB
     WEB -->|/api| API
-    API -->|DATABASE_URL| PGB --> PG
-    API -->|DIRECT_URL migrations| PG
+    API -->|"DATABASE_URL (pooled)"| PGB --> PG
+    API -->|"DIRECT_URL (migrations)"| PG
     API --> RD
     BK -. pg_dump .-> PG
 ```
 
 **Why this shape**
 
-- **Only nginx is public** (80/443). The SPA/API container binds to `127.0.0.1:8080`; Postgres,
-  Redis and PgBouncer have **no host ports at all** — reachable only inside Docker.
-- **PgBouncer** pools DB connections (transaction mode) so thousands of concurrent users share a
-  small, stable set of Postgres connections — the real scaling win on one box. Prisma migrations
-  use a **direct** connection (`DIRECT_URL`).
-- **Redis** holds sessions, the BullMQ job queues (reports, imports), rate-limit counters and
-  caches — `appendonly` so it survives restarts.
-- **TLS** via Let's Encrypt (certbot) with automatic renewal. HSTS/CSP/security headers come from
-  the app layer (Helmet + web nginx).
+- **Only nginx is public** (80/443). The SPA/API container binds to `127.0.0.1:8080`; **Postgres,
+  Redis and PgBouncer have no host ports at all** — the database is unreachable from the internet.
+- **PgBouncer** pools DB connections (transaction mode) so many concurrent users share a small,
+  stable set of Postgres connections. App queries use `DATABASE_URL` (pooled); Prisma **migrations**
+  use `DIRECT_URL` (a real session), and run automatically when the API container starts.
+- **Redis** holds sessions, BullMQ queues (reports/imports), rate-limit counters and caches
+  (`appendonly` so it survives restarts).
+- **TLS** via Let's Encrypt with automatic renewal. HSTS/CSP/security headers come from the app
+  layer (Helmet + the web container's nginx); the edge preserves the `https` scheme so the API sets
+  **secure, first-party session cookies**.
 
-**On "load balancer":** on a single VPS the useful move is running the API on multiple CPU cores,
-not spreading across machines. Default is one API container (plenty for a department). To use more
-cores, scale it and let nginx round-robin — see § 6. True multi-node load balancing is a later
-tier (add nodes + an external LB); the app is already stateless-friendly (state lives in
-Redis/Postgres), so it grows into that cleanly.
+**"Load balancer" on one VPS:** the useful move is running the API on more CPU cores, not spreading
+across machines — see § 9. The app keeps all state in Redis/Postgres, so it grows cleanly into a
+true multi-node setup (add nodes + an external LB) later.
 
 ---
 
-## 1 · Security first — SSH keys, then rotate the password
+## 2 · Secure access (SSH keys, rotate the password)
 
-**On your laptop** (skip keygen if you already have `~/.ssh/id_ed25519.pub`):
+**💻 Your Mac** — create a key (press Enter at every prompt) and install it (asks for the root
+password once):
 
 ```bash
 ssh-keygen -t ed25519 -C "exam-vps"
+```
+
+```bash
 ssh-copy-id -p 36179 root@103.99.176.199
 ```
 
-**Log in with the key**, then rotate the password and lock SSH down:
+**💻 Your Mac** — log in with the key (no password now):
 
 ```bash
 ssh -p 36179 root@103.99.176.199
-passwd                       # set a NEW strong root password (the old one is compromised)
-# Disable password logins entirely (key-only from now on):
-sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
-sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
-systemctl restart ssh || systemctl restart sshd
 ```
 
-Keep this SSH session open and open a **second** terminal to confirm key login still works before
-closing it (so a mistake can't lock you out).
+**🖥️ The server** — set a new strong password, then disable password logins entirely:
+
+```bash
+passwd
+```
+
+```bash
+sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config; grep -rl 'PasswordAuthentication' /etc/ssh/sshd_config.d/ 2>/dev/null | xargs -r sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/'; systemctl restart ssh 2>/dev/null || systemctl restart sshd
+```
+
+**💻 Verify from a second Mac terminal** — password login must be refused (`Permission denied (publickey)`):
+
+```bash
+ssh -p 36179 -o PreferredAuthentications=password -o PubkeyAuthentication=no root@103.99.176.199
+```
 
 ---
 
-## 2 · Harden the host + install prerequisites
+## 3 · Get the code + harden the host
 
-Copy the repo up and run the one-time bootstrap (firewall, fail2ban, auto security-updates,
-Docker, nginx, certbot, swap):
+**🖥️ The server:**
 
 ```bash
-# On the VPS:
-mkdir -p /opt && cd /opt
-git clone <your-repo-url> exam-system    # or: rsync the project up
-cd exam-system
+mkdir -p /opt && cd /opt && git clone https://github.com/omarfaruk16/exam-system.git exam-system && cd exam-system
+```
+
+> If the folder already exists from a previous attempt: `cd /opt/exam-system && git fetch origin && git reset --hard origin/main` (leaves your gitignored `infra/.env` untouched).
+
+One-time hardening — installs Docker, ufw firewall (opens **only 36179/80/443**), fail2ban,
+automatic security updates, and swap. It opens the SSH port _before_ enabling the firewall, so you
+can't be locked out:
+
+```bash
 SSH_PORT=36179 bash infra/scripts/harden-vps.sh
 ```
 
-Firewall ends up: **only 36179 (SSH), 80, 443 inbound**; everything else denied. Review the script
-first — it's short and commented.
-
 ---
 
-## 3 · Configure secrets
+## 4 · Secrets
+
+Copy the template and auto-generate the two secrets straight into it (no manual editing):
 
 ```bash
-cd /opt/exam-system
-cp infra/.env.production.example infra/.env
-# Generate strong secrets:
-echo "SESSION_SECRET=$(openssl rand -hex 64)"          # paste into infra/.env
-echo "POSTGRES_PASSWORD=$(openssl rand -base64 32 | tr -d '/+=')"   # paste into infra/.env
-nano infra/.env
+cp infra/.env.production.example infra/.env && SS=$(openssl rand -hex 64) && PW=$(openssl rand -base64 32 | tr -d '/+=') && sed -i "s|^SESSION_SECRET=.*|SESSION_SECRET=${SS}|" infra/.env && sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=${PW}|" infra/.env && chmod 600 infra/.env && echo done
 ```
 
-Set at least: `POSTGRES_PASSWORD`, `SESSION_SECRET`, and confirm `POSTGRES_DB=exam_prod`,
-`CORS_ORIGINS`/`WEB_APP_URL=https://e-exam.ru.ac.bd`, `COOKIE_SECURE=true`. Keep `infra/.env`
-**out of git** (it already is) and readable only by root: `chmod 600 infra/.env`.
+Verify (does **not** print the secrets):
+
+```bash
+grep -qE "CHANGE_ME" infra/.env && echo "STILL HAS PLACEHOLDERS" || echo "secrets set OK"; grep -E "^(POSTGRES_DB|COOKIE_SECURE|CORS_ORIGINS|WEB_APP_URL)=" infra/.env
+```
+
+Expect `secrets set OK`, `POSTGRES_DB=exam_prod`, `COOKIE_SECURE=true`, and the two
+`https://e-exam.ru.ac.bd` lines.
+
+**Email (optional, for "Forgot password"):** edit `infra/.env` (`nano infra/.env`) and fill the SMTP
+block — use your university mail server, or a Gmail account with a 16-char **App Password**:
+
+```
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=youraccount@gmail.com
+SMTP_PASS=your-app-password
+MAIL_FROM=University Examination System <no-reply@ru.ac.bd>
+```
+
+Leave `SMTP_HOST` empty to disable email (reset links are written to the API log instead).
 
 ---
 
-## 4 · Deploy the app
+## 5 · Build and launch
 
 ```bash
-cd /opt/exam-system
 docker compose -f infra/docker-compose.prod.yml --env-file infra/.env up -d --build
 ```
 
-This brings up Postgres, Redis, PgBouncer, the API (which runs `prisma migrate deploy` on boot),
-and the web container on `127.0.0.1:8080`. Check health:
+First build takes several minutes. Check health:
 
 ```bash
 docker compose -f infra/docker-compose.prod.yml ps
-curl -s http://127.0.0.1:8080/api/v1/health        # {"status":"ok",...}
+curl -s http://127.0.0.1:8080/api/v1/health; echo      # {"status":"ok",...}
 ```
-
-**Seed once** (first deploy only — creates roles + the initial admin; skip on later deploys so you
-never overwrite real data):
-
-```bash
-docker exec -it exam_api node apps/api/dist/prisma/seed.js   # path per your image; see package.json "db:seed"
-```
-
-> Change every seeded demo password immediately after first login.
 
 ---
 
-## 5 · TLS + the public edge (nginx)
+## 6 · Create the first super-admin
+
+The production database starts empty. Create a single super-admin (no demo data). The script also
+creates the role rows so this admin can then add other users from the UI.
 
 ```bash
-# On the VPS:
-cp infra/nginx/ratelimit.conf  /etc/nginx/conf.d/exam-ratelimit.conf
-mkdir -p /etc/nginx/snippets && cp infra/nginx/exam-proxy.conf /etc/nginx/snippets/exam-proxy.conf
-cp infra/nginx/host.conf       /etc/nginx/sites-available/exam-system
+docker cp apps/api/prisma/create-admin.ts exam_api:/app/apps/api/prisma/create-admin.ts
+```
+
+```bash
+read -p "Admin email: " AE; read -s -p "Admin password (min 8): " AP; echo; docker exec -it -e ADMIN_EMAIL="$AE" -e ADMIN_PASSWORD="$AP" -e ADMIN_NAME="Super Admin" exam_api pnpm exec tsx prisma/create-admin.ts
+```
+
+Expect `✅ super_admin ready — email: … · created`. (Re-running with the same email just resets that
+password.)
+
+> _Alternative — full demo dataset instead of a single admin:_
+> `docker exec -it exam_api pnpm exec tsx prisma/seed.ts` (creates faculties, courses, demo users
+> `Admin@12345` / students `Student@123` — change all passwords afterwards).
+
+---
+
+## 7 · HTTPS (TLS certificate)
+
+The full site config references certificate files that don't exist yet, so nginx won't start with
+it. Get the certificate first with a temporary HTTP-only config, then switch to the full one.
+
+**7a — install the shared pieces:**
+
+```bash
+cp infra/nginx/ratelimit.conf /etc/nginx/conf.d/exam-ratelimit.conf && mkdir -p /etc/nginx/snippets && cp infra/nginx/exam-proxy.conf /etc/nginx/snippets/exam-proxy.conf && rm -f /etc/nginx/sites-enabled/default && mkdir -p /var/www/certbot
+```
+
+**7b — temporary HTTP-only site so nginx can start:**
+
+```bash
+cat > /etc/nginx/sites-available/exam-system <<'EOF'
+server {
+    listen 80;
+    listen [::]:80;
+    server_name e-exam.ru.ac.bd;
+    location /.well-known/acme-challenge/ { root /var/www/certbot; }
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        include /etc/nginx/snippets/exam-proxy.conf;
+    }
+}
+EOF
 ln -sf /etc/nginx/sites-available/exam-system /etc/nginx/sites-enabled/exam-system
-rm -f /etc/nginx/sites-enabled/default
-mkdir -p /var/www/certbot
-
 nginx -t && systemctl reload nginx
-certbot --nginx -d e-exam.ru.ac.bd          # issues the cert + wires HTTPS; auto-renews via timer
-systemctl reload nginx
 ```
 
-Visit **https://e-exam.ru.ac.bd** — you should get the login over a valid certificate. Renewal is
-automatic (`systemctl list-timers | grep certbot`).
+**7c — obtain the certificate** (answer the email + agree prompts):
+
+```bash
+certbot --nginx -d e-exam.ru.ac.bd
+```
+
+**7d — switch to the full config** (TLS + rate-limiting; the cert files now exist):
+
+```bash
+cp infra/nginx/host.conf /etc/nginx/sites-available/exam-system && nginx -t && systemctl reload nginx
+```
+
+**Verify end to end:**
+
+```bash
+curl -sI https://e-exam.ru.ac.bd | head -3; curl -s https://e-exam.ru.ac.bd/api/v1/health; echo
+```
+
+Expect `HTTP/2 200` and `{"status":"ok",...}`. Open **https://e-exam.ru.ac.bd**, log in as your
+super-admin, and complete the one-time **2FA setup** (scan the QR with an authenticator app). Renewal
+is automatic (`systemctl list-timers | grep certbot`).
 
 ---
 
-## 6 · Operations
-
-**Redeploy after a code change** (pull, rebuild, migrations run on boot):
+## 8 · Automatic backups
 
 ```bash
-cd /opt/exam-system && git pull
-docker compose -f infra/docker-compose.prod.yml --env-file infra/.env up -d --build
+cp infra/systemd/exam-backup.service infra/systemd/exam-backup.timer /etc/systemd/system/ && systemctl daemon-reload && systemctl enable --now exam-backup.timer && systemctl start exam-backup.service
 ```
+
+Verify — one dump should appear, and the timer should be scheduled for 02:00:
+
+```bash
+ls -lh /opt/exam-system/backups/; systemctl list-timers | grep exam-backup
+```
+
+**Retrieve a backup to your Mac** (💻 run locally):
+
+```bash
+cd ~/Desktop/Web\ Dev/Project/exam-system && SSH_HOST=root@103.99.176.199 infra/scripts/pull-backup.sh ~/exam-backups
+```
+
+**Restore** (🖥️ ⚠️ replaces all current data):
+
+```bash
+cd /opt/exam-system && set -a && . infra/.env && set +a && POSTGRES_DB=exam_prod infra/scripts/restore.sh backups/exam_db_YYYYMMDD_HHMMSS.dump
+```
+
+**Offsite (recommended, 3-2-1):** install rclone, configure a remote, then add to
+`infra/systemd/exam-backup.service` → `Environment=OFFSITE_CMD=rclone copy {} myremote:exam-backups`
+and `systemctl daemon-reload`. Redis is not backed up (it's a cache/queue that rebuilds itself).
+
+---
+
+## 9 · Everyday operations
+
+**Deploy an update** (edit locally → push to GitHub → on the server):
+
+```bash
+cd /opt/exam-system && bash infra/scripts/deploy.sh
+```
+
+Pulls `main`, rebuilds, runs DB migrations automatically, restarts — no data loss.
 
 **Logs / status:**
 
 ```bash
-docker compose -f infra/docker-compose.prod.yml logs -f api        # app logs (capped at 10m×5)
+docker compose -f infra/docker-compose.prod.yml logs -f api
 docker compose -f infra/docker-compose.prod.yml ps
 ```
 
-**Use more CPU cores (single-node "load balancing"):** run N API replicas and let nginx
-round-robin. Remove `container_name: exam_api` from the api service, then:
+**More CPU cores (single-node scaling):** remove `container_name: exam_api` from the api service in
+`infra/docker-compose.prod.yml`, then `up -d --scale api=3`. For nginx to balance across replicas,
+switch the web container's `/api` proxy to a Docker-resolver upstream.
 
-```bash
-docker compose -f infra/docker-compose.prod.yml --env-file infra/.env up -d --scale api=3
-```
-
-For nginx to balance across replicas, switch the web container's `/api` proxy to a Docker-resolver
-upstream (`resolver 127.0.0.11; set $u http://api:4100; proxy_pass $u;`). One replica is the
-default and is fine for a department's load.
-
-**Maintenance mode** (e.g., during a big restore): set `MAINTENANCE_MODE=true` in `infra/.env` and
-redeploy the api; the app returns 503 to everyone except health checks.
+**Maintenance mode:** set `MAINTENANCE_MODE=true` in `infra/.env` and redeploy — the app returns 503
+to everyone except health checks (useful during a big restore).
 
 ---
 
-## 7 · Backups — schedule, retrieve, restore
+## 10 · Accounts & passwords
 
-**Schedule (nightly 02:00, 14-day retention):**
+| How the account is made          | Initial password                                                              |
+| -------------------------------- | ----------------------------------------------------------------------------- |
+| `create-admin.ts` (§ 6)          | the password you chose                                                        |
+| Seed (demo)                      | staff `Admin@12345`, students `Student@123`                                   |
+| **Admin → Users → Create**       | random, not shown → user sets it via _Forgot password_, or use _Set password_ |
+| **Admin → Users → Set password** | the password you type (user must change on first login)                       |
+| **Org → add student**            | `Student@123` (must change on first login)                                    |
+| **Bulk import (xlsx)**           | the `password` column if present, else random + email reset                   |
 
-```bash
-cp infra/systemd/exam-backup.service /etc/systemd/system/
-cp infra/systemd/exam-backup.timer   /etc/systemd/system/
-systemctl daemon-reload
-systemctl enable --now exam-backup.timer
-systemctl start exam-backup.service          # run one now to verify
-ls -lh /opt/exam-system/backups/             # exam_db_YYYYMMDD_HHMMSS.dump
-systemctl list-timers | grep exam-backup     # confirm the schedule
-journalctl -u exam-backup.service --no-pager # see the last run's log
-```
+Staff (super_admin / admin / department_head / teacher) must enroll **2FA** on first login. Students
+never do. "Forgot password" needs SMTP configured (§ 4) and the user to have an email address.
 
-**Get the backups onto your own machine** (run locally, uses your SSH key):
+---
 
-```bash
-infra/scripts/pull-backup.sh ~/exam-backups              # newest dump
-# or grab everything:
-rsync -avz -e "ssh -p 36179" root@103.99.176.199:/opt/exam-system/backups/ ~/exam-backups/
-```
+## 11 · Troubleshooting (issues already fixed in this repo)
 
-**Offsite (recommended — 3-2-1 rule).** After a good local backup the script can push the dump
-anywhere. Install rclone, configure a remote (S3, Google Drive, another server…), then add to
-`infra/systemd/exam-backup.service`:
+These were hit and fixed during the first deployment; a fresh clone already contains the fixes.
 
-```
-Environment=OFFSITE_CMD=rclone copy {} myremote:exam-backups
-```
-
-(`{}` is replaced with the new dump path.) Re-run `systemctl daemon-reload`.
-
-**Restore a backup** (⚠️ drops & recreates the DB — all current data is replaced):
-
-```bash
-cd /opt/exam-system
-POSTGRES_DB=exam_prod infra/scripts/restore.sh backups/exam_db_YYYYMMDD_HHMMSS.dump
-```
-
-Redis is not backed up (it's a cache/queue and rebuilds itself); only Postgres holds durable data.
+- **`nginx -t` fails: `options-ssl-nginx.conf … No such file`** — the full config needs the cert.
+  Use the § 7 order (temp config → certbot → full config).
+- **`pnpm run seed` → "Missing script: seed"** — use `pnpm exec tsx prisma/seed.ts` (or
+  `create-admin.ts`) inside the container instead.
+- **Backup fails: `fe_sendauth: no password supplied`** — prod Postgres uses password auth; the
+  scripts pass `PGPASSWORD` from `infra/.env` (fixed).
+- **Login seems to work but 2FA/authenticated calls fail** — the web nginx must forward the edge's
+  `X-Forwarded-Proto: https` so the API sets secure cookies (fixed in `infra/nginx/web.conf`).
 
 ---
 
 ## Security checklist
 
-- [x] Root password rotated; **SSH is key-only** (`PasswordAuthentication no`).
-- [x] Firewall: only **36179, 80, 443** inbound; fail2ban bans SSH brute-forcers.
-- [x] **Postgres/Redis/PgBouncer have no host ports** — internet-unreachable.
+- [x] Root password rotated; **SSH key-only** (`PasswordAuthentication no`, verified refused).
+- [x] Firewall: only **36179 / 80 / 443** inbound; fail2ban bans SSH brute-forcers.
+- [x] **Postgres / Redis / PgBouncer have no host ports** — internet-unreachable.
 - [x] Web bound to `127.0.0.1:8080`; only nginx faces the public.
-- [x] **HTTPS** everywhere (auto-renewing cert); HSTS + CSP + secure, first-party cookies.
+- [x] **HTTPS** (auto-renewing cert); HSTS + CSP; secure, first-party cookies; 2FA for staff.
 - [x] Strong generated `POSTGRES_PASSWORD` + `SESSION_SECRET`; `infra/.env` is root-only, not in git.
-- [x] SCRAM-SHA-256 DB auth; app-level rate limiting + edge rate limiting; 2FA for staff.
-- [x] Automatic OS security updates; capped container logs; swap to avoid OOM.
-- [x] Nightly backups, retained + retrievable + optional offsite.
+- [x] SCRAM-SHA-256 DB auth; app + edge rate limiting; automatic OS security updates; capped logs; swap.
+- [x] Nightly backups — retained, retrievable, optional offsite.
+
+```
+
+```
