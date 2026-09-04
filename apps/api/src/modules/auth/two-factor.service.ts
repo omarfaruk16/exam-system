@@ -39,6 +39,11 @@ export class TwoFactorService {
     authenticator.options = { window: 1 }; // tolerate ±1 time-step clock skew
   }
 
+  /** Whether 2FA is switched on at all (STAFF_2FA_REQUIRED). When false, 2FA is fully disabled. */
+  enforced(): boolean {
+    return this.staff2faRequired;
+  }
+
   requiresTwoFactor(user: AuthUser): boolean {
     if (!this.staff2faRequired) return false;
     return user.roles.some((r) => ROLES_REQUIRING_2FA.has(r.role));

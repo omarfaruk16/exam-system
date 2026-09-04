@@ -55,8 +55,9 @@ export class AuthController {
   async login(@Body() dto: LoginDto, @Req() req: Request, @Ip() ip: string): Promise<LoginResult> {
     const user = await this.auth.validateUser(dto.identifier, dto.password);
 
-    // Enrolled 2FA users must clear the second factor before a session is issued.
-    if (user.twoFactorEnabled) {
+    // Enrolled 2FA users must clear the second factor before a session is issued — unless 2FA
+    // is switched off globally (STAFF_2FA_REQUIRED=false), in which case sign-in is direct.
+    if (user.twoFactorEnabled && this.twoFactor.enforced()) {
       const partialToken = await this.twoFactor.mintPartialToken(user.id);
       return { status: 'two_factor_required', partialToken };
     }
