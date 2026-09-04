@@ -103,12 +103,20 @@ export function ImportModal({
           </DialogDescription>
         </DialogHeader>
 
-        <a
-          href={templateUrl(entity)}
-          className="text-primary inline-flex items-center gap-1.5 text-sm hover:underline"
-        >
-          <Download className="size-4" /> Download {entity} template (.xlsx)
-        </a>
+        <div className="flex flex-wrap items-center gap-4">
+          <a
+            href={templateUrl(entity, 'xlsx')}
+            className="text-primary inline-flex items-center gap-1.5 text-sm hover:underline"
+          >
+            <Download className="size-4" /> Template (.xlsx)
+          </a>
+          <a
+            href={templateUrl(entity, 'csv')}
+            className="text-primary inline-flex items-center gap-1.5 text-sm hover:underline"
+          >
+            <Download className="size-4" /> Template (.csv)
+          </a>
+        </div>
 
         {phase.kind === 'done' ? (
           <div className="space-y-3">

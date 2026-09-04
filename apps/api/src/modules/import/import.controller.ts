@@ -24,7 +24,7 @@ import type { Env } from '../../common/config/env.validation';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { ImportService } from './import.service';
-import { buildTemplate, isTemplateType } from './import-templates';
+import { buildTemplate, buildTemplateCsv, isTemplateType } from './import-templates';
 import type { ImportEntity, UploadedExcel } from './import.types';
 
 @Controller('imports')
@@ -38,10 +38,21 @@ export class ImportController {
   ) {}
 
   // ─────────────────────────── Templates ───────────────────────────
-  /** Download a pre-formatted .xlsx template with headers + one example row. */
+  /** Download a pre-formatted template (headers + one example row). ?format=csv for CSV. */
   @Get('templates/:type')
-  async template(@Param('type') type: string, @Res() res: Response): Promise<void> {
+  async template(
+    @Param('type') type: string,
+    @Res() res: Response,
+    @Query('format') format?: string,
+  ): Promise<void> {
     if (!isTemplateType(type)) throw new BadRequestException('Unknown template type');
+    if (format === 'csv') {
+      const buffer = buildTemplateCsv(type);
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${type}-template.csv"`);
+      res.end(buffer);
+      return;
+    }
     const buffer = await buildTemplate(type);
     res.setHeader(
       'Content-Type',
@@ -116,6 +127,26 @@ export class ImportController {
     @Ip() ip: string,
   ): Promise<{ jobId: string }> {
     return this.enqueueEntity('courses', file, user, ip);
+  }
+
+  @Post('faculties')
+  @UseInterceptors(FileInterceptor('file'))
+  uploadFaculties(
+    @UploadedFile() file: UploadedExcel | undefined,
+    @CurrentUser() user: AuthUser,
+    @Ip() ip: string,
+  ): Promise<{ jobId: string }> {
+    return this.enqueueEntity('faculties', file, user, ip);
+  }
+
+  @Post('semesters')
+  @UseInterceptors(FileInterceptor('file'))
+  uploadSemesters(
+    @UploadedFile() file: UploadedExcel | undefined,
+    @CurrentUser() user: AuthUser,
+    @Ip() ip: string,
+  ): Promise<{ jobId: string }> {
+    return this.enqueueEntity('semesters', file, user, ip);
   }
 
   private async enqueueEntity(

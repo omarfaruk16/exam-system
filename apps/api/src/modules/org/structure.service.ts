@@ -853,6 +853,106 @@ export class StructureService {
     });
   }
 
+  // ─────────────────────── Structure exports (xlsx) ───────────────────────
+  // Column headers match the import templates, so an exported sheet can be edited and re-imported.
+
+  private async xlsxFile(
+    sheet: string,
+    columns: { header: string; key: string; width: number }[],
+    rows: Record<string, string | number>[],
+    filename: string,
+  ): Promise<StreamableFile> {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet(sheet);
+    ws.columns = columns;
+    ws.getRow(1).font = { bold: true };
+    for (const r of rows) ws.addRow(r);
+    const buffer = await wb.xlsx.writeBuffer();
+    return new StreamableFile(Buffer.from(buffer), {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: `attachment; filename="${filename}"`,
+    });
+  }
+
+  async exportFaculties(): Promise<StreamableFile> {
+    const rows = await this.prisma.db.faculty.findMany({
+      select: { name: true, _count: { select: { departments: true } } },
+      orderBy: { name: 'asc' },
+    });
+    return this.xlsxFile(
+      'Faculties',
+      [
+        { header: 'name', key: 'name', width: 36 },
+        { header: 'departments', key: 'departments', width: 14 },
+      ],
+      rows.map((f) => ({ name: f.name, departments: f._count.departments })),
+      'faculties.xlsx',
+    );
+  }
+
+  async exportDepartments(): Promise<StreamableFile> {
+    const rows = await this.prisma.db.department.findMany({
+      select: { name: true, faculty: { select: { name: true } } },
+      orderBy: [{ faculty: { name: 'asc' } }, { name: 'asc' }],
+    });
+    return this.xlsxFile(
+      'Departments',
+      [
+        { header: 'name', key: 'name', width: 36 },
+        { header: 'faculty', key: 'faculty', width: 30 },
+      ],
+      rows.map((d) => ({ name: d.name, faculty: d.faculty.name })),
+      'departments.xlsx',
+    );
+  }
+
+  async exportSemesters(): Promise<StreamableFile> {
+    const rows = await this.prisma.db.semester.findMany({
+      select: { number: true, name: true, program: { select: { name: true } } },
+      orderBy: [{ program: { name: 'asc' } }, { number: 'asc' }],
+    });
+    return this.xlsxFile(
+      'Semesters',
+      [
+        { header: 'program', key: 'program', width: 24 },
+        { header: 'number', key: 'number', width: 10 },
+        { header: 'name', key: 'name', width: 28 },
+      ],
+      rows.map((s) => ({ program: s.program.name, number: s.number, name: s.name ?? '' })),
+      'semesters.xlsx',
+    );
+  }
+
+  async exportCourses(): Promise<StreamableFile> {
+    const rows = await this.prisma.db.course.findMany({
+      select: {
+        code: true,
+        name: true,
+        credit: true,
+        semester: { select: { number: true, program: { select: { name: true } } } },
+      },
+      orderBy: [{ code: 'asc' }],
+    });
+    return this.xlsxFile(
+      'Courses',
+      [
+        { header: 'code', key: 'code', width: 16 },
+        { header: 'name', key: 'name', width: 36 },
+        { header: 'credit', key: 'credit', width: 10 },
+        { header: 'semesterNumber', key: 'semesterNumber', width: 16 },
+        { header: 'program', key: 'program', width: 24 },
+      ],
+      rows.map((c) => ({
+        code: c.code,
+        name: c.name,
+        credit: c.credit,
+        semesterNumber: c.semester.number,
+        program: c.semester.program.name,
+      })),
+      'courses.xlsx',
+    );
+  }
+
   // ─────────────────────────────── Batch ───────────────────────────────
   listBatches(actor: AuthUser, programPublicId?: string, departmentPublicId?: string) {
     const scope = this.deptScopeId(actor);

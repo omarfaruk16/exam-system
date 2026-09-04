@@ -1,7 +1,11 @@
 import type { ImportJobState } from '@exam/types';
 import { api } from '@/lib/api';
 
-export type ImportEntity = 'students' | 'teachers' | 'departments' | 'courses';
+export type ImportEntity =
+  'students' | 'teachers' | 'departments' | 'courses' | 'faculties' | 'semesters';
+
+/** Structure entities that can be exported to xlsx. */
+export type ExportEntity = 'faculties' | 'departments' | 'semesters' | 'courses';
 
 const API_BASE = '/api/v1';
 
@@ -28,5 +32,9 @@ export const uploadEntity = (entity: Exclude<ImportEntity, 'students'>, file: Fi
 
 export const fetchImportState = (jobId: string) => api.get<ImportJobState>(`/imports/${jobId}`);
 
-export const templateUrl = (entity: ImportEntity) => `${API_BASE}/imports/templates/${entity}`;
+export const templateUrl = (entity: ImportEntity, format: 'xlsx' | 'csv' = 'xlsx') =>
+  `${API_BASE}/imports/templates/${entity}${format === 'csv' ? '?format=csv' : ''}`;
 export const errorReportUrl = (jobId: string) => `${API_BASE}/imports/${jobId}/errors`;
+
+/** Download URL for exporting existing structure data as xlsx. */
+export const exportUrl = (entity: ExportEntity) => `${API_BASE}/org/export/${entity}`;

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -11,6 +12,7 @@ import {
   Query,
   Res,
 } from '@nestjs/common';
+import type { StreamableFile } from '@nestjs/common';
 import type { Response } from 'express';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -278,6 +280,27 @@ export class StructureController {
     @Body() dto: AssignTeacherDto,
   ) {
     return this.svc.assignTeacher(this.ctx(u, ip), id, dto);
+  }
+
+  // Structure exports (xlsx). One route keeps it clear of the `:publicId` routes above.
+  @Get('export/:type')
+  exportStructure(
+    @Res({ passthrough: true }) res: Response,
+    @Param('type') type: string,
+  ): Promise<StreamableFile> {
+    res.set({ 'Cache-Control': 'no-store' });
+    switch (type) {
+      case 'faculties':
+        return this.svc.exportFaculties();
+      case 'departments':
+        return this.svc.exportDepartments();
+      case 'semesters':
+        return this.svc.exportSemesters();
+      case 'courses':
+        return this.svc.exportCourses();
+      default:
+        throw new BadRequestException('Unknown export type');
+    }
   }
 
   // Teacher admin list and CRUD (admin only — class-level @Roles applies)

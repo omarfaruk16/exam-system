@@ -7,6 +7,7 @@ import {
   GraduationCap,
   Loader2,
   Plus,
+  Trash2,
   Users,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -14,11 +15,19 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useSession } from '@/lib/session';
-import { createDepartment, fetchFacultyStats, updateFaculty } from './orgApi';
+import { createDepartment, deleteFaculty, fetchFacultyStats, updateFaculty } from './orgApi';
 
 export function FacultyDashboardPage() {
   const { publicId } = useParams<{ publicId: string }>();
@@ -30,6 +39,17 @@ export function FacultyDashboardPage() {
   const [addingDept, setAddingDept] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [facultyName, setFacultyName] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const deleteFacultyMut = useMutation({
+    mutationFn: () => deleteFaculty(publicId!),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['org-faculties'] });
+      toast.success('Faculty deleted');
+      navigate('/org');
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not delete faculty'),
+  });
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['faculty-stats', publicId],
@@ -127,11 +147,48 @@ export function FacultyDashboardPage() {
           <p className="text-muted-foreground mt-1 text-sm">Faculty dashboard</p>
         </div>
         {isAdmin && (
-          <Button size="sm" onClick={() => setAddingDept((v) => !v)}>
-            <Plus className="size-4" /> New department
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={() => setAddingDept((v) => !v)}>
+              <Plus className="size-4" /> New department
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => setConfirmDelete(true)}
+              aria-label="Delete faculty"
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          </div>
         )}
       </div>
+
+      {/* Delete faculty confirmation */}
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this faculty?</DialogTitle>
+            <DialogDescription>
+              “{data.name}” will be removed. A faculty that still has departments cannot be deleted
+              — remove or move its departments first. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDelete(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteFacultyMut.mutate()}
+              disabled={deleteFacultyMut.isPending}
+            >
+              {deleteFacultyMut.isPending && <Loader2 className="size-4 animate-spin" />}
+              Delete faculty
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Stats */}
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">

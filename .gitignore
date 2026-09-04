@@ -38,6 +38,9 @@ tmp/
 # deployment runbook — kept local only (contains server IP / SSH port), not in the public repo
 infra/DEPLOYMENT.md
 
+# local tooling
+.claude/
+
 # OS / editor
 .DS_Store
 Thumbs.db

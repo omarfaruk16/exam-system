@@ -7,7 +7,7 @@ export interface StudentImportJobData {
 }
 
 /** The bulk-importable entity types beyond students. */
-export type ImportEntity = 'teachers' | 'departments' | 'courses';
+export type ImportEntity = 'teachers' | 'departments' | 'courses' | 'faculties' | 'semesters';
 
 /** Payload enqueued for the generic entity-import worker. */
 export interface EntityImportJobData {

@@ -178,3 +178,50 @@ export function validateCourseRow(
     },
   };
 }
+
+// ─────────────────────────────── Faculties ───────────────────────────────
+export interface ParsedFacultyRow {
+  rowNumber: number;
+  name: string;
+}
+
+export function validateFacultyRow(
+  cells: Record<string, string>,
+  row: number,
+): Result<ParsedFacultyRow> {
+  const name = pick(cells, 'name', 'faculty', 'faculty name', 'facultyname');
+  if (!name) return { error: { row, field: 'name', message: 'Faculty name is required' } };
+  return { value: { rowNumber: row, name } };
+}
+
+// ─────────────────────────────── Semesters ───────────────────────────────
+export interface ParsedSemesterRow {
+  rowNumber: number;
+  programName: string;
+  number: number;
+  name: string | null;
+}
+
+export function validateSemesterRow(
+  cells: Record<string, string>,
+  row: number,
+): Result<ParsedSemesterRow> {
+  const programName = pick(cells, 'program', 'programname', 'program name');
+  const numberRaw = pick(cells, 'number', 'semesternumber', 'semester number', 'semester');
+  const name = pick(cells, 'name', 'semestername', 'semester name');
+
+  if (!programName)
+    return { error: { row, field: 'program', message: 'Program name is required' } };
+  const number = Number(numberRaw || '0');
+  if (!numberRaw || !Number.isInteger(number) || number <= 0) {
+    return {
+      error: {
+        row,
+        field: 'number',
+        value: numberRaw,
+        message: 'Semester number must be a positive whole number',
+      },
+    };
+  }
+  return { value: { rowNumber: row, programName, number, name: name || null } };
+}

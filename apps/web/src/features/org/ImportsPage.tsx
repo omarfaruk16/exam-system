@@ -1,11 +1,20 @@
 import { useQuery } from '@tanstack/react-query';
-import { Building2, BookOpen, GraduationCap, Upload, Users } from 'lucide-react';
+import {
+  Building2,
+  BookOpen,
+  Download,
+  GraduationCap,
+  Landmark,
+  Layers,
+  Upload,
+  Users,
+} from 'lucide-react';
 import { useState, type ComponentType } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { fetchBatches } from './orgApi';
-import type { ImportEntity } from './importApi';
+import { exportUrl, type ExportEntity, type ImportEntity } from './importApi';
 import { ImportModal } from './ImportModal';
 
 interface CardDef {
@@ -17,10 +26,28 @@ interface CardDef {
 
 const CARDS: CardDef[] = [
   {
-    entity: 'students',
-    title: 'Students',
-    description: 'Import a batch roster. Creates student accounts.',
-    icon: GraduationCap,
+    entity: 'faculties',
+    title: 'Faculties',
+    description: 'Adds faculties by name. Existing names are skipped.',
+    icon: Landmark,
+  },
+  {
+    entity: 'departments',
+    title: 'Departments',
+    description: 'Adds departments under a faculty. Existing names are skipped.',
+    icon: Building2,
+  },
+  {
+    entity: 'semesters',
+    title: 'Semesters',
+    description: 'Adds semesters to a programme (by number). Existing ones are skipped.',
+    icon: Layers,
+  },
+  {
+    entity: 'courses',
+    title: 'Courses',
+    description: 'Adds courses to a semester. Existing codes are skipped.',
+    icon: BookOpen,
   },
   {
     entity: 'teachers',
@@ -29,17 +56,18 @@ const CARDS: CardDef[] = [
     icon: Users,
   },
   {
-    entity: 'departments',
-    title: 'Departments',
-    description: 'Adds departments under a faculty. Existing codes are skipped.',
-    icon: Building2,
+    entity: 'students',
+    title: 'Students',
+    description: 'Import a batch roster. Creates student accounts.',
+    icon: GraduationCap,
   },
-  {
-    entity: 'courses',
-    title: 'Courses',
-    description: 'Adds courses to a semester. Existing codes are skipped.',
-    icon: BookOpen,
-  },
+];
+
+const EXPORTS: { entity: ExportEntity; title: string }[] = [
+  { entity: 'faculties', title: 'Faculties' },
+  { entity: 'departments', title: 'Departments' },
+  { entity: 'semesters', title: 'Semesters' },
+  { entity: 'courses', title: 'Courses' },
 ];
 
 export function ImportsPage() {
@@ -98,6 +126,22 @@ export function ImportsPage() {
               <Upload className="size-4" /> Import {c.title.toLowerCase()}
             </Button>
           </Card>
+        ))}
+      </div>
+
+      {/* Export existing data — the sheets match the import templates, so you can edit and re-import. */}
+      <h2 className="mb-1 mt-8 text-sm font-semibold">Export data (.xlsx)</h2>
+      <p className="text-muted-foreground mb-4 text-sm">
+        Download current structure data. The columns match the import templates, so an exported
+        sheet can be edited and imported back.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {EXPORTS.map((e) => (
+          <a key={e.entity} href={exportUrl(e.entity)}>
+            <Button variant="outline" size="sm">
+              <Download className="size-4" /> {e.title}
+            </Button>
+          </a>
         ))}
       </div>
 

@@ -12,7 +12,13 @@ import type { Env } from '../../common/config/env.validation';
 import { PasswordService } from '../auth/password.service';
 import { QUEUE_ENTITY_IMPORT } from '../../queue/queue.constants';
 import { readImportRows } from './import-file';
-import { validateCourseRow, validateDepartmentRow, validateTeacherRow } from './entity-rows';
+import {
+  validateCourseRow,
+  validateDepartmentRow,
+  validateFacultyRow,
+  validateSemesterRow,
+  validateTeacherRow,
+} from './entity-rows';
 import type { EntityImportJobData } from './import.types';
 
 /**
@@ -41,7 +47,103 @@ export class EntityImportProcessor extends WorkerHost {
         return this.importDepartments(job, rows);
       case 'courses':
         return this.importCourses(job, rows);
+      case 'faculties':
+        return this.importFaculties(job, rows);
+      case 'semesters':
+        return this.importSemesters(job, rows);
     }
+  }
+
+  // ─────────────────────────────── Faculties ───────────────────────────────
+  private async importFaculties(
+    job: Job<EntityImportJobData>,
+    rows: Awaited<ReturnType<typeof readImportRows>>,
+  ): Promise<ImportSummary> {
+    const errors: ImportRowError[] = [];
+    const parsed = [];
+    for (const { rowNumber, cells } of rows) {
+      const { value, error } = validateFacultyRow(cells, rowNumber);
+      if (error) errors.push(error);
+      else if (value) parsed.push(value);
+    }
+    const validationErrors = errors.length;
+
+    let imported = 0;
+    let skipped = 0;
+    for (let i = 0; i < parsed.length; i++) {
+      const row = parsed[i]!;
+      try {
+        // Idempotent: skip (not an error) if a faculty with this name already exists.
+        const existing = await this.prisma.db.faculty.findFirst({
+          where: { name: row.name },
+          select: { id: true },
+        });
+        if (existing) {
+          skipped++;
+          continue;
+        }
+        await this.prisma.db.faculty.create({ data: { name: row.name } });
+        imported++;
+      } catch (e) {
+        errors.push({ row: row.rowNumber, message: `Unexpected error: ${(e as Error).message}` });
+      }
+      await job.updateProgress(Math.round(((i + 1) / Math.max(parsed.length, 1)) * 100));
+    }
+    return this.finish(job, parsed.length + validationErrors, imported, skipped, errors);
+  }
+
+  // ─────────────────────────────── Semesters ───────────────────────────────
+  private async importSemesters(
+    job: Job<EntityImportJobData>,
+    rows: Awaited<ReturnType<typeof readImportRows>>,
+  ): Promise<ImportSummary> {
+    const errors: ImportRowError[] = [];
+    const parsed = [];
+    for (const { rowNumber, cells } of rows) {
+      const { value, error } = validateSemesterRow(cells, rowNumber);
+      if (error) errors.push(error);
+      else if (value) parsed.push(value);
+    }
+    const validationErrors = errors.length;
+
+    let imported = 0;
+    let skipped = 0;
+    for (let i = 0; i < parsed.length; i++) {
+      const row = parsed[i]!;
+      try {
+        const program = await this.prisma.db.program.findFirst({
+          where: { name: row.programName },
+          select: { id: true },
+        });
+        if (!program) {
+          skipped++;
+          errors.push({
+            row: row.rowNumber,
+            field: 'program',
+            value: row.programName,
+            message: 'Program not found',
+          });
+          continue;
+        }
+        // Idempotent: skip if this program already has a semester with that number.
+        const existing = await this.prisma.db.semester.findFirst({
+          where: { programId: program.id, number: row.number },
+          select: { id: true },
+        });
+        if (existing) {
+          skipped++;
+          continue;
+        }
+        await this.prisma.db.semester.create({
+          data: { programId: program.id, number: row.number, name: row.name },
+        });
+        imported++;
+      } catch (e) {
+        errors.push({ row: row.rowNumber, message: `Unexpected error: ${(e as Error).message}` });
+      }
+      await job.updateProgress(Math.round(((i + 1) / Math.max(parsed.length, 1)) * 100));
+    }
+    return this.finish(job, parsed.length + validationErrors, imported, skipped, errors);
   }
 
   // ─────────────────────────────── Teachers ───────────────────────────────
