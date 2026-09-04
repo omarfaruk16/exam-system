@@ -534,7 +534,8 @@ export class StructureService {
     return this.prisma.db.course.findMany({
       where,
       select: courseSelect,
-      orderBy: { code: 'asc' },
+      // First-created first (the order they were added), not alphabetical.
+      orderBy: { createdAt: 'asc' },
     });
   }
   async createCourse(ctx: OrgContext, dto: CreateCourseDto) {

@@ -47,6 +47,10 @@ export const envSchema = z.object({
   // When false, the API stops running import/grading workers embedded — run `worker.ts` instead.
   RUN_EMBEDDED_WORKERS: zBool(true),
 
+  // Require staff (admin / super_admin) to enrol in 2FA. Set false to let admins sign in with
+  // just username + password (e.g. while onboarding several admins); turn back on for security.
+  STAFF_2FA_REQUIRED: zBool(true),
+
   STORAGE_DIR: z.string().default('./storage'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   SENTRY_DSN: z.string().default(''),

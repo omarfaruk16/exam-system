@@ -921,6 +921,7 @@ function SemesterCourses({ semester, deptPublicId }: { semester: Semester; deptP
               <Input
                 type="number"
                 min={0}
+                step="0.5"
                 value={credit}
                 onChange={(e) => setCredit(e.target.value)}
                 placeholder="Cr"
@@ -1012,6 +1013,7 @@ function CourseRow({
           <Input
             type="number"
             min={0}
+            step="0.5"
             value={credit}
             onChange={(e) => setCredit(e.target.value)}
             className="h-8 w-16"

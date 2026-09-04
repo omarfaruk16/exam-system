@@ -26,6 +26,7 @@ const SETUP_TTL_SECONDS = 10 * 60;
 export class TwoFactorService {
   private readonly key: Buffer;
   private readonly issuer: string;
+  private readonly staff2faRequired: boolean;
 
   constructor(
     config: ConfigService<Env, true>,
@@ -34,10 +35,12 @@ export class TwoFactorService {
     // Derive a stable 32-byte key from the session secret — no extra env var to manage.
     this.key = scryptSync(config.getOrThrow('SESSION_SECRET', { infer: true }), 'exam-2fa-v1', 32);
     this.issuer = config.get('INSTITUTION_NAME', { infer: true });
+    this.staff2faRequired = config.get('STAFF_2FA_REQUIRED', { infer: true });
     authenticator.options = { window: 1 }; // tolerate ±1 time-step clock skew
   }
 
   requiresTwoFactor(user: AuthUser): boolean {
+    if (!this.staff2faRequired) return false;
     return user.roles.some((r) => ROLES_REQUIRING_2FA.has(r.role));
   }
 
