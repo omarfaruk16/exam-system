@@ -17,6 +17,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useSession } from '@/lib/session';
 import { cn } from '@/lib/utils';
 import {
+  fetchBatches,
   fetchCourseParts,
   fetchCourses,
   fetchDepartments,
@@ -412,6 +413,7 @@ function CascadingPartPicker({
   const [facultyId, setFacultyId] = useState('');
   const [deptId, setDeptId] = useState('');
   const [programId, setProgramId] = useState('');
+  const [batchId, setBatchId] = useState('');
   const [semesterId, setSemesterId] = useState('');
   const [courseId, setCourseId] = useState('');
 
@@ -426,10 +428,15 @@ function CascadingPartPicker({
     queryFn: () => fetchPrograms(deptId),
     enabled: !!deptId,
   });
-  const semestersQ = useQuery({
-    queryKey: ['org-semesters', programId],
-    queryFn: () => fetchSemesters(programId),
+  const batchesQ = useQuery({
+    queryKey: ['org-batches', programId],
+    queryFn: () => fetchBatches(programId),
     enabled: !!programId,
+  });
+  const semestersQ = useQuery({
+    queryKey: ['org-semesters', batchId],
+    queryFn: () => fetchSemesters(batchId),
+    enabled: !!batchId,
   });
   const coursesQ = useQuery({
     queryKey: ['org-courses', semesterId],
@@ -444,19 +451,26 @@ function CascadingPartPicker({
 
   const selectedPart = partsQ.data?.find((p) => p.publicId === value);
 
-  const reset = (level: 'faculty' | 'dept' | 'program' | 'semester' | 'course') => {
+  const reset = (level: 'faculty' | 'dept' | 'program' | 'batch' | 'semester' | 'course') => {
     if (level === 'faculty') {
       setDeptId('');
       setProgramId('');
+      setBatchId('');
       setSemesterId('');
       setCourseId('');
     }
     if (level === 'dept') {
       setProgramId('');
+      setBatchId('');
       setSemesterId('');
       setCourseId('');
     }
     if (level === 'program') {
+      setBatchId('');
+      setSemesterId('');
+      setCourseId('');
+    }
+    if (level === 'batch') {
       setSemesterId('');
       setCourseId('');
     }
@@ -525,8 +539,28 @@ function CascadingPartPicker({
         </select>
       )}
 
-      {/* Semester */}
+      {/* Batch */}
       {programId && (
+        <select
+          className={selectCls}
+          value={batchId}
+          disabled={batchesQ.isLoading}
+          onChange={(e) => {
+            setBatchId(e.target.value);
+            reset('batch');
+          }}
+        >
+          <option value="">Batch…</option>
+          {(batchesQ.data ?? []).map((b) => (
+            <option key={b.publicId} value={b.publicId}>
+              {b.name}
+            </option>
+          ))}
+        </select>
+      )}
+
+      {/* Semester */}
+      {batchId && (
         <select
           className={selectCls}
           value={semesterId}

@@ -70,8 +70,9 @@ export function FinalMarkingPage() {
       case 'program':
         return Boolean(filters.department);
       case 'batch':
-      case 'semester':
         return Boolean(filters.program);
+      case 'semester':
+        return Boolean(filters.batch);
       case 'course':
         return Boolean(filters.semester);
     }

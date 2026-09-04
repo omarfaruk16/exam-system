@@ -68,16 +68,18 @@ export const examListSelect = {
             select: {
               number: true,
               name: true,
-              program: {
+              // The owning batch (each batch has its own semesters/courses now).
+              batch: {
                 select: {
                   name: true,
-                  department: { select: { name: true } },
+                  year: true,
+                  program: {
+                    select: {
+                      name: true,
+                      department: { select: { name: true } },
+                    },
+                  },
                 },
-              },
-              batches: {
-                where: { deletedAt: null },
-                select: { name: true, year: true },
-                orderBy: { year: 'desc' },
               },
             },
           },

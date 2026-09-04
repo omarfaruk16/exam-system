@@ -519,7 +519,7 @@ export class AttemptService {
                       select: {
                         number: true,
                         name: true,
-                        program: { select: { name: true } },
+                        batch: { select: { program: { select: { name: true } } } },
                       },
                     },
                   },
@@ -549,7 +549,7 @@ export class AttemptService {
         semMap.set(sem.number, {
           number: sem.number,
           name: sem.name,
-          programName: sem.program.name,
+          programName: sem.batch.program.name,
           exams: [],
         });
       }
@@ -597,7 +597,7 @@ export class AttemptService {
                 id: true,
                 number: true,
                 name: true,
-                program: { select: { name: true } },
+                batch: { select: { program: { select: { name: true } } } },
                 courses: {
                   where: { deletedAt: null },
                   select: {
@@ -610,7 +610,7 @@ export class AttemptService {
                       orderBy: { createdAt: 'asc' },
                     },
                   },
-                  orderBy: { code: 'asc' },
+                  orderBy: { createdAt: 'asc' },
                 },
               },
             },
@@ -633,7 +633,7 @@ export class AttemptService {
       semester: {
         number: sem.number,
         name: sem.name ?? `Semester ${sem.number}`,
-        programName: sem.program.name,
+        programName: sem.batch.program.name,
       },
       courses: sem.courses.map((c) => ({
         publicId: c.publicId,

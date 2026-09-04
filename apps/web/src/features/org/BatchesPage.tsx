@@ -134,8 +134,8 @@ function BatchRow({ batch, allBatches }: { batch: Batch; allBatches: Batch[] }) 
   const [editYear, setEditYear] = useState(String(batch.year));
 
   const semestersQuery = useQuery({
-    queryKey: ['org-semesters', batch.program.publicId],
-    queryFn: () => fetchSemesters(batch.program.publicId),
+    queryKey: ['org-semesters', batch.publicId],
+    queryFn: () => fetchSemesters(batch.publicId),
     enabled: assigning,
   });
 

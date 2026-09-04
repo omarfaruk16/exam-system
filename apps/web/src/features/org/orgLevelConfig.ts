@@ -1,16 +1,19 @@
 import {
+  createBatch,
   createCourse,
   createCoursePart,
   createDepartment,
   createProgram,
   createSemester,
   updateSemester,
+  deleteBatch,
   deleteCourse,
   deleteCoursePart,
   deleteDepartment,
   deleteFaculty,
   deleteProgram,
   deleteSemester,
+  updateBatch,
   updateCourse,
   updateCoursePart,
   updateDepartment,
@@ -63,12 +66,23 @@ const PROGRAM: AddChildDef = {
     createProgram({ departmentPublicId: parent, ...b } as Parameters<typeof createProgram>[0]),
 };
 
+const BATCH: AddChildDef = {
+  level: 'batch',
+  label: 'Add Batch',
+  fields: [
+    { key: 'name', label: 'Name (e.g. 2021 Batch)', kind: 'text' },
+    { key: 'year', label: 'Year', kind: 'number' },
+  ],
+  create: (parent, b) =>
+    createBatch({ programPublicId: parent, ...b } as Parameters<typeof createBatch>[0]),
+};
+
 const SEMESTER: AddChildDef = {
   level: 'semester',
   label: 'Add Semester',
   fields: [{ key: 'name', label: 'Semester name', kind: 'text' }],
   create: (parent, b) =>
-    createSemester({ programPublicId: parent, ...b } as Parameters<typeof createSemester>[0]),
+    createSemester({ batchPublicId: parent, ...b } as Parameters<typeof createSemester>[0]),
 };
 
 const COURSE: AddChildDef = {
@@ -118,6 +132,16 @@ export const LEVEL_CONFIG: Record<OrgLevel, LevelConfig> = {
     editable: true,
     update: (id, b) => updateProgram(id, b as never),
     remove: deleteProgram,
+    addChildren: [BATCH],
+  },
+  batch: {
+    fields: [
+      { key: 'name', label: 'Name', kind: 'text' },
+      { key: 'year', label: 'Year', kind: 'number' },
+    ],
+    editable: true,
+    update: (id, b) => updateBatch(id, b as never),
+    remove: deleteBatch,
     addChildren: [SEMESTER],
   },
   semester: {
@@ -158,6 +182,8 @@ export function childCountOf(n: OrgNode): { count: number; label: string } {
     case 'department':
       return { count: n.raw._count.programs, label: 'program' };
     case 'program':
+      return { count: n.raw._count.batches, label: 'batch' };
+    case 'batch':
       return { count: n.raw._count.semesters, label: 'semester' };
     case 'semester':
       return { count: n.raw._count.courses, label: 'course' };

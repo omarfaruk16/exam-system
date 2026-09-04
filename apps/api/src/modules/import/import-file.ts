@@ -34,22 +34,29 @@ export async function readImportRows(filePath: string, originalName: string): Pr
   const ws = wb.worksheets[0];
   if (!ws) throw new Error('Uploaded file has no worksheets');
 
+  // Iterate with eachRow rather than a `for r <= ws.rowCount` loop: files produced by Excel
+  // or Google Sheets often omit the sheet <dimension> tag, so rowCount can read as 0 and the
+  // loop would extract nothing. eachRow walks the actual rows regardless. The first non-empty
+  // row is the header; `includeEmpty: true` on cells keeps column indexes aligned when a data
+  // cell in the middle is blank.
   const headers: string[] = [];
-  ws.getRow(1).eachCell((cell, col) => {
-    headers[col] = cellText(cell.value).trim().toLowerCase();
-  });
-
   const rows: SheetRow[] = [];
-  for (let r = 2; r <= ws.rowCount; r++) {
-    const row = ws.getRow(r);
-    if (!row.hasValues) continue;
+  ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+    if (headers.length === 0) {
+      row.eachCell({ includeEmpty: true }, (cell, col) => {
+        headers[col] = cellText(cell.value).trim().toLowerCase();
+      });
+      return;
+    }
     const cells: Record<string, string> = {};
-    row.eachCell((cell, col) => {
+    row.eachCell({ includeEmpty: true }, (cell, col) => {
       const h = headers[col];
-      if (h) cells[h] = cellText(cell.value).trim();
+      if (!h) return;
+      const text = cellText(cell.value).trim();
+      if (text !== '') cells[h] = text;
     });
-    rows.push({ rowNumber: r, cells });
-  }
+    if (Object.keys(cells).length > 0) rows.push({ rowNumber, cells });
+  });
   return rows;
 }
 

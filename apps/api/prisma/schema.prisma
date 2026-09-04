@@ -97,7 +97,6 @@ model Program {
 
   department Department @relation(fields: [departmentId], references: [id])
   batches    Batch[]
-  semesters  Semester[]
 
   @@index([departmentId])
   @@index([deletedAt])
@@ -107,19 +106,20 @@ model Program {
 model Semester {
   id        Int       @id @default(autoincrement())
   publicId  String    @unique @default(uuid())
-  programId Int
+  batchId   Int
   number    Int
   name      String?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  program Program  @relation(fields: [programId], references: [id])
+  // A semester belongs to ONE batch (each batch has its own semesters + courses).
+  batch   Batch    @relation("BatchSemesters", fields: [batchId], references: [id])
   courses Course[]
   batches Batch[]  @relation("BatchCurrentSemester")
 
-  @@unique([programId, number])
-  @@index([programId])
+  @@unique([batchId, number])
+  @@index([batchId])
 }
 
 // A cohort of students in one program. `currentSemesterId` is where the batch sits now;
@@ -135,8 +135,9 @@ model Batch {
   updatedAt         DateTime  @updatedAt
   deletedAt         DateTime?
 
-  program         Program   @relation(fields: [programId], references: [id])
-  currentSemester Semester? @relation("BatchCurrentSemester", fields: [currentSemesterId], references: [id])
+  program         Program    @relation(fields: [programId], references: [id])
+  currentSemester Semester?  @relation("BatchCurrentSemester", fields: [currentSemesterId], references: [id])
+  semesters       Semester[] @relation("BatchSemesters")
   students        Student[]
 
   @@unique([programId, name])

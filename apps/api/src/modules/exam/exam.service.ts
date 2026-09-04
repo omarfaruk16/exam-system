@@ -47,10 +47,14 @@ export class ExamService {
               select: {
                 semester: {
                   select: {
-                    program: {
+                    batch: {
                       select: {
-                        departmentId: true,
-                        department: { select: { facultyId: true } },
+                        program: {
+                          select: {
+                            departmentId: true,
+                            department: { select: { facultyId: true } },
+                          },
+                        },
                       },
                     },
                   },
@@ -62,7 +66,7 @@ export class ExamService {
       },
     });
     if (!exam) throw new NotFoundException('Exam not found');
-    const program = exam.coursePart.course.semester.program;
+    const program = exam.coursePart.course.semester.batch.program;
     return {
       id: exam.id,
       publicId: exam.publicId,
@@ -202,7 +206,9 @@ export class ExamService {
         .map((r) => r.scopeDepartmentId as number);
       where = {
         deletedAt: null,
-        coursePart: { course: { semester: { program: { departmentId: { in: deptIds } } } } },
+        coursePart: {
+          course: { semester: { batch: { program: { departmentId: { in: deptIds } } } } },
+        },
       };
     } else {
       const teacher = await this.access.requireTeacher(user);
@@ -214,7 +220,7 @@ export class ExamService {
         coursePart: {
           course: {
             semester: {
-              program: { department: { publicId: departmentPublicId } },
+              batch: { program: { department: { publicId: departmentPublicId } } },
             },
           },
         },
@@ -229,7 +235,7 @@ export class ExamService {
     return exams.map((e) => {
       const course = e.coursePart.course;
       const sem = course.semester;
-      const batches = sem.batches;
+      const batch = sem.batch;
       return {
         publicId: e.publicId,
         title: e.title,
@@ -238,9 +244,9 @@ export class ExamService {
         part: e.coursePart.name,
         semesterLabel: sem.name?.trim() ? sem.name : `Semester ${sem.number}`,
         semesterNumber: sem.number,
-        programName: sem.program.name,
-        departmentName: sem.program.department.name,
-        batch: batches.length ? batches.map((b) => b.name).join(', ') : null,
+        programName: batch.program.name,
+        departmentName: batch.program.department.name,
+        batch: batch.name,
         startAt: e.startAt.toISOString(),
         endAt: e.endAt.toISOString(),
         durationMinutes: e.durationMinutes,
@@ -271,7 +277,9 @@ export class ExamService {
         .map((r) => r.scopeDepartmentId as number);
       where = {
         deletedAt: null,
-        coursePart: { course: { semester: { program: { departmentId: { in: deptIds } } } } },
+        coursePart: {
+          course: { semester: { batch: { program: { departmentId: { in: deptIds } } } } },
+        },
       };
     } else {
       const teacher = await this.access.requireTeacher(user);
@@ -279,16 +287,17 @@ export class ExamService {
     }
     where.status = { in: CONDUCTED };
 
+    // Each semester now belongs to exactly one batch, so the exam's batch is deterministic.
     const exams = await this.prisma.db.exam.findMany({
       where,
       select: {
-        id: true,
         publicId: true,
         title: true,
         status: true,
         startAt: true,
         totalMarks: true,
         durationMinutes: true,
+        _count: { select: { attempts: true } },
         coursePart: {
           select: {
             name: true,
@@ -297,7 +306,13 @@ export class ExamService {
                 code: true,
                 name: true,
                 semesterId: true,
-                semester: { select: { number: true, name: true } },
+                semester: {
+                  select: {
+                    number: true,
+                    name: true,
+                    batch: { select: { publicId: true, name: true, currentSemesterId: true } },
+                  },
+                },
               },
             },
           },
@@ -305,80 +320,12 @@ export class ExamService {
       },
       orderBy: [{ startAt: 'desc' }],
     });
-    const examIds = exams.map((e) => e.id);
-    const semesterIds = [...new Set(exams.map((e) => e.coursePart.course.semesterId))];
-
-    // The batch currently sitting each semester (fallback when an exam has no attempts yet).
-    const currentBatches = semesterIds.length
-      ? await this.prisma.db.batch.findMany({
-          where: { currentSemesterId: { in: semesterIds }, deletedAt: null },
-          select: { publicId: true, name: true, currentSemesterId: true },
-        })
-      : [];
-    const currentBySem = new Map(currentBatches.map((b) => [b.currentSemesterId as number, b]));
-
-    // Which batch actually sat each exam, from the attempting students (most frequent wins).
-    const attempts = examIds.length
-      ? await this.prisma.db.examAttempt.findMany({
-          where: { examId: { in: examIds } },
-          select: {
-            examId: true,
-            student: {
-              select: {
-                batch: { select: { publicId: true, name: true, currentSemesterId: true } },
-              },
-            },
-          },
-        })
-      : [];
-    const attemptedByExam = new Map<number, number>();
-    const batchCountByExam = new Map<
-      number,
-      Map<string, { publicId: string; name: string; currentSemesterId: number | null; n: number }>
-    >();
-    for (const a of attempts) {
-      attemptedByExam.set(a.examId, (attemptedByExam.get(a.examId) ?? 0) + 1);
-      const b = a.student.batch;
-      let m = batchCountByExam.get(a.examId);
-      if (!m) {
-        m = new Map();
-        batchCountByExam.set(a.examId, m);
-      }
-      const cur = m.get(b.publicId) ?? {
-        publicId: b.publicId,
-        name: b.name,
-        currentSemesterId: b.currentSemesterId,
-        n: 0,
-      };
-      cur.n += 1;
-      m.set(b.publicId, cur);
-    }
-    const primaryBatch = (examId: number) => {
-      const m = batchCountByExam.get(examId);
-      if (!m) return null;
-      return [...m.values()].sort((x, y) => y.n - x.n)[0] ?? null;
-    };
 
     return exams.map((e) => {
       const course = e.coursePart.course;
       const sem = course.semester;
+      const batch = sem.batch;
       const semLabel = sem.name?.trim() ? sem.name : `Semester ${sem.number}`;
-      const pb = primaryBatch(e.id);
-      let batchName: string | null = null;
-      let batchPublicId: string | null = null;
-      let isCurrentBatch = false;
-      if (pb) {
-        batchName = pb.name;
-        batchPublicId = pb.publicId;
-        isCurrentBatch = pb.currentSemesterId === course.semesterId;
-      } else {
-        const cb = currentBySem.get(course.semesterId);
-        if (cb) {
-          batchName = cb.name;
-          batchPublicId = cb.publicId;
-          isCurrentBatch = true;
-        }
-      }
       return {
         publicId: e.publicId,
         title: e.title,
@@ -391,10 +338,11 @@ export class ExamService {
         durationMinutes: e.durationMinutes,
         semesterNumber: sem.number,
         semesterLabel: semLabel,
-        batchName,
-        batchPublicId,
-        isCurrentBatch,
-        attempted: attemptedByExam.get(e.id) ?? 0,
+        batchName: batch.name,
+        batchPublicId: batch.publicId,
+        // "Current" when the batch is presently sitting this exam's semester.
+        isCurrentBatch: batch.currentSemesterId === course.semesterId,
+        attempted: e._count.attempts,
       };
     });
   }
@@ -468,11 +416,11 @@ export class ExamService {
         .map((r) => r.scopeFacultyId as number);
       if (facultyIds.length) {
         where.course = {
-          semester: { program: { department: { facultyId: { in: facultyIds } } } },
+          semester: { batch: { program: { department: { facultyId: { in: facultyIds } } } } },
         };
       }
     } else if (headDeptIds.length) {
-      where.course = { semester: { program: { departmentId: { in: headDeptIds } } } };
+      where.course = { semester: { batch: { program: { departmentId: { in: headDeptIds } } } } };
     } else if (isTeacher) {
       const teacher = await this.access.requireTeacher(user);
       where.assignedTeacherId = teacher.id;
@@ -493,18 +441,18 @@ export class ExamService {
               select: {
                 number: true,
                 name: true,
-                program: {
+                batch: {
                   select: {
                     name: true,
-                    department: {
-                      select: { name: true, faculty: { select: { name: true } } },
+                    program: {
+                      select: {
+                        name: true,
+                        department: {
+                          select: { name: true, faculty: { select: { name: true } } },
+                        },
+                      },
                     },
                   },
-                },
-                batches: {
-                  where: { deletedAt: null },
-                  select: { name: true },
-                  orderBy: { year: 'desc' },
                 },
               },
             },
@@ -516,6 +464,7 @@ export class ExamService {
 
     return parts.map((p) => {
       const sem = p.course.semester;
+      const batch = sem.batch;
       const semLabel = sem.name?.trim() ? sem.name : `Semester ${sem.number}`;
       return {
         publicId: p.publicId,
@@ -524,11 +473,11 @@ export class ExamService {
         courseTitle: p.course.name,
         semesterLabel: semLabel,
         semesterNumber: sem.number,
-        program: sem.program.name,
-        department: sem.program.department.name,
-        faculty: sem.program.department.faculty.name,
-        currentBatch: sem.batches.length ? sem.batches.map((b) => b.name).join(', ') : null,
-        label: `${p.course.code} · ${p.course.name} · ${p.name} (${sem.program.name} · ${semLabel})`,
+        program: batch.program.name,
+        department: batch.program.department.name,
+        faculty: batch.program.department.faculty.name,
+        currentBatch: batch.name,
+        label: `${p.course.code} · ${p.course.name} · ${p.name} (${batch.program.name} · ${batch.name} · ${semLabel})`,
       };
     });
   }

@@ -71,7 +71,7 @@ export class QuestionService {
         deletedAt: null,
         semester: {
           deletedAt: null,
-          program: { deletedAt: null, department: { publicId: departmentPublicId } },
+          batch: { program: { deletedAt: null, department: { publicId: departmentPublicId } } },
         },
       },
       select: {

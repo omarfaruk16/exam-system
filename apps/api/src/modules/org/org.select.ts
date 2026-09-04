@@ -32,15 +32,18 @@ export const programSelect = {
   degreeType: true,
   durationYears: true,
   department: { select: { publicId: true, name: true } },
-  _count: { select: { batches: notDeleted, semesters: true } },
+  _count: { select: { batches: notDeleted } },
 } satisfies Prisma.ProgramSelect;
 
 export const semesterSelect = {
   publicId: true,
   number: true,
   name: true,
-  program: { select: { publicId: true, name: true } },
-  _count: { select: { courses: notDeleted, batches: notDeleted } },
+  // A semester now belongs to a batch (which belongs to a programme).
+  batch: {
+    select: { publicId: true, name: true, program: { select: { publicId: true, name: true } } },
+  },
+  _count: { select: { courses: notDeleted } },
 } satisfies Prisma.SemesterSelect;
 
 export const batchSelect = {
@@ -49,7 +52,7 @@ export const batchSelect = {
   year: true,
   program: { select: { publicId: true, name: true } },
   currentSemester: { select: { publicId: true, number: true, name: true } },
-  _count: { select: { students: notDeleted } },
+  _count: { select: { students: notDeleted, semesters: notDeleted } },
 } satisfies Prisma.BatchSelect;
 
 export const courseSelect = {
@@ -73,7 +76,11 @@ export const coursePartSelect = {
       // Expose the owning department so the UI can scope the assign-teacher selector.
       semester: {
         select: {
-          program: { select: { department: { select: { publicId: true, name: true } } } },
+          batch: {
+            select: {
+              program: { select: { department: { select: { publicId: true, name: true } } } },
+            },
+          },
         },
       },
     },

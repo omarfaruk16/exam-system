@@ -40,13 +40,14 @@ const CARDS: CardDef[] = [
   {
     entity: 'semesters',
     title: 'Semesters',
-    description: 'Adds semesters to a programme (by number). Existing ones are skipped.',
+    description:
+      'Adds semesters to a batch (by program + batch + number). Existing ones are skipped.',
     icon: Layers,
   },
   {
     entity: 'courses',
     title: 'Courses',
-    description: 'Adds courses to a semester. Existing codes are skipped.',
+    description: 'Adds courses to a batch’s semester. Existing codes are skipped.',
     icon: BookOpen,
   },
   {

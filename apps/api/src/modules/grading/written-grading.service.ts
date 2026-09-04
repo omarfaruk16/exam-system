@@ -22,8 +22,12 @@ const examScopeSelect = {
         select: {
           semester: {
             select: {
-              program: {
-                select: { departmentId: true, department: { select: { facultyId: true } } },
+              batch: {
+                select: {
+                  program: {
+                    select: { departmentId: true, department: { select: { facultyId: true } } },
+                  },
+                },
               },
             },
           },
@@ -50,7 +54,7 @@ export class WrittenGradingService {
 
   /** Only the teacher assigned to the course part (or an admin, scoped) may grade this exam. */
   private async assertGrader(user: AuthUser, exam: ExamScope): Promise<void> {
-    const program = exam.coursePart.course.semester.program;
+    const program = exam.coursePart.course.semester.batch.program;
     if (this.isAdmin(user)) {
       this.access.assertAdminScope(user, {
         departmentId: program.departmentId,

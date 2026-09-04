@@ -30,8 +30,8 @@ export const fetchPrograms = (department?: string) =>
   api.get<Program[]>(`/org/programs${qs({ department })}`);
 export const fetchBatches = (program?: string, department?: string) =>
   api.get<Batch[]>(`/org/batches${qs({ program, department })}`);
-export const fetchSemesters = (program?: string) =>
-  api.get<Semester[]>(`/org/semesters${qs({ program })}`);
+export const fetchSemesters = (batch?: string) =>
+  api.get<Semester[]>(`/org/semesters${qs({ batch })}`);
 export const fetchCourses = (semester?: string) =>
   api.get<Course[]>(`/org/courses${qs({ semester })}`);
 export const fetchCourseParts = (course?: string) =>
@@ -49,7 +49,7 @@ export const createProgram = (b: {
 }) => api.post<Program>('/org/programs', b);
 export const createBatch = (b: { programPublicId: string; name: string; year: number }) =>
   api.post<Batch>('/org/batches', b);
-export const createSemester = (b: { programPublicId: string; name: string; number?: number }) =>
+export const createSemester = (b: { batchPublicId: string; name: string; number?: number }) =>
   api.post<Semester>('/org/semesters', b);
 export const updateSemester = (id: string, b: { name?: string }) =>
   api.patch<Semester>(`/org/semesters/${id}`, b);

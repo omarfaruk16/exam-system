@@ -557,8 +557,7 @@ function ProgramRow({
       </div>
       <div className="flex items-center gap-2">
         <span className="text-muted-foreground hidden text-xs sm:inline">
-          {program._count.semesters} semester{program._count.semesters === 1 ? '' : 's'} ·{' '}
-          {program._count.batches} session{program._count.batches === 1 ? '' : 's'}
+          {program._count.batches} batch{program._count.batches === 1 ? '' : 'es'}
         </span>
         {canManage && (
           <>
@@ -589,9 +588,9 @@ function ProgramRow({
           <DialogHeader>
             <DialogTitle>Delete “{program.name}”?</DialogTitle>
             <DialogDescription>
-              This degree, its {program._count.semesters} semester
-              {program._count.semesters === 1 ? '' : 's'} and {program._count.batches} session
-              {program._count.batches === 1 ? '' : 's'} will be removed (soft delete).
+              This degree and its {program._count.batches} batch
+              {program._count.batches === 1 ? '' : 'es'} (with their semesters and courses) will be
+              removed (soft delete).
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -617,10 +616,19 @@ function CoursesTab({ programs, deptPublicId }: { programs: Program[]; deptPubli
   const [programId, setProgramId] = useState(programs[0]?.publicId ?? '');
   const active = programs.find((p) => p.publicId === programId) ?? programs[0];
 
+  const batchesQuery = useQuery({
+    queryKey: ['org-batches', active?.publicId],
+    queryFn: () => fetchBatches(active!.publicId),
+    enabled: Boolean(active),
+  });
+  const batches = batchesQuery.data ?? [];
+  const [batchId, setBatchId] = useState('');
+  const activeBatch = batches.find((b) => b.publicId === batchId) ?? batches[0];
+
   if (programs.length === 0) {
     return (
       <Card className="p-6">
-        <Empty text="Add a degree first, then build its semesters and courses here." />
+        <Empty text="Add a degree first, then a batch, then build its semesters and courses here." />
       </Card>
     );
   }
@@ -630,45 +638,71 @@ function CoursesTab({ programs, deptPublicId }: { programs: Program[]; deptPubli
       <SectionHeading
         title="Courses"
         action={
-          programs.length > 1 ? (
-            <select
-              value={active?.publicId}
-              onChange={(e) => setProgramId(e.target.value)}
-              className="border-input bg-card h-9 rounded-md border px-2 text-sm"
-            >
-              {programs.map((p) => (
-                <option key={p.publicId} value={p.publicId}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          ) : undefined
+          <div className="flex flex-wrap items-center gap-2">
+            {programs.length > 1 && (
+              <select
+                value={active?.publicId}
+                onChange={(e) => {
+                  setProgramId(e.target.value);
+                  setBatchId('');
+                }}
+                className="border-input bg-card h-9 rounded-md border px-2 text-sm"
+              >
+                {programs.map((p) => (
+                  <option key={p.publicId} value={p.publicId}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            {batches.length > 1 && (
+              <select
+                value={activeBatch?.publicId}
+                onChange={(e) => setBatchId(e.target.value)}
+                className="border-input bg-card h-9 rounded-md border px-2 text-sm"
+              >
+                {batches.map((b) => (
+                  <option key={b.publicId} value={b.publicId}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
         }
       />
-      {active && <SemesterList programPublicId={active.publicId} deptPublicId={deptPublicId} />}
+      {batchesQuery.isLoading ? (
+        <Skeleton className="h-20 w-full" />
+      ) : batches.length === 0 ? (
+        <Empty text="No batches in this degree yet. Add a batch in the Batches tab first." />
+      ) : (
+        activeBatch && (
+          <SemesterList batchPublicId={activeBatch.publicId} deptPublicId={deptPublicId} />
+        )
+      )}
     </Card>
   );
 }
 
 function SemesterList({
-  programPublicId,
+  batchPublicId,
   deptPublicId,
 }: {
-  programPublicId: string;
+  batchPublicId: string;
   deptPublicId: string;
 }) {
   const qc = useQueryClient();
   const canManage = useCanManage();
   const [name, setName] = useState('');
   const semestersQuery = useQuery({
-    queryKey: ['org-semesters', programPublicId],
-    queryFn: () => fetchSemesters(programPublicId),
+    queryKey: ['org-semesters', batchPublicId],
+    queryFn: () => fetchSemesters(batchPublicId),
   });
 
   const create = useMutation({
-    mutationFn: () => createSemester({ programPublicId, name: name.trim() }),
+    mutationFn: () => createSemester({ batchPublicId, name: name.trim() }),
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['org-semesters', programPublicId] });
+      await qc.invalidateQueries({ queryKey: ['org-semesters', batchPublicId] });
       toast.success('Semester added');
       setName('');
     },

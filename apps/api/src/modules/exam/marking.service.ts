@@ -309,11 +309,17 @@ export class MarkingService {
     const or: Prisma.CoursePartWhereInput[] = [];
     if (scope.facultyIds.length) {
       or.push({
-        course: { semester: { program: { department: { facultyId: { in: scope.facultyIds } } } } },
+        course: {
+          semester: { batch: { program: { department: { facultyId: { in: scope.facultyIds } } } } },
+        },
       });
     }
     if (scope.departmentIds.length) {
-      or.push({ course: { semester: { program: { departmentId: { in: scope.departmentIds } } } } });
+      or.push({
+        course: {
+          semester: { batch: { program: { departmentId: { in: scope.departmentIds } } } },
+        },
+      });
     }
     return or.length === 1 ? or[0]! : { OR: or };
   }
@@ -391,9 +397,10 @@ export class MarkingService {
         })
       : [];
 
-    const semesters = filters.program
+    // Semesters now belong to a batch, so they appear once a batch is chosen.
+    const semesters = filters.batch
       ? await this.prisma.db.semester.findMany({
-          where: { program: { publicId: filters.program } },
+          where: { batch: { publicId: filters.batch } },
           select: { publicId: true, number: true, name: true },
           orderBy: { number: 'asc' },
         })
@@ -464,14 +471,18 @@ export class MarkingService {
     const scope = this.resolveScope(user);
     const scopeFragment = this.scopeCoursePartWhere(scope);
 
+    // Hierarchy is now faculty → department → programme → batch → semester → course.
     const departmentFilter: Prisma.DepartmentWhereInput = {};
     if (filters.faculty) departmentFilter.faculty = { publicId: filters.faculty };
     const programFilter: Prisma.ProgramWhereInput = {};
     if (filters.department) programFilter.department = { publicId: filters.department };
     else if (Object.keys(departmentFilter).length) programFilter.department = departmentFilter;
+    const batchFilter: Prisma.BatchWhereInput = {};
+    if (filters.program) batchFilter.program = { publicId: filters.program };
+    else if (Object.keys(programFilter).length) batchFilter.program = programFilter;
+    if (filters.batch) batchFilter.publicId = filters.batch;
     const semesterFilter: Prisma.SemesterWhereInput = {};
-    if (filters.program) semesterFilter.program = { publicId: filters.program };
-    else if (Object.keys(programFilter).length) semesterFilter.program = programFilter;
+    if (Object.keys(batchFilter).length) semesterFilter.batch = batchFilter;
     const courseFilter: Prisma.CourseWhereInput = {};
     if (filters.semester) courseFilter.semester = { publicId: filters.semester };
     else if (Object.keys(semesterFilter).length) courseFilter.semester = semesterFilter;

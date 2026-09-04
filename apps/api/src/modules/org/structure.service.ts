@@ -93,17 +93,17 @@ export class StructureService {
 
   private async semesterRef(
     publicId: string,
-  ): Promise<{ id: number; facultyId: number; programId: number }> {
+  ): Promise<{ id: number; facultyId: number; batchId: number }> {
     const s = await this.prisma.db.semester.findFirst({
       where: { publicId },
       select: {
         id: true,
-        programId: true,
-        program: { select: { department: { select: { facultyId: true } } } },
+        batchId: true,
+        batch: { select: { program: { select: { department: { select: { facultyId: true } } } } } },
       },
     });
     if (!s) throw new NotFoundException('Semester not found');
-    return { id: s.id, facultyId: s.program.department.facultyId, programId: s.programId };
+    return { id: s.id, facultyId: s.batch.program.department.facultyId, batchId: s.batchId };
   }
 
   private async courseRef(publicId: string): Promise<{ id: number; facultyId: number }> {
@@ -112,12 +112,16 @@ export class StructureService {
       select: {
         id: true,
         semester: {
-          select: { program: { select: { department: { select: { facultyId: true } } } } },
+          select: {
+            batch: {
+              select: { program: { select: { department: { select: { facultyId: true } } } } },
+            },
+          },
         },
       },
     });
     if (!c) throw new NotFoundException('Course not found');
-    return { id: c.id, facultyId: c.semester.program.department.facultyId };
+    return { id: c.id, facultyId: c.semester.batch.program.department.facultyId };
   }
 
   private async coursePartScope(
@@ -131,8 +135,15 @@ export class StructureService {
           select: {
             semester: {
               select: {
-                program: {
-                  select: { departmentId: true, department: { select: { facultyId: true } } },
+                batch: {
+                  select: {
+                    program: {
+                      select: {
+                        departmentId: true,
+                        department: { select: { facultyId: true } },
+                      },
+                    },
+                  },
                 },
               },
             },
@@ -141,7 +152,7 @@ export class StructureService {
       },
     });
     if (!cp) throw new NotFoundException('Course part not found');
-    const program = cp.course.semester.program;
+    const program = cp.course.semester.batch.program;
     return {
       id: cp.id,
       facultyId: program.department.facultyId,
@@ -461,12 +472,12 @@ export class StructureService {
   }
 
   // ─────────────────────────────── Semester ───────────────────────────────
-  listSemesters(actor: AuthUser, programPublicId?: string) {
+  listSemesters(actor: AuthUser, batchPublicId?: string) {
     const scope = this.deptScopeId(actor);
-    const program: Prisma.ProgramWhereInput = {};
-    if (programPublicId) program.publicId = programPublicId;
-    if (scope != null) program.department = { id: scope };
-    const where: Prisma.SemesterWhereInput = Object.keys(program).length ? { program } : {};
+    const batch: Prisma.BatchWhereInput = {};
+    if (batchPublicId) batch.publicId = batchPublicId;
+    if (scope != null) batch.program = { department: { id: scope } };
+    const where: Prisma.SemesterWhereInput = Object.keys(batch).length ? { batch } : {};
     return this.prisma.db.semester.findMany({
       where,
       select: semesterSelect,
@@ -474,21 +485,21 @@ export class StructureService {
     });
   }
   async createSemester(ctx: OrgContext, dto: CreateSemesterDto) {
-    const program = await this.programRef(dto.programPublicId);
-    this.acl.assertFaculty(ctx.actor, program.facultyId);
+    const batch = await this.batchRef(dto.batchPublicId);
+    this.acl.assertFaculty(ctx.actor, batch.facultyId);
     return this.mutate(ctx, 'semester.create', 'Semester', async (tx) => {
       // The tx runs on the base client, so max() sees soft-deleted rows too — this
-      // keeps the auto-assigned ordinal clear of the [programId, number] unique slot.
+      // keeps the auto-assigned ordinal clear of the [batchId, number] unique slot.
       let number = dto.number;
       if (number == null) {
         const max = await tx.semester.aggregate({
-          where: { programId: program.id },
+          where: { batchId: batch.id },
           _max: { number: true },
         });
         number = (max._max.number ?? 0) + 1;
       }
       const result = await tx.semester.create({
-        data: { programId: program.id, number, name: dto.name.trim() },
+        data: { batchId: batch.id, number, name: dto.name.trim() },
         select: semesterSelect,
       });
       return { result, entityId: result.publicId, after: result };
@@ -498,10 +509,12 @@ export class StructureService {
   async updateSemester(ctx: OrgContext, publicId: string, dto: UpdateSemesterDto) {
     const sem = await this.prisma.db.semester.findFirst({
       where: { publicId },
-      select: { program: { select: { department: { select: { facultyId: true } } } } },
+      select: {
+        batch: { select: { program: { select: { department: { select: { facultyId: true } } } } } },
+      },
     });
     if (!sem) throw new NotFoundException('Semester not found');
-    this.acl.assertFaculty(ctx.actor, sem.program.department.facultyId);
+    this.acl.assertFaculty(ctx.actor, sem.batch.program.department.facultyId);
     return this.mutate(ctx, 'semester.update', 'Semester', async (tx) => {
       const result = await tx.semester.update({
         where: { publicId },
@@ -529,7 +542,7 @@ export class StructureService {
     const scope = this.deptScopeId(actor);
     const semester: Prisma.SemesterWhereInput = {};
     if (semesterPublicId) semester.publicId = semesterPublicId;
-    if (scope != null) semester.program = { department: { id: scope } };
+    if (scope != null) semester.batch = { program: { department: { id: scope } } };
     const where: Prisma.CourseWhereInput = Object.keys(semester).length ? { semester } : {};
     return this.prisma.db.course.findMany({
       where,
@@ -568,12 +581,16 @@ export class StructureService {
       select: {
         code: true,
         semester: {
-          select: { program: { select: { department: { select: { facultyId: true } } } } },
+          select: {
+            batch: {
+              select: { program: { select: { department: { select: { facultyId: true } } } } },
+            },
+          },
         },
       },
     });
     if (!course) throw new NotFoundException('Course not found');
-    this.acl.assertFaculty(ctx.actor, course.semester.program.department.facultyId);
+    this.acl.assertFaculty(ctx.actor, course.semester.batch.program.department.facultyId);
 
     const del = `__del_${Date.now()}`;
     return this.mutate(ctx, 'course.delete', 'Course', async (tx) => {
@@ -909,17 +926,27 @@ export class StructureService {
 
   async exportSemesters(): Promise<StreamableFile> {
     const rows = await this.prisma.db.semester.findMany({
-      select: { number: true, name: true, program: { select: { name: true } } },
-      orderBy: [{ program: { name: 'asc' } }, { number: 'asc' }],
+      select: {
+        number: true,
+        name: true,
+        batch: { select: { name: true, program: { select: { name: true } } } },
+      },
+      orderBy: [{ batch: { program: { name: 'asc' } } }, { number: 'asc' }],
     });
     return this.xlsxFile(
       'Semesters',
       [
         { header: 'program', key: 'program', width: 24 },
+        { header: 'batch', key: 'batch', width: 18 },
         { header: 'number', key: 'number', width: 10 },
         { header: 'name', key: 'name', width: 28 },
       ],
-      rows.map((s) => ({ program: s.program.name, number: s.number, name: s.name ?? '' })),
+      rows.map((s) => ({
+        program: s.batch.program.name,
+        batch: s.batch.name,
+        number: s.number,
+        name: s.name ?? '',
+      })),
       'semesters.xlsx',
     );
   }
@@ -930,7 +957,12 @@ export class StructureService {
         code: true,
         name: true,
         credit: true,
-        semester: { select: { number: true, program: { select: { name: true } } } },
+        semester: {
+          select: {
+            number: true,
+            batch: { select: { name: true, program: { select: { name: true } } } },
+          },
+        },
       },
       orderBy: [{ code: 'asc' }],
     });
@@ -940,15 +972,17 @@ export class StructureService {
         { header: 'code', key: 'code', width: 16 },
         { header: 'name', key: 'name', width: 36 },
         { header: 'credit', key: 'credit', width: 10 },
-        { header: 'semesterNumber', key: 'semesterNumber', width: 16 },
         { header: 'program', key: 'program', width: 24 },
+        { header: 'batch', key: 'batch', width: 18 },
+        { header: 'semesterNumber', key: 'semesterNumber', width: 16 },
       ],
       rows.map((c) => ({
         code: c.code,
         name: c.name,
         credit: c.credit,
+        program: c.semester.batch.program.name,
+        batch: c.semester.batch.name,
         semesterNumber: c.semester.number,
-        program: c.semester.program.name,
       })),
       'courses.xlsx',
     );
@@ -1016,8 +1050,8 @@ export class StructureService {
     });
   }
 
-  /** Assign (or clear) the semester a batch currently sits in. The semester must be in the
-   *  batch's own program, so its students only ever see their program's coursework. */
+  /** Assign (or clear) the semester a batch currently sits in. The semester must be one of the
+   *  batch's own semesters, so its students only ever see their batch's coursework. */
   async assignBatchSemester(ctx: OrgContext, batchPublicId: string, dto: AssignBatchSemesterDto) {
     const batch = await this.batchRef(batchPublicId);
     this.acl.assertFaculty(ctx.actor, batch.facultyId);
@@ -1025,8 +1059,8 @@ export class StructureService {
     let semesterId: number | null = null;
     if (dto.semesterPublicId) {
       const semester = await this.semesterRef(dto.semesterPublicId);
-      if (semester.programId !== batch.programId) {
-        throw new BadRequestException('Semester belongs to a different program');
+      if (semester.batchId !== batch.id) {
+        throw new BadRequestException('Semester belongs to a different batch');
       }
       semesterId = semester.id;
     }

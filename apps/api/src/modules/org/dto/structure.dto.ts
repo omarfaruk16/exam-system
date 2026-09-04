@@ -39,10 +39,10 @@ export class UpdateProgramDto {
 }
 
 export class CreateSemesterDto {
-  @IsString() programPublicId!: string;
+  @IsString() batchPublicId!: string;
   // A free-text label, e.g. "Fall 2024" or "1st Semester".
   @IsString() @Length(1, 60) name!: string;
-  // Optional explicit ordinal; auto-assigned (next in the program) when omitted.
+  // Optional explicit ordinal; auto-assigned (next in the batch) when omitted.
   @IsOptional() @IsInt() @Min(1) @Max(100) number?: number;
 }
 

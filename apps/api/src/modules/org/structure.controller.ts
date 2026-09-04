@@ -186,8 +186,8 @@ export class StructureController {
   // Semesters
   @Roles('super_admin', 'admin', 'department_head')
   @Get('semesters')
-  listSemesters(@CurrentUser() u: AuthUser, @Query('program') program?: string) {
-    return this.svc.listSemesters(u, program);
+  listSemesters(@CurrentUser() u: AuthUser, @Query('batch') batch?: string) {
+    return this.svc.listSemesters(u, batch);
   }
   @Post('semesters') createSemester(
     @CurrentUser() u: AuthUser,

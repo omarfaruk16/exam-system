@@ -34,8 +34,12 @@ const examScopeSelect = {
         select: {
           semester: {
             select: {
-              program: {
-                select: { departmentId: true, department: { select: { facultyId: true } } },
+              batch: {
+                select: {
+                  program: {
+                    select: { departmentId: true, department: { select: { facultyId: true } } },
+                  },
+                },
               },
             },
           },
@@ -62,7 +66,7 @@ export class ReportService {
   }
 
   private async assertReportAccess(user: AuthUser, exam: ExamScope): Promise<void> {
-    const program = exam.coursePart.course.semester.program;
+    const program = exam.coursePart.course.semester.batch.program;
     const scope = {
       departmentId: program.departmentId,
       facultyId: program.department.facultyId,

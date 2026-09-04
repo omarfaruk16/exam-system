@@ -41,12 +41,12 @@ const TEMPLATES: Record<TemplateType, TemplateSpec> = {
     example: ['Software Engineering', 'Faculty of Science'],
   },
   semesters: {
-    headers: ['program', 'number', 'name'],
-    example: ['Honours', 3, 'Third Semester'],
+    headers: ['program', 'batch', 'number', 'name'],
+    example: ['Honours', '2021 Batch', 3, 'Third Semester'],
   },
   courses: {
-    headers: ['code', 'name', 'credit', 'semesterId', 'semesterNumber', 'program'],
-    example: ['CSE-2101', 'Data Structures', 3, '', 2, 'Honours'],
+    headers: ['code', 'name', 'credit', 'semesterId', 'semesterNumber', 'program', 'batch'],
+    example: ['CSE-2101', 'Data Structures', 3, '', 2, 'Honours', '2021 Batch'],
   },
 };
 

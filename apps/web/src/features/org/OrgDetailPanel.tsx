@@ -192,8 +192,9 @@ export function OrgDetailPanel({
               {count > 0 && (
                 <span className="text-foreground mt-2 flex items-start gap-1.5 rounded-md border-l-2 border-amber-500 bg-amber-500/10 px-3 py-2 text-amber-800 dark:text-amber-300">
                   <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-                  This {LEVEL_LABEL[node.level].toLowerCase()} has {count} active {label}
-                  {count === 1 ? '' : 's'}. Deleting it will hide them from active offerings.
+                  This {LEVEL_LABEL[node.level].toLowerCase()} has {count} active{' '}
+                  {count === 1 ? label : label === 'batch' ? 'batches' : `${label}s`}. Deleting it
+                  will hide them from active offerings.
                 </span>
               )}
             </DialogDescription>
@@ -451,7 +452,7 @@ function PartTeacherCard({
   const qc = useQueryClient();
   const [assigning, setAssigning] = useState(false);
   const part = node.raw;
-  const departmentPublicId = part.course.semester.program.department.publicId;
+  const departmentPublicId = part.course.semester.batch.program.department.publicId;
 
   // Local copy so the display updates instantly without waiting for the tree to refetch.
   const [localTeacher, setLocalTeacher] = useState<{

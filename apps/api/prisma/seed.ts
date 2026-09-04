@@ -122,38 +122,37 @@ async function main(): Promise<void> {
       },
     }));
 
-  // 5. Semesters
-  const cseSem1 = await prisma.semester.upsert({
-    where: { programId_number: { programId: cseHons.id, number: 1 } },
-    update: {},
-    create: { programId: cseHons.id, number: 1 },
-  });
-  await prisma.semester.upsert({
-    where: { programId_number: { programId: cseHons.id, number: 2 } },
-    update: {},
-    create: { programId: cseHons.id, number: 2 },
-  });
-  await prisma.semester.upsert({
-    where: { programId_number: { programId: bba.id, number: 1 } },
-    update: {},
-    create: { programId: bba.id, number: 1 },
-  });
-
-  // 6. Batches — the CSE 2021 batch currently sits in semester 1.
+  // 5. Batches — semesters now belong to a batch, so the batch is created first.
   const cseBatch = await prisma.batch.upsert({
     where: { programId_name: { programId: cseHons.id, name: '2021 Batch' } },
-    update: { year: 2021, currentSemesterId: cseSem1.id },
-    create: {
-      programId: cseHons.id,
-      name: '2021 Batch',
-      year: 2021,
-      currentSemesterId: cseSem1.id,
-    },
+    update: { year: 2021 },
+    create: { programId: cseHons.id, name: '2021 Batch', year: 2021 },
   });
-  await prisma.batch.upsert({
+  const bbaBatch = await prisma.batch.upsert({
     where: { programId_name: { programId: bba.id, name: '2022 Batch' } },
     update: { year: 2022 },
     create: { programId: bba.id, name: '2022 Batch', year: 2022 },
+  });
+
+  // 6. Semesters — each belongs to a batch. The CSE 2021 batch currently sits in semester 1.
+  const cseSem1 = await prisma.semester.upsert({
+    where: { batchId_number: { batchId: cseBatch.id, number: 1 } },
+    update: {},
+    create: { batchId: cseBatch.id, number: 1 },
+  });
+  await prisma.semester.upsert({
+    where: { batchId_number: { batchId: cseBatch.id, number: 2 } },
+    update: {},
+    create: { batchId: cseBatch.id, number: 2 },
+  });
+  await prisma.semester.upsert({
+    where: { batchId_number: { batchId: bbaBatch.id, number: 1 } },
+    update: {},
+    create: { batchId: bbaBatch.id, number: 1 },
+  });
+  await prisma.batch.update({
+    where: { id: cseBatch.id },
+    data: { currentSemesterId: cseSem1.id },
   });
 
   // 7. Course
@@ -256,20 +255,19 @@ async function main(): Promise<void> {
         durationYears: 4,
       },
     }));
-  const phySem1 = await prisma.semester.upsert({
-    where: { programId_number: { programId: phyProgram.id, number: 1 } },
-    update: {},
-    create: { programId: phyProgram.id, number: 1 },
-  });
-  await prisma.batch.upsert({
+  const phyBatch = await prisma.batch.upsert({
     where: { programId_name: { programId: phyProgram.id, name: '2021 Batch' } },
-    update: { year: 2021, currentSemesterId: phySem1.id },
-    create: {
-      programId: phyProgram.id,
-      name: '2021 Batch',
-      year: 2021,
-      currentSemesterId: phySem1.id,
-    },
+    update: { year: 2021 },
+    create: { programId: phyProgram.id, name: '2021 Batch', year: 2021 },
+  });
+  const phySem1 = await prisma.semester.upsert({
+    where: { batchId_number: { batchId: phyBatch.id, number: 1 } },
+    update: {},
+    create: { batchId: phyBatch.id, number: 1 },
+  });
+  await prisma.batch.update({
+    where: { id: phyBatch.id },
+    data: { currentSemesterId: phySem1.id },
   });
   const phyCourse = await prisma.course.upsert({
     where: { semesterId_code: { semesterId: phySem1.id, code: 'PHY-1101' } },

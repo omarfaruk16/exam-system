@@ -111,23 +111,23 @@ export class EntityImportProcessor extends WorkerHost {
     for (let i = 0; i < parsed.length; i++) {
       const row = parsed[i]!;
       try {
-        const program = await this.prisma.db.program.findFirst({
-          where: { name: row.programName },
+        const batch = await this.prisma.db.batch.findFirst({
+          where: { name: row.batchName, program: { name: row.programName } },
           select: { id: true },
         });
-        if (!program) {
+        if (!batch) {
           skipped++;
           errors.push({
             row: row.rowNumber,
-            field: 'program',
-            value: row.programName,
-            message: 'Program not found',
+            field: 'batch',
+            value: `${row.programName} / ${row.batchName}`,
+            message: 'Batch not found for that program',
           });
           continue;
         }
-        // Idempotent: skip if this program already has a semester with that number.
+        // Idempotent: skip if this batch already has a semester with that number.
         const existing = await this.prisma.db.semester.findFirst({
-          where: { programId: program.id, number: row.number },
+          where: { batchId: batch.id, number: row.number },
           select: { id: true },
         });
         if (existing) {
@@ -135,7 +135,7 @@ export class EntityImportProcessor extends WorkerHost {
           continue;
         }
         await this.prisma.db.semester.create({
-          data: { programId: program.id, number: row.number, name: row.name },
+          data: { batchId: batch.id, number: row.number, name: row.name },
         });
         imported++;
       } catch (e) {
@@ -315,13 +315,14 @@ export class EntityImportProcessor extends WorkerHost {
           row.semesterId,
           row.semesterNumber,
           row.programName,
+          row.batchName,
         );
         if (!semester) {
           skipped++;
           errors.push({
             row: row.rowNumber,
             field: 'semesterId',
-            message: 'Semester not found (check semesterId or semesterNumber + program)',
+            message: 'Semester not found (check semesterId or semesterNumber + program + batch)',
           });
           continue;
         }
@@ -356,16 +357,17 @@ export class EntityImportProcessor extends WorkerHost {
     id: number | null,
     number: number | null,
     programName: string | null,
+    batchName: string | null,
   ) {
     if (id) return this.prisma.db.semester.findFirst({ where: { id }, select: { id: true } });
-    if (number && programName) {
-      const program = await this.prisma.db.program.findFirst({
-        where: { name: programName },
+    if (number && programName && batchName) {
+      const batch = await this.prisma.db.batch.findFirst({
+        where: { name: batchName, program: { name: programName } },
         select: { id: true },
       });
-      if (!program) return null;
+      if (!batch) return null;
       return this.prisma.db.semester.findFirst({
-        where: { programId: program.id, number },
+        where: { batchId: batch.id, number },
         select: { id: true },
       });
     }

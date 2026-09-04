@@ -23,16 +23,17 @@ export interface Program {
   degreeType: string;
   durationYears: number;
   department: { publicId: string; name: string };
-  _count: { batches: number; semesters: number };
+  _count: { batches: number };
 }
 
 export interface Semester {
   publicId: string;
   number: number;
   name: string | null;
-  program: { publicId: string; name: string };
-  /** courses in this semester; batches currently assigned to it */
-  _count: { courses: number; batches: number };
+  /** A semester belongs to a batch, which belongs to a programme. */
+  batch: { publicId: string; name: string; program: { publicId: string; name: string } };
+  /** courses in this semester */
+  _count: { courses: number };
 }
 
 export interface Course {
@@ -58,7 +59,7 @@ export interface CoursePart {
     publicId: string;
     code: string;
     name: string;
-    semester: { program: { department: { publicId: string; name: string } } };
+    semester: { batch: { program: { department: { publicId: string; name: string } } } };
   };
   assignedTeacher: AssignedTeacher | null;
   _count: { exams: number };
@@ -70,7 +71,7 @@ export interface Batch {
   year: number;
   program: { publicId: string; name: string };
   currentSemester: { publicId: string; number: number; name: string | null } | null;
-  _count: { students: number };
+  _count: { students: number; semesters: number };
 }
 
 export interface StudentRow {

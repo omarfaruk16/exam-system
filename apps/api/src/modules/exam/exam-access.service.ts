@@ -47,8 +47,15 @@ export class ExamAccessService {
           select: {
             semester: {
               select: {
-                program: {
-                  select: { departmentId: true, department: { select: { facultyId: true } } },
+                batch: {
+                  select: {
+                    program: {
+                      select: {
+                        departmentId: true,
+                        department: { select: { facultyId: true } },
+                      },
+                    },
+                  },
                 },
               },
             },
@@ -59,10 +66,11 @@ export class ExamAccessService {
     if (!cp) throw new NotFoundException('Course part not found');
     if (cp.deletedAt) throw new BadRequestException('This course part has been removed');
 
+    const program = cp.course.semester.batch.program;
     return {
       coursePartId: cp.id,
-      departmentId: cp.course.semester.program.departmentId,
-      facultyId: cp.course.semester.program.department.facultyId,
+      departmentId: program.departmentId,
+      facultyId: program.department.facultyId,
       assignedTeacherId: cp.assignedTeacherId,
     };
   }

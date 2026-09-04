@@ -1,5 +1,14 @@
-import type { Course, CoursePart, Department, Faculty, Program, Semester } from '@exam/types';
+import type {
+  Batch,
+  Course,
+  CoursePart,
+  Department,
+  Faculty,
+  Program,
+  Semester,
+} from '@exam/types';
 import {
+  fetchBatches,
   fetchCourseParts,
   fetchCourses,
   fetchDepartments,
@@ -7,13 +16,16 @@ import {
   fetchSemesters,
 } from './orgApi';
 
-// The structure tree. Batches are a separate axis (assigned to semesters), managed elsewhere.
-export type OrgLevel = 'faculty' | 'department' | 'program' | 'semester' | 'course' | 'part';
+// The structure tree: Faculty → Department → Programme → Batch → Semester → Course → Part.
+// Each batch owns its own semesters, and each semester its own courses.
+export type OrgLevel =
+  'faculty' | 'department' | 'program' | 'batch' | 'semester' | 'course' | 'part';
 
 export type OrgNode =
   | { level: 'faculty'; publicId: string; raw: Faculty }
   | { level: 'department'; publicId: string; raw: Department }
   | { level: 'program'; publicId: string; raw: Program }
+  | { level: 'batch'; publicId: string; raw: Batch }
   | { level: 'semester'; publicId: string; raw: Semester }
   | { level: 'course'; publicId: string; raw: Course }
   | { level: 'part'; publicId: string; raw: CoursePart };
@@ -22,6 +34,7 @@ export const LEVEL_LABEL: Record<OrgLevel, string> = {
   faculty: 'Faculty',
   department: 'Department',
   program: 'Program',
+  batch: 'Batch',
   semester: 'Semester',
   course: 'Course',
   part: 'Course part',
@@ -35,6 +48,8 @@ export function nodeName(n: OrgNode): string {
     case 'department':
       return n.raw.name;
     case 'program':
+      return n.raw.name;
+    case 'batch':
       return n.raw.name;
     case 'semester':
       return n.raw.name ?? `Semester ${n.raw.number}`;
@@ -53,6 +68,8 @@ export function nodeBadge(n: OrgNode): string | null {
     case 'department':
       return plural(n.raw._count.programs, 'program');
     case 'program':
+      return plural(n.raw._count.batches, 'batch', 'batches');
+    case 'batch':
       return plural(n.raw._count.semesters, 'semester');
     case 'semester':
       return plural(n.raw._count.courses, 'course');
@@ -71,6 +88,8 @@ export function nodeExpandable(n: OrgNode): boolean {
     case 'department':
       return n.raw._count.programs > 0;
     case 'program':
+      return n.raw._count.batches > 0;
+    case 'batch':
       return n.raw._count.semesters > 0;
     case 'semester':
       return n.raw._count.courses > 0;
@@ -81,7 +100,7 @@ export function nodeExpandable(n: OrgNode): boolean {
   }
 }
 
-/** Load a node's children as typed nodes. Programs fan out to batches then semesters. */
+/** Load a node's children as typed nodes. Programmes fan out to batches, then semesters. */
 export async function loadChildren(n: OrgNode): Promise<OrgNode[]> {
   switch (n.level) {
     case 'faculty': {
@@ -93,6 +112,10 @@ export async function loadChildren(n: OrgNode): Promise<OrgNode[]> {
       return rows.map((raw) => ({ level: 'program', publicId: raw.publicId, raw }));
     }
     case 'program': {
+      const rows = await fetchBatches(n.publicId);
+      return rows.map((raw) => ({ level: 'batch', publicId: raw.publicId, raw }));
+    }
+    case 'batch': {
       const rows = await fetchSemesters(n.publicId);
       return rows.map((raw) => ({ level: 'semester', publicId: raw.publicId, raw }));
     }

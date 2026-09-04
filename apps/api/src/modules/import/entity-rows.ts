@@ -97,6 +97,7 @@ export interface ParsedCourseRow {
   semesterId: number | null;
   semesterNumber: number | null;
   programName: string | null;
+  batchName: string | null;
 }
 
 export function validateCourseRow(
@@ -109,6 +110,7 @@ export function validateCourseRow(
   const semesterIdRaw = pick(cells, 'semesterid', 'semester id');
   const semesterNumberRaw = pick(cells, 'semesternumber', 'semester number', 'semester');
   const programName = pick(cells, 'program', 'programname', 'program name');
+  const batchName = pick(cells, 'batch', 'batchname', 'batch name');
 
   if (!code) return { error: { row, field: 'code', message: 'Code is required' } };
   if (!CODE_RE.test(code)) {
@@ -136,12 +138,12 @@ export function validateCourseRow(
 
   const semesterId = semesterIdRaw ? Number(semesterIdRaw) : null;
   const semesterNumber = semesterNumberRaw ? Number(semesterNumberRaw) : null;
-  if (!semesterIdRaw && !(semesterNumberRaw && programName)) {
+  if (!semesterIdRaw && !(semesterNumberRaw && programName && batchName)) {
     return {
       error: {
         row,
         field: 'semesterId',
-        message: 'Provide semesterId, or both semesterNumber and program',
+        message: 'Provide semesterId, or semesterNumber with program and batch',
       },
     };
   }
@@ -175,6 +177,7 @@ export function validateCourseRow(
       semesterId,
       semesterNumber,
       programName: programName || null,
+      batchName: batchName || null,
     },
   };
 }
@@ -198,6 +201,7 @@ export function validateFacultyRow(
 export interface ParsedSemesterRow {
   rowNumber: number;
   programName: string;
+  batchName: string;
   number: number;
   name: string | null;
 }
@@ -207,11 +211,13 @@ export function validateSemesterRow(
   row: number,
 ): Result<ParsedSemesterRow> {
   const programName = pick(cells, 'program', 'programname', 'program name');
+  const batchName = pick(cells, 'batch', 'batchname', 'batch name');
   const numberRaw = pick(cells, 'number', 'semesternumber', 'semester number', 'semester');
   const name = pick(cells, 'name', 'semestername', 'semester name');
 
   if (!programName)
     return { error: { row, field: 'program', message: 'Program name is required' } };
+  if (!batchName) return { error: { row, field: 'batch', message: 'Batch name is required' } };
   const number = Number(numberRaw || '0');
   if (!numberRaw || !Number.isInteger(number) || number <= 0) {
     return {
@@ -223,5 +229,5 @@ export function validateSemesterRow(
       },
     };
   }
-  return { value: { rowNumber: row, programName, number, name: name || null } };
+  return { value: { rowNumber: row, programName, batchName, number, name: name || null } };
 }
