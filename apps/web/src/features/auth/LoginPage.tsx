@@ -4,13 +4,16 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
+  FileCheck2,
   GraduationCap,
   Loader2,
+  Lock,
   ScrollText,
   ShieldCheck,
-  Sparkles,
+  Zap,
+  type LucideIcon,
 } from 'lucide-react';
-import { useState, type ComponentType } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { loginSchema, type LoginInput } from '@exam/types';
@@ -31,13 +34,12 @@ interface Portal {
   key: PortalKey;
   title: string;
   tag: string;
-  icon: ComponentType<{ className?: string }>;
+  icon: LucideIcon;
   desc: string;
   features: string[];
-  // Tailwind accent classes per portal.
-  ring: string; // hover border
-  chip: string; // small tag pill
   iconBox: string;
+  chip: string;
+  accent: string; // left border on hover
   button: string;
   check: string;
 }
@@ -54,11 +56,11 @@ const PORTALS: Portal[] = [
       'View instant question results',
       'Track academic performance',
     ],
-    ring: 'hover:border-blue-500/50',
-    chip: 'bg-blue-500/10 text-blue-500',
-    iconBox: 'bg-blue-500/10 text-blue-500',
+    iconBox: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+    chip: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+    accent: 'hover:border-blue-500/60',
     button: 'bg-blue-600 text-white hover:bg-blue-500',
-    check: 'text-blue-500',
+    check: 'text-blue-600 dark:text-blue-400',
   },
   {
     key: 'teacher',
@@ -71,11 +73,11 @@ const PORTALS: Portal[] = [
       'Evaluate candidate submissions',
       'Finalize & submit marks sheets',
     ],
-    ring: 'hover:border-emerald-500/50',
-    chip: 'bg-emerald-500/10 text-emerald-500',
-    iconBox: 'bg-emerald-500/10 text-emerald-500',
+    iconBox: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+    chip: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+    accent: 'hover:border-emerald-500/60',
     button: 'bg-emerald-600 text-white hover:bg-emerald-500',
-    check: 'text-emerald-500',
+    check: 'text-emerald-600 dark:text-emerald-400',
   },
   {
     key: 'admin',
@@ -88,12 +90,18 @@ const PORTALS: Portal[] = [
       'Bulk enrollments & faculty assignments',
       'Full system role & user management',
     ],
-    ring: 'hover:border-violet-500/50',
-    chip: 'bg-violet-500/10 text-violet-500',
-    iconBox: 'bg-violet-500/10 text-violet-500',
+    iconBox: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
+    chip: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
+    accent: 'hover:border-violet-500/60',
     button: 'bg-violet-600 text-white hover:bg-violet-500',
-    check: 'text-violet-500',
+    check: 'text-violet-600 dark:text-violet-400',
   },
+];
+
+const HIGHLIGHTS: { icon: LucideIcon; label: string }[] = [
+  { icon: Zap, label: 'Real-time, auto-graded online examinations' },
+  { icon: FileCheck2, label: 'Question banks, marking & published results' },
+  { icon: Lock, label: 'Secure, proctored & entirely paperless' },
 ];
 
 export function LoginPage() {
@@ -101,92 +109,94 @@ export function LoginPage() {
   const active = PORTALS.find((p) => p.key === portal) ?? null;
 
   return (
-    <div className="relative min-h-screen w-full overflow-x-hidden bg-slate-950 text-slate-100">
-      {/* Ambient glows */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -left-40 -top-40 size-[38rem] rounded-full bg-blue-600/20 blur-[120px]" />
-        <div className="absolute -right-40 top-20 size-[34rem] rounded-full bg-violet-600/20 blur-[120px]" />
-        <div className="absolute bottom-0 left-1/3 size-[30rem] rounded-full bg-emerald-500/10 blur-[120px]" />
-      </div>
-      {/* Dot grid */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.35]"
-        style={{
-          backgroundImage: 'radial-gradient(rgba(148,163,184,0.25) 1px, transparent 1.4px)',
-          backgroundSize: '26px 26px',
-        }}
-      />
+    <div className="bg-background text-foreground flex min-h-screen flex-col md:flex-row">
+      {/* ── Left: brand panel ── */}
+      <aside className="relative flex flex-col overflow-hidden bg-gradient-to-br from-[#1E3A5F] via-[#1b2a4a] to-[#0b1120] px-8 py-10 text-white md:w-[42%] md:px-12 md:py-14">
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute -left-24 -top-24 size-96 rounded-full bg-blue-500/25 blur-3xl" />
+          <div className="absolute -bottom-24 right-0 size-96 rounded-full bg-violet-500/20 blur-3xl" />
+          <div
+            className="absolute inset-0 opacity-30"
+            style={{
+              backgroundImage: 'radial-gradient(rgba(255,255,255,0.18) 1px, transparent 1.4px)',
+              backgroundSize: '24px 24px',
+            }}
+          />
+        </div>
 
-      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-6xl flex-col px-5">
-        {/* Top bar */}
-        <header className="flex items-center justify-between py-5">
-          <div className="flex items-center gap-3">
-            <img
-              src="/ru-logo.png"
-              alt=""
-              className="size-9 rounded-lg bg-white/95 p-1"
-              onError={(e) => (e.currentTarget.style.display = 'none')}
-            />
-            <div className="leading-tight">
-              <p className="text-sm font-semibold tracking-tight">The Paperless Exam System</p>
-              <p className="text-[11px] uppercase tracking-wider text-slate-400">{INSTITUTION}</p>
-            </div>
+        <div className="relative flex items-center gap-3">
+          <img
+            src="/ru-logo.png"
+            alt=""
+            className="size-11 rounded-xl bg-white/95 p-1.5"
+            onError={(e) => (e.currentTarget.style.display = 'none')}
+          />
+          <div className="leading-tight">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-white/60">{INSTITUTION}</p>
+            <p className="text-sm font-semibold">Examination System</p>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="hidden sm:block">
-              <ThemeToggle />
-            </span>
-            {PORTALS.map((p) => (
-              <button
-                key={p.key}
-                onClick={() => setPortal(p.key)}
-                className={cn(
-                  'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
-                  p.key === 'student' && 'bg-blue-600 text-white hover:bg-blue-500',
-                  p.key === 'teacher' && 'bg-emerald-600 text-white hover:bg-emerald-500',
-                  p.key === 'admin' && 'border border-white/15 text-slate-200 hover:bg-white/10',
-                )}
-              >
-                {p.title.split(' ')[0]} Login
-              </button>
-            ))}
-          </div>
-        </header>
+        </div>
 
-        {/* Hero */}
-        <section className="flex flex-col items-center pt-14 text-center sm:pt-20">
-          <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-sm font-medium text-blue-300">
-            <Sparkles className="size-3.5" /> Official Academic Assessment Portal
+        <div className="relative mt-auto pt-16">
+          <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-medium text-blue-200">
+            Official Academic Assessment Portal
           </span>
-          <h1 className="mt-8 max-w-3xl text-5xl font-extrabold leading-[1.05] tracking-tight sm:text-6xl">
+          <h1 className="mt-5 text-4xl font-extrabold leading-[1.08] tracking-tight lg:text-5xl">
             The Paperless
             <br />
-            <span className="bg-gradient-to-r from-blue-400 via-cyan-300 to-violet-400 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-blue-300 via-cyan-200 to-violet-300 bg-clip-text text-transparent">
               Exam System.
             </span>
           </h1>
-          <p className="mt-6 max-w-2xl text-base leading-relaxed text-slate-400 sm:text-lg">
+          <p className="mt-5 max-w-md text-sm leading-relaxed text-white/70 lg:text-base">
             A unified platform for {INSTITUTION} students, faculty, and departments to conduct
             examinations, manage question banks, and publish results — entirely paperless.
           </p>
-        </section>
 
-        {/* Portals */}
-        <p className="mb-6 mt-16 text-center text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-          Choose your login portal
+          <ul className="mt-8 space-y-3">
+            {HIGHLIGHTS.map((h) => (
+              <li key={h.label} className="flex items-center gap-3 text-sm text-white/85">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white/10">
+                  <h.icon className="size-4" />
+                </span>
+                {h.label}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <p className="relative mt-auto pt-12 text-xs text-white/45">
+          © {new Date().getFullYear()} {INSTITUTION}
         </p>
-        <section className="grid gap-5 pb-16 md:grid-cols-3">
-          {PORTALS.map((p) => (
-            <PortalCard key={p.key} portal={p} onLogin={() => setPortal(p.key)} />
-          ))}
-        </section>
+      </aside>
 
-        <footer className="mt-auto pb-6 text-center text-xs text-slate-500">
-          © {new Date().getFullYear()} {INSTITUTION} · The Paperless Exam System
-        </footer>
-      </div>
+      {/* ── Right: portal chooser ── */}
+      <main className="relative flex flex-1 flex-col px-6 py-10 md:px-12 md:py-14">
+        <div className="absolute right-5 top-5">
+          <ThemeToggle />
+        </div>
 
-      {/* Login modal */}
+        <div className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center">
+          <div className="mb-1 text-sm font-medium text-blue-600 dark:text-blue-400">
+            Welcome back
+          </div>
+          <h2 className="text-2xl font-bold tracking-tight">Choose your login portal</h2>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Select the portal that matches your role to sign in.
+          </p>
+
+          <div className="mt-6 space-y-3">
+            {PORTALS.map((p) => (
+              <PortalRow key={p.key} portal={p} onLogin={() => setPortal(p.key)} />
+            ))}
+          </div>
+
+          <p className="text-muted-foreground mt-6 text-center text-xs">
+            Trouble signing in? Contact your department’s exam administrator.
+          </p>
+        </div>
+      </main>
+
       <Dialog open={Boolean(active)} onOpenChange={(o) => !o && setPortal(null)}>
         <DialogContent className="sm:max-w-[420px]">
           {active && <LoginPanel portal={active} />}
@@ -196,42 +206,51 @@ export function LoginPage() {
   );
 }
 
-function PortalCard({ portal, onLogin }: { portal: Portal; onLogin: () => void }) {
+function PortalRow({ portal, onLogin }: { portal: Portal; onLogin: () => void }) {
   const Icon = portal.icon;
   return (
-    <div
+    <button
+      type="button"
+      onClick={onLogin}
       className={cn(
-        'flex flex-col rounded-2xl border border-white/10 bg-white/[0.03] p-6 backdrop-blur transition-all duration-200 hover:-translate-y-1 hover:bg-white/[0.06]',
-        portal.ring,
+        'bg-card group flex w-full items-start gap-4 rounded-2xl border p-5 text-left transition-all hover:-translate-y-0.5 hover:shadow-md',
+        portal.accent,
       )}
     >
-      <div className="flex items-start justify-between">
-        <div className={cn('flex size-11 items-center justify-center rounded-xl', portal.iconBox)}>
-          <Icon className="size-5" />
-        </div>
-        <span className={cn('rounded-full px-2.5 py-1 text-xs font-medium', portal.chip)}>
-          {portal.tag}
-        </span>
-      </div>
-      <h3 className="mt-4 text-lg font-semibold">{portal.title}</h3>
-      <p className="mt-1.5 text-sm leading-relaxed text-slate-400">{portal.desc}</p>
-      <ul className="mt-4 space-y-2">
-        {portal.features.map((f) => (
-          <li key={f} className="flex items-center gap-2 text-sm text-slate-300">
-            <CheckCircle2 className={cn('size-4 shrink-0', portal.check)} /> {f}
-          </li>
-        ))}
-      </ul>
-      <button
-        onClick={onLogin}
+      <div
         className={cn(
-          'mt-6 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors',
-          portal.button,
+          'flex size-11 shrink-0 items-center justify-center rounded-xl',
+          portal.iconBox,
         )}
       >
-        {portal.title.split(' ')[0]} Login <ArrowRight className="size-4" />
-      </button>
-    </div>
+        <Icon className="size-5" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="font-semibold">{portal.title}</h3>
+          <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', portal.chip)}>
+            {portal.tag}
+          </span>
+        </div>
+        <p className="text-muted-foreground mt-1 text-sm leading-relaxed">{portal.desc}</p>
+        <ul className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1">
+          {portal.features.map((f) => (
+            <li key={f} className="text-muted-foreground flex items-center gap-1.5 text-xs">
+              <CheckCircle2 className={cn('size-3.5 shrink-0', portal.check)} /> {f}
+            </li>
+          ))}
+        </ul>
+        <span
+          className={cn(
+            'mt-3 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold',
+            portal.button,
+          )}
+        >
+          {portal.title.split(' ')[0]} Login
+          <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+        </span>
+      </div>
+    </button>
   );
 }
 
