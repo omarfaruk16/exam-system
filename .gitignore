@@ -35,6 +35,9 @@ apps/api/storage/
 uploads/
 tmp/
 
+# deployment runbook — kept local only (contains server IP / SSH port), not in the public repo
+infra/DEPLOYMENT.md
+
 # OS / editor
 .DS_Store
 Thumbs.db
