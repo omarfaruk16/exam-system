@@ -560,10 +560,15 @@ export class StructureService {
   async createCourse(ctx: OrgContext, dto: CreateCourseDto) {
     const semester = await this.semesterRef(dto.semesterPublicId);
     this.acl.assertFaculty(ctx.actor, semester.facultyId);
-    await this.freeDeletedCourseSlot(semester.id, dto.code);
+    await this.freeDeletedCourseSlot(semester.id, dto.code.trim());
     return this.mutate(ctx, 'course.create', 'Course', async (tx) => {
       const result = await tx.course.create({
-        data: { semesterId: semester.id, code: dto.code, name: dto.name, credit: dto.credit },
+        data: {
+          semesterId: semester.id,
+          code: dto.code.trim(),
+          name: dto.name.trim(),
+          credit: dto.credit,
+        },
         select: courseSelect,
       });
       return { result, entityId: result.publicId, after: result };
@@ -575,7 +580,11 @@ export class StructureService {
     return this.mutate(ctx, 'course.update', 'Course', async (tx) => {
       const result = await tx.course.update({
         where: { publicId },
-        data: dto,
+        data: {
+          ...dto,
+          ...(dto.code != null ? { code: dto.code.trim() } : {}),
+          ...(dto.name != null ? { name: dto.name.trim() } : {}),
+        },
         select: courseSelect,
       });
       return { result, entityId: publicId, after: result };
@@ -622,7 +631,7 @@ export class StructureService {
     this.acl.assertFaculty(ctx.actor, course.facultyId);
     return this.mutate(ctx, 'coursePart.create', 'CoursePart', async (tx) => {
       const result = await tx.coursePart.create({
-        data: { courseId: course.id, name: dto.name, marksWeight: dto.marksWeight },
+        data: { courseId: course.id, name: dto.name.trim(), marksWeight: dto.marksWeight },
         select: coursePartSelect,
       });
       return { result, entityId: result.publicId, after: result };
@@ -634,7 +643,7 @@ export class StructureService {
     return this.mutate(ctx, 'coursePart.update', 'CoursePart', async (tx) => {
       const result = await tx.coursePart.update({
         where: { publicId },
-        data: dto,
+        data: { ...dto, ...(dto.name != null ? { name: dto.name.trim() } : {}) },
         select: coursePartSelect,
       });
       return { result, entityId: publicId, after: result };
