@@ -50,7 +50,15 @@ export const batchSelect = {
   publicId: true,
   name: true,
   year: true,
-  program: { select: { publicId: true, name: true } },
+  // Expose the owning department so the Sessions page can scope its per-session
+  // semester/course panel (assign-teacher selector needs the department).
+  program: {
+    select: {
+      publicId: true,
+      name: true,
+      department: { select: { publicId: true, name: true } },
+    },
+  },
   currentSemester: { select: { publicId: true, number: true, name: true } },
   _count: { select: { students: notDeleted, semesters: notDeleted } },
 } satisfies Prisma.BatchSelect;

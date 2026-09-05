@@ -710,7 +710,7 @@ function CoursesTab({ programs, deptPublicId }: { programs: Program[]; deptPubli
   );
 }
 
-function SemesterList({
+export function SemesterList({
   batchPublicId,
   deptPublicId,
 }: {

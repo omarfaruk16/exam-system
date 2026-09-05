@@ -69,7 +69,7 @@ export interface Batch {
   publicId: string;
   name: string;
   year: number;
-  program: { publicId: string; name: string };
+  program: { publicId: string; name: string; department: { publicId: string; name: string } };
   currentSemester: { publicId: string; number: number; name: string | null } | null;
   _count: { students: number; semesters: number };
 }

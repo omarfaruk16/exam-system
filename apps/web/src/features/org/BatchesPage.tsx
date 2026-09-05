@@ -12,6 +12,7 @@ import {
   Trash2,
   UserPlus,
   Users,
+  BookOpen,
 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -28,6 +29,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { SemesterList } from './DepartmentProfilePage';
 import {
   assignBatchSemester,
   changeStudentBatch,
@@ -127,6 +129,7 @@ export function BatchesPage() {
 function BatchRow({ batch, allBatches }: { batch: Batch; allBatches: Batch[] }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [showSemesters, setShowSemesters] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -244,8 +247,16 @@ function BatchRow({ batch, allBatches }: { batch: Batch; allBatches: Batch[] }) 
                 <span className="text-muted-foreground">Not assigned</span>
               )}
             </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowSemesters((v) => !v)}
+              title="Design this session's semesters and courses"
+            >
+              <BookOpen className="size-3.5" /> Semesters & courses
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setAssigning((v) => !v)}>
-              {batch.currentSemester ? 'Change semester' : 'Assign semester'}
+              {batch.currentSemester ? 'Change current semester' : 'Set semester'}
             </Button>
             <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => setEditing(true)}>
               <Pencil className="size-3.5" />
@@ -281,6 +292,20 @@ function BatchRow({ batch, allBatches }: { batch: Batch; allBatches: Batch[] }) 
             </select>
             {assign.isPending && <Loader2 className="size-5 animate-spin self-center" />}
           </div>
+        </div>
+      )}
+
+      {showSemesters && (
+        <div className="bg-muted/20 border-t p-4">
+          <p className="text-muted-foreground mb-3 text-xs">
+            Semesters and courses for <span className="font-medium">{batch.name}</span>. Each
+            session has its own set — build them here, then pick the current one with “Set
+            semester”.
+          </p>
+          <SemesterList
+            batchPublicId={batch.publicId}
+            deptPublicId={batch.program.department.publicId}
+          />
         </div>
       )}
 

@@ -14,7 +14,6 @@ export interface ParsedTeacherRow {
   email: string;
   departmentName: string;
   designation: string | null;
-  phone: string | null;
 }
 
 export function validateTeacherRow(
@@ -29,7 +28,6 @@ export function validateTeacherRow(
   const email = pick(cells, 'email', 'e-mail');
   const departmentName = pick(cells, 'department', 'departmentname', 'department name', 'dept');
   const designation = pick(cells, 'designation', 'title');
-  const phone = pick(cells, 'phone', 'mobile', 'contact');
 
   if (!name)
     return { error: { row, field: 'name', message: 'First and last name (or name) are required' } };
@@ -48,7 +46,6 @@ export function validateTeacherRow(
       email,
       departmentName,
       designation: designation || null,
-      phone: phone || null,
     },
   };
 }
