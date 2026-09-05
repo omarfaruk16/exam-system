@@ -7,7 +7,6 @@ import type { Redis } from 'ioredis';
 import { LoggerModule } from 'nestjs-pino';
 import { randomUUID } from 'node:crypto';
 import { REDIS_CLIENT } from './common/redis/redis.constants';
-import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
 import { MaintenanceGuard } from './common/guards/maintenance.guard';
 import type { Env } from './common/config/env.validation';
 import { validateEnv } from './common/config/env.validation';
@@ -99,9 +98,8 @@ import { QueueModule } from './queue/queue.module';
     HealthModule,
   ],
   providers: [
-    // Order matters: maintenance gate, then throttle, then auth, then 2FA enrolment, then roles.
+    // Order matters: maintenance gate, then auth, then 2FA enrolment, then roles.
     { provide: APP_GUARD, useClass: MaintenanceGuard },
-    { provide: APP_GUARD, useClass: AppThrottlerGuard },
     { provide: APP_GUARD, useClass: AuthenticatedGuard },
     { provide: APP_GUARD, useClass: TwoFactorSetupGuard },
     { provide: APP_GUARD, useClass: RolesGuard },

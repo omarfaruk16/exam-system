@@ -346,10 +346,16 @@ export class EntityImportProcessor extends WorkerHost {
 
   // ─────────────────────────────── lookups ───────────────────────────────
   private resolveDepartment(name: string) {
-    return this.prisma.db.department.findFirst({ where: { name }, select: { id: true } });
+    return this.prisma.db.department.findFirst({
+      where: { name: { equals: name, mode: 'insensitive' } },
+      select: { id: true },
+    });
   }
   private resolveFaculty(name: string) {
-    return this.prisma.db.faculty.findFirst({ where: { name }, select: { id: true } });
+    return this.prisma.db.faculty.findFirst({
+      where: { name: { equals: name, mode: 'insensitive' } },
+      select: { id: true },
+    });
   }
   private async resolveSemester(
     id: number | null,

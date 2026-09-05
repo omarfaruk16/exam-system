@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { BankQuestion } from '@exam/types';
-import { Check, Loader2, Plus, Search } from 'lucide-react';
+import { Check, CheckSquare, Loader2, Plus, Search, Square } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -35,6 +35,8 @@ export function QuestionBankPanel({
   const [chapterId, setChapterId] = useState<string>('');
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkAdding, setBulkAdding] = useState(false);
 
   const banksQuery = useQuery({
     queryKey: ['banks', coursePartPublicId],
@@ -76,6 +78,51 @@ export function QuestionBankPanel({
     return true;
   });
 
+  // Selectable = filtered questions not already added
+  const selectable = filtered.filter((q) => !addedQuestionIds.has(q.publicId));
+  const allSelected = selectable.length > 0 && selectable.every((q) => selected.has(q.publicId));
+  const someSelected = selected.size > 0;
+
+  function toggleSelect(publicId: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(publicId)) next.delete(publicId);
+      else next.add(publicId);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (allSelected) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(selectable.map((q) => q.publicId)));
+    }
+  }
+
+  async function addSelected() {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    setBulkAdding(true);
+    let ok = 0;
+    for (let i = 0; i < ids.length; i++) {
+      try {
+        await addExamQuestion(examPublicId, { questionPublicId: ids[i]!, order: nextOrder + i });
+        ok++;
+      } catch {
+        // continue — report at end
+      }
+    }
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ['exam-questions', examPublicId] }),
+      qc.invalidateQueries({ queryKey: ['authoring-exam', examPublicId] }),
+    ]);
+    setSelected(new Set());
+    setBulkAdding(false);
+    if (ok === ids.length) toast.success(`Added ${ok} question${ok !== 1 ? 's' : ''}`);
+    else toast.warning(`Added ${ok} of ${ids.length} questions`);
+  }
+
   const activeBankForCreate = allMode ? (banks[0]?.publicId ?? '') : chapterId;
 
   return (
@@ -97,14 +144,20 @@ export function QuestionBankPanel({
               <ChapterChip
                 label="All chapters"
                 active={chapterId === ALL_CHAPTERS}
-                onClick={() => setChapterId(ALL_CHAPTERS)}
+                onClick={() => {
+                  setChapterId(ALL_CHAPTERS);
+                  setSelected(new Set());
+                }}
               />
               {banks.map((b) => (
                 <ChapterChip
                   key={b.publicId}
                   label={b.name}
                   active={chapterId === b.publicId}
-                  onClick={() => setChapterId(b.publicId)}
+                  onClick={() => {
+                    setChapterId(b.publicId);
+                    setSelected(new Set());
+                  }}
                 />
               ))}
             </div>
@@ -115,7 +168,10 @@ export function QuestionBankPanel({
                 <button
                   key={f}
                   type="button"
-                  onClick={() => setFilter(f)}
+                  onClick={() => {
+                    setFilter(f);
+                    setSelected(new Set());
+                  }}
                   className={cn(
                     'flex-1 rounded px-2 py-1 text-xs font-medium capitalize transition-colors',
                     filter === f
@@ -131,7 +187,10 @@ export function QuestionBankPanel({
               <Search className="text-muted-foreground absolute left-2.5 top-1/2 size-4 -translate-y-1/2" />
               <Input
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setSelected(new Set());
+                }}
                 placeholder="Search questions…"
                 className="h-9 pl-8"
               />
@@ -139,6 +198,39 @@ export function QuestionBankPanel({
           </>
         )}
       </div>
+
+      {/* Select-all toolbar */}
+      {banks.length > 0 && selectable.length > 0 && (
+        <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
+          <button
+            type="button"
+            onClick={toggleSelectAll}
+            className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-xs"
+          >
+            {allSelected ? (
+              <CheckSquare className="text-primary size-4" />
+            ) : (
+              <Square className="size-4" />
+            )}
+            {allSelected ? 'Deselect all' : `Select all (${selectable.length})`}
+          </button>
+          {someSelected && (
+            <Button
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => void addSelected()}
+              disabled={bulkAdding}
+            >
+              {bulkAdding ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Plus className="size-3.5" />
+              )}
+              Add {selected.size} selected
+            </Button>
+          )}
+        </div>
+      )}
 
       {/* Question list */}
       {banks.length > 0 && (
@@ -163,8 +255,10 @@ export function QuestionBankPanel({
                   q={q}
                   showChapter={allMode}
                   added={addedQuestionIds.has(q.publicId)}
+                  selected={selected.has(q.publicId)}
                   adding={add.isPending && add.variables === q.publicId}
                   onAdd={() => add.mutate(q.publicId)}
+                  onToggleSelect={() => toggleSelect(q.publicId)}
                 />
               ))}
             </ul>
@@ -211,18 +305,42 @@ function BankQuestionCard({
   q,
   showChapter,
   added,
+  selected,
   adding,
   onAdd,
+  onToggleSelect,
 }: {
   q: BankQuestion;
   showChapter: boolean;
   added: boolean;
+  selected: boolean;
   adding: boolean;
   onAdd: () => void;
+  onToggleSelect: () => void;
 }) {
   return (
-    <li className="rounded-md border p-3">
+    <li
+      className={cn(
+        'rounded-md border p-3 transition-colors',
+        selected && !added && 'border-primary/40 bg-primary/5',
+      )}
+    >
       <div className="flex flex-wrap items-center gap-1.5">
+        {/* Checkbox — only shown for questions not yet added */}
+        {!added && (
+          <button
+            type="button"
+            onClick={onToggleSelect}
+            className="text-muted-foreground hover:text-primary shrink-0"
+            aria-label={selected ? 'Deselect' : 'Select'}
+          >
+            {selected ? (
+              <CheckSquare className="text-primary size-4" />
+            ) : (
+              <Square className="size-4" />
+            )}
+          </button>
+        )}
         <span
           className={cn(
             'rounded-full px-2 py-0.5 text-[10px] font-medium uppercase',

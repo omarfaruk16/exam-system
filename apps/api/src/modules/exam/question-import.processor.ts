@@ -37,24 +37,27 @@ function cellText(v: ExcelJS.CellValue): string {
   return String(v);
 }
 
-/** Reads rows from a named sheet into `{ header: value }` records. */
+/** Reads rows from a named sheet into `{ header: value }` records.
+ *  Uses eachRow (not ws.rowCount) because Excel/Google Sheets files often
+ *  omit the <dimension> tag, making rowCount report 0. */
 function readSheet(ws: ExcelJS.Worksheet): Record<string, unknown>[] {
   const headers: string[] = [];
-  ws.getRow(1).eachCell((c, col) => {
-    headers[col] = cellText(c.value).trim().toLowerCase();
-  });
-  const rows: { rowNumber: number; data: Record<string, unknown> }[] = [];
-  for (let r = 2; r <= ws.rowCount; r++) {
-    const row = ws.getRow(r);
-    if (!row.hasValues) continue;
-    const data: Record<string, unknown> = { __row: r };
-    row.eachCell((c, col) => {
+  const rows: Record<string, unknown>[] = [];
+  ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+    if (headers.length === 0) {
+      row.eachCell({ includeEmpty: true }, (c, col) => {
+        headers[col] = cellText(c.value).trim().toLowerCase();
+      });
+      return;
+    }
+    const data: Record<string, unknown> = { __row: rowNumber };
+    row.eachCell({ includeEmpty: true }, (c, col) => {
       const h = headers[col];
       if (h) data[h] = cellText(c.value);
     });
-    rows.push({ rowNumber: r, data });
-  }
-  return rows.map((x) => ({ ...x.data }));
+    if (Object.keys(data).length > 1) rows.push(data);
+  });
+  return rows;
 }
 
 /** Excel question import: MCQ + Written sheets, row-level validation, error report. */
