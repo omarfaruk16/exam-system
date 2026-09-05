@@ -22,9 +22,9 @@ const TEMPLATES: Record<TemplateType, TemplateSpec> = {
     ],
   },
   teachers: {
-    headers: ['username', 'name', 'email', 'department', 'designation', 'phone'],
+    // Teachers sign in with their email — no username column.
+    headers: ['name', 'email', 'department', 'designation', 'phone'],
     example: [
-      'jdoe',
       'Dr. John Doe',
       'jdoe@example.edu',
       'Computer Science & Engineering',

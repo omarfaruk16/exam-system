@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useSession } from '@/lib/session';
 import { createFaculty, fetchFaculties } from './orgApi';
+import { ImportExportBar } from './ImportExportBar';
 
 export function DepartmentsListPage() {
   const navigate = useNavigate();
@@ -19,6 +20,7 @@ export function DepartmentsListPage() {
 
   const [addingFaculty, setAddingFaculty] = useState(false);
 
+  const qc = useQueryClient();
   const facQuery = useQuery({ queryKey: ['org-faculties'], queryFn: fetchFaculties });
   const faculties = facQuery.data ?? [];
 
@@ -37,6 +39,27 @@ export function DepartmentsListPage() {
           </Button>
         )}
       </div>
+
+      {canManage && (
+        <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border p-3">
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground w-24 text-xs font-medium">Faculties</span>
+            <ImportExportBar
+              entity="faculties"
+              label="faculties"
+              onImported={() => void qc.invalidateQueries({ queryKey: ['org-faculties'] })}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground w-24 text-xs font-medium">Departments</span>
+            <ImportExportBar
+              entity="departments"
+              label="departments"
+              onImported={() => void qc.invalidateQueries({ queryKey: ['org-faculties'] })}
+            />
+          </div>
+        </div>
+      )}
 
       {addingFaculty && canManage && (
         <AddFacultyForm

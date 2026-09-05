@@ -54,6 +54,12 @@ export interface OrgContext {
   ip?: string | null;
 }
 
+/** Download format for the structure/teacher/student exports. */
+export type ExportFormat = 'xlsx' | 'csv';
+
+/** Initial password for a newly created/imported teacher (they must change it on first login). */
+export const TEACHER_DEFAULT_PASSWORD = 'Teacher@12345';
+
 @Injectable()
 export class StructureService {
   constructor(
@@ -757,13 +763,14 @@ export class StructureService {
     const teacherRole = await this.prisma.db.role.findUnique({ where: { name: 'teacher' } });
     if (!teacherRole) throw new BadRequestException('Role "teacher" missing — run seed first');
 
+    // Teachers sign in with their email; username is an internal unique handle only.
     const username = `${
       dto.email
         .split('@')[0]
         ?.replace(/[^a-z0-9]/gi, '')
         .toLowerCase() ?? 'teacher'
     }_${Math.random().toString(36).slice(2, 8)}`;
-    const hash = await this.password.hash(`Exam@${Math.random().toString(36).slice(2, 10)}`);
+    const hash = await this.password.hash(TEACHER_DEFAULT_PASSWORD);
 
     return this.mutate(ctx, 'teacher.create', 'Teacher', async (tx) => {
       const user = await tx.user.create({
@@ -839,47 +846,60 @@ export class StructureService {
     });
   }
 
-  async exportTeachers(departmentPublicId?: string): Promise<StreamableFile> {
+  async exportTeachers(
+    departmentPublicId?: string,
+    format: ExportFormat = 'xlsx',
+  ): Promise<StreamableFile> {
     const where = departmentPublicId ? { department: { publicId: departmentPublicId } } : undefined;
     const rows = await this.prisma.db.teacher.findMany({
       where,
       select: teacherAdminSelect,
       orderBy: { user: { displayName: 'asc' } },
     });
-    const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet('Teachers');
-    ws.columns = [
-      { header: 'Username', key: 'username', width: 20 },
-      { header: 'Display Name', key: 'displayName', width: 30 },
-      { header: 'Email', key: 'email', width: 30 },
-      { header: 'Department', key: 'department', width: 30 },
-      { header: 'Designation', key: 'designation', width: 25 },
-    ];
-    for (const t of rows) {
-      ws.addRow({
-        username: t.user.username,
-        displayName: t.user.displayName,
+    // Headers match the teachers import template (teachers now log in by email — no username).
+    return this.tableFile(
+      'Teachers',
+      [
+        { header: 'name', key: 'name', width: 30 },
+        { header: 'email', key: 'email', width: 30 },
+        { header: 'department', key: 'department', width: 30 },
+        { header: 'designation', key: 'designation', width: 25 },
+      ],
+      rows.map((t) => ({
+        name: t.user.displayName,
         email: t.user.email ?? '',
         department: t.department.name,
         designation: t.designation ?? '',
-      });
-    }
-    const buffer = await wb.xlsx.writeBuffer();
-    return new StreamableFile(Buffer.from(buffer), {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      disposition: 'attachment; filename="teachers.xlsx"',
-    });
+      })),
+      'teachers',
+      format,
+    );
   }
 
-  // ─────────────────────── Structure exports (xlsx) ───────────────────────
+  // ─────────────────────── Structure exports ───────────────────────
   // Column headers match the import templates, so an exported sheet can be edited and re-imported.
 
-  private async xlsxFile(
+  /** Emit a table as either a formatted .xlsx (bold header) or a UTF-8 CSV (BOM for Excel). */
+  private async tableFile(
     sheet: string,
     columns: { header: string; key: string; width: number }[],
     rows: Record<string, string | number>[],
-    filename: string,
+    baseName: string,
+    format: ExportFormat,
   ): Promise<StreamableFile> {
+    if (format === 'csv') {
+      const esc = (v: string | number): string => {
+        const s = String(v ?? '');
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      };
+      const lines = [columns.map((c) => esc(c.header)).join(',')];
+      for (const r of rows) lines.push(columns.map((c) => esc(r[c.key] ?? '')).join(','));
+      const csv = String.fromCharCode(0xfeff) + lines.join('\r\n'); // BOM so Excel detects UTF-8
+      return new StreamableFile(Buffer.from(csv, 'utf8'), {
+        type: 'text/csv; charset=utf-8',
+        disposition: `attachment; filename="${baseName}.csv"`,
+      });
+    }
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet(sheet);
     ws.columns = columns;
@@ -888,43 +908,45 @@ export class StructureService {
     const buffer = await wb.xlsx.writeBuffer();
     return new StreamableFile(Buffer.from(buffer), {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      disposition: `attachment; filename="${filename}"`,
+      disposition: `attachment; filename="${baseName}.xlsx"`,
     });
   }
 
-  async exportFaculties(): Promise<StreamableFile> {
+  async exportFaculties(format: ExportFormat = 'xlsx'): Promise<StreamableFile> {
     const rows = await this.prisma.db.faculty.findMany({
       select: { name: true, _count: { select: { departments: true } } },
       orderBy: { name: 'asc' },
     });
-    return this.xlsxFile(
+    return this.tableFile(
       'Faculties',
       [
         { header: 'name', key: 'name', width: 36 },
         { header: 'departments', key: 'departments', width: 14 },
       ],
       rows.map((f) => ({ name: f.name, departments: f._count.departments })),
-      'faculties.xlsx',
+      'faculties',
+      format,
     );
   }
 
-  async exportDepartments(): Promise<StreamableFile> {
+  async exportDepartments(format: ExportFormat = 'xlsx'): Promise<StreamableFile> {
     const rows = await this.prisma.db.department.findMany({
       select: { name: true, faculty: { select: { name: true } } },
       orderBy: [{ faculty: { name: 'asc' } }, { name: 'asc' }],
     });
-    return this.xlsxFile(
+    return this.tableFile(
       'Departments',
       [
         { header: 'name', key: 'name', width: 36 },
         { header: 'faculty', key: 'faculty', width: 30 },
       ],
       rows.map((d) => ({ name: d.name, faculty: d.faculty.name })),
-      'departments.xlsx',
+      'departments',
+      format,
     );
   }
 
-  async exportSemesters(): Promise<StreamableFile> {
+  async exportSemesters(format: ExportFormat = 'xlsx'): Promise<StreamableFile> {
     const rows = await this.prisma.db.semester.findMany({
       select: {
         number: true,
@@ -933,7 +955,7 @@ export class StructureService {
       },
       orderBy: [{ batch: { program: { name: 'asc' } } }, { number: 'asc' }],
     });
-    return this.xlsxFile(
+    return this.tableFile(
       'Semesters',
       [
         { header: 'program', key: 'program', width: 24 },
@@ -947,11 +969,12 @@ export class StructureService {
         number: s.number,
         name: s.name ?? '',
       })),
-      'semesters.xlsx',
+      'semesters',
+      format,
     );
   }
 
-  async exportCourses(): Promise<StreamableFile> {
+  async exportCourses(format: ExportFormat = 'xlsx'): Promise<StreamableFile> {
     const rows = await this.prisma.db.course.findMany({
       select: {
         code: true,
@@ -966,7 +989,7 @@ export class StructureService {
       },
       orderBy: [{ code: 'asc' }],
     });
-    return this.xlsxFile(
+    return this.tableFile(
       'Courses',
       [
         { header: 'code', key: 'code', width: 16 },
@@ -984,7 +1007,8 @@ export class StructureService {
         batch: c.semester.batch.name,
         semesterNumber: c.semester.number,
       })),
-      'courses.xlsx',
+      'courses',
+      format,
     );
   }
 
@@ -1219,7 +1243,10 @@ export class StructureService {
     });
   }
 
-  async exportStudents(batchPublicId?: string): Promise<StreamableFile> {
+  async exportStudents(
+    batchPublicId?: string,
+    format: ExportFormat = 'xlsx',
+  ): Promise<StreamableFile> {
     const rows = await this.prisma.db.student.findMany({
       where: batchPublicId ? { batch: { publicId: batchPublicId } } : {},
       select: {
@@ -1228,30 +1255,28 @@ export class StructureService {
       },
       orderBy: { studentId: 'asc' },
     });
-    const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet('Students');
-    ws.columns = [
-      { header: 'Student ID', key: 'studentId', width: 15 },
-      { header: 'Display Name', key: 'displayName', width: 30 },
-      { header: 'Email', key: 'email', width: 30 },
-      { header: 'Batch', key: 'batch', width: 20 },
-      { header: 'Registration Number', key: 'registrationNumber', width: 25 },
-      { header: 'Roll Number', key: 'rollNumber', width: 15 },
-    ];
-    for (const s of rows) {
-      ws.addRow({
+    // Headers match the students import template (name/email/registrationNumber/rollNumber);
+    // `batch` is included for reference — on import the target batch is chosen in the dialog.
+    return this.tableFile(
+      'Students',
+      [
+        { header: 'studentId', key: 'studentId', width: 15 },
+        { header: 'name', key: 'name', width: 30 },
+        { header: 'email', key: 'email', width: 30 },
+        { header: 'batch', key: 'batch', width: 20 },
+        { header: 'registrationNumber', key: 'registrationNumber', width: 25 },
+        { header: 'rollNumber', key: 'rollNumber', width: 15 },
+      ],
+      rows.map((s) => ({
         studentId: s.studentId,
-        displayName: s.user.displayName,
+        name: s.user.displayName,
         email: s.user.email ?? '',
         batch: s.batch.name,
         registrationNumber: s.registrationNumber ?? '',
         rollNumber: s.rollNumber ?? '',
-      });
-    }
-    const buffer = await wb.xlsx.writeBuffer();
-    return new StreamableFile(Buffer.from(buffer), {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      disposition: 'attachment; filename="students.xlsx"',
-    });
+      })),
+      'students',
+      format,
+    );
   }
 }

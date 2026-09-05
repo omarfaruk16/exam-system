@@ -7,7 +7,6 @@ const tabs = [
   { to: '/org/batches', label: 'Sessions', end: false, adminOnly: false },
   { to: '/org/students', label: 'Students', end: false, adminOnly: false },
   { to: '/org/teachers', label: 'Teachers', end: false, adminOnly: false },
-  { to: '/org/imports', label: 'Bulk import', end: false, adminOnly: true },
 ];
 
 export function OrgLayout() {
@@ -21,7 +20,7 @@ export function OrgLayout() {
         <h1 className="text-2xl font-semibold tracking-tight">Organization</h1>
         <p className="text-muted-foreground mt-1 text-sm">
           {isAdmin
-            ? 'Manage the academic structure, batches & students, and bulk imports.'
+            ? 'Manage the academic structure, batches, students and teachers. Import, export and templates are on each page.'
             : 'View your department’s structure, batches, students and faculty.'}
         </p>
       </header>

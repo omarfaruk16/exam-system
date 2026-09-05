@@ -2,17 +2,16 @@ import type { ImportRowError } from '@exam/types';
 import { pick } from './import-file';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
-const USERNAME_RE = /^[A-Za-z0-9._-]{3,50}$/u;
 const CODE_RE = /^[A-Za-z0-9._-]{1,30}$/u;
 
 type Result<T> = { value?: T; error?: ImportRowError };
 
 // ─────────────────────────────── Teachers ───────────────────────────────
+// Teachers sign in with their email, so email is the required identifier — no username column.
 export interface ParsedTeacherRow {
   rowNumber: number;
-  username: string;
   name: string;
-  email: string | null;
+  email: string;
   departmentName: string;
   designation: string | null;
   phone: string | null;
@@ -22,7 +21,6 @@ export function validateTeacherRow(
   cells: Record<string, string>,
   row: number,
 ): Result<ParsedTeacherRow> {
-  const username = pick(cells, 'username', 'user name', 'login');
   const firstName = pick(cells, 'firstname', 'first name', 'first_name');
   const lastName = pick(cells, 'lastname', 'last name', 'last_name');
   const name =
@@ -33,17 +31,6 @@ export function validateTeacherRow(
   const designation = pick(cells, 'designation', 'title');
   const phone = pick(cells, 'phone', 'mobile', 'contact');
 
-  if (!username) return { error: { row, field: 'username', message: 'Username is required' } };
-  if (!USERNAME_RE.test(username)) {
-    return {
-      error: {
-        row,
-        field: 'username',
-        value: username,
-        message: 'Username: letters, digits, . _ - (3–50 chars)',
-      },
-    };
-  }
   if (!name)
     return { error: { row, field: 'name', message: 'First and last name (or name) are required' } };
   if (!email) return { error: { row, field: 'email', message: 'Email is required' } };
@@ -57,7 +44,6 @@ export function validateTeacherRow(
   return {
     value: {
       rowNumber: row,
-      username,
       name,
       email,
       departmentName,

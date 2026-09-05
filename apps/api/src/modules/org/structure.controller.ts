@@ -40,7 +40,7 @@ import {
   UpdateStudentDto,
   UpdateTeacherDto,
 } from './dto/structure.dto';
-import { StructureService } from './structure.service';
+import { StructureService, type ExportFormat } from './structure.service';
 
 /** Academic structure management — an administrator function. */
 @Controller('org')
@@ -287,17 +287,19 @@ export class StructureController {
   exportStructure(
     @Res({ passthrough: true }) res: Response,
     @Param('type') type: string,
+    @Query('format') format?: string,
   ): Promise<StreamableFile> {
     res.set({ 'Cache-Control': 'no-store' });
+    const fmt: ExportFormat = format === 'csv' ? 'csv' : 'xlsx';
     switch (type) {
       case 'faculties':
-        return this.svc.exportFaculties();
+        return this.svc.exportFaculties(fmt);
       case 'departments':
-        return this.svc.exportDepartments();
+        return this.svc.exportDepartments(fmt);
       case 'semesters':
-        return this.svc.exportSemesters();
+        return this.svc.exportSemesters(fmt);
       case 'courses':
-        return this.svc.exportCourses();
+        return this.svc.exportCourses(fmt);
       default:
         throw new BadRequestException('Unknown export type');
     }
@@ -309,9 +311,10 @@ export class StructureController {
   exportTeachers(
     @Res({ passthrough: true }) res: Response,
     @Query('department') department?: string,
+    @Query('format') format?: string,
   ) {
     res.set({ 'Cache-Control': 'no-store' });
-    return this.svc.exportTeachers(department);
+    return this.svc.exportTeachers(department, format === 'csv' ? 'csv' : 'xlsx');
   }
 
   @Roles('super_admin', 'admin', 'department_head')
@@ -370,9 +373,10 @@ export class StructureController {
   exportStudents(
     @Query('batch') batch: string | undefined,
     @Res({ passthrough: true }) res: Response,
+    @Query('format') format?: string,
   ) {
     res.set({ 'Cache-Control': 'no-store' });
-    return this.svc.exportStudents(batch);
+    return this.svc.exportStudents(batch, format === 'csv' ? 'csv' : 'xlsx');
   }
 
   @Roles('super_admin', 'admin', 'department_head')

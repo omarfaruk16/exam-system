@@ -4,9 +4,6 @@ import { api } from '@/lib/api';
 export type ImportEntity =
   'students' | 'teachers' | 'departments' | 'courses' | 'faculties' | 'semesters';
 
-/** Structure entities that can be exported to xlsx. */
-export type ExportEntity = 'faculties' | 'departments' | 'semesters' | 'courses';
-
 const API_BASE = '/api/v1';
 
 /** Multipart upload (the JSON api client can't send FormData). Returns the job id. */
@@ -36,5 +33,25 @@ export const templateUrl = (entity: ImportEntity, format: 'xlsx' | 'csv' = 'xlsx
   `${API_BASE}/imports/templates/${entity}${format === 'csv' ? '?format=csv' : ''}`;
 export const errorReportUrl = (jobId: string) => `${API_BASE}/imports/${jobId}/errors`;
 
-/** Download URL for exporting existing structure data as xlsx. */
-export const exportUrl = (entity: ExportEntity) => `${API_BASE}/org/export/${entity}`;
+export type ExportFormat = 'xlsx' | 'csv';
+
+/**
+ * Download URL for exporting existing data. Structure entities go through /org/export/:type;
+ * teachers and students have their own routes (with an optional department/batch filter).
+ */
+export const exportUrl = (
+  entity: ImportEntity,
+  format: ExportFormat = 'xlsx',
+  filter?: string,
+): string => {
+  const q = (extra: Record<string, string | undefined>) => {
+    const params = new URLSearchParams();
+    if (format === 'csv') params.set('format', 'csv');
+    for (const [k, v] of Object.entries(extra)) if (v) params.set(k, v);
+    const s = params.toString();
+    return s ? `?${s}` : '';
+  };
+  if (entity === 'teachers') return `${API_BASE}/org/teachers/export${q({ department: filter })}`;
+  if (entity === 'students') return `${API_BASE}/org/students/export${q({ batch: filter })}`;
+  return `${API_BASE}/org/export/${entity}${q({})}`;
+};

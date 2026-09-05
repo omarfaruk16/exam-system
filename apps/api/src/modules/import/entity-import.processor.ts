@@ -11,6 +11,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import type { Env } from '../../common/config/env.validation';
 import { PasswordService } from '../auth/password.service';
 import { QUEUE_ENTITY_IMPORT } from '../../queue/queue.constants';
+import { TEACHER_DEFAULT_PASSWORD } from '../org/structure.service';
 import { readImportRows } from './import-file';
 import {
   validateCourseRow,
@@ -158,15 +159,16 @@ export class EntityImportProcessor extends WorkerHost {
       const { value, error } = validateTeacherRow(cells, rowNumber);
       if (error) errors.push(error);
       else if (value) {
-        if (seen.has(value.username.toLowerCase())) {
+        // Teachers are keyed by email (their login identifier).
+        if (seen.has(value.email.toLowerCase())) {
           errors.push({
             row: rowNumber,
-            field: 'username',
-            value: value.username,
-            message: 'Duplicate username in file',
+            field: 'email',
+            value: value.email,
+            message: 'Duplicate email in file',
           });
         } else {
-          seen.add(value.username.toLowerCase());
+          seen.add(value.email.toLowerCase());
           parsed.push(value);
         }
       }
@@ -192,23 +194,19 @@ export class EntityImportProcessor extends WorkerHost {
           });
           continue;
         }
-        // Free the username slot if a soft-deleted user previously held it.
-        const staleUser = await this.prisma.user.findFirst({
-          where: { username: row.username, deletedAt: { not: null } },
-          select: { id: true },
-        });
-        if (staleUser) {
-          await this.prisma.user.update({
-            where: { id: staleUser.id },
-            data: { username: `${row.username}__del_${Date.now()}`, email: null },
-          });
-        }
-        const tempPassword = `${row.username}@Exam123`;
-        const hash = await this.password.hash(tempPassword);
+        // Username is an internal unique handle derived from the email; teachers sign in by email.
+        const base =
+          row.email
+            .split('@')[0]
+            ?.replace(/[^a-z0-9]/gi, '')
+            .toLowerCase() || 'teacher';
+        const username = `${base}_${Math.random().toString(36).slice(2, 8)}`;
+        // Initial password is the fixed default; teachers must change it on first login.
+        const hash = await this.password.hash(TEACHER_DEFAULT_PASSWORD);
         await this.prisma.$transaction(async (tx) => {
           const user = await tx.user.create({
             data: {
-              username: row.username,
+              username,
               email: row.email,
               passwordHash: hash,
               displayName: row.name,
@@ -228,9 +226,9 @@ export class EntityImportProcessor extends WorkerHost {
           skipped++;
           errors.push({
             row: row.rowNumber,
-            field: 'username',
-            value: row.username,
-            message: 'A user with this username or email already exists',
+            field: 'email',
+            value: row.email,
+            message: 'A user with this email already exists',
           });
         } else {
           errors.push({ row: row.rowNumber, message: `Unexpected error: ${(e as Error).message}` });

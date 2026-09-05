@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { TeacherRow } from '@exam/types';
-import { Download, Loader2, Pencil, Plus, Search, Trash2, Users } from 'lucide-react';
+import { Loader2, Pencil, Plus, Search, Trash2, Users } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -19,18 +19,17 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   createTeacher,
   deleteTeacher,
-  downloadExport,
   fetchDepartments,
   fetchTeachersAdmin,
   updateTeacher,
 } from './orgApi';
+import { ImportExportBar } from './ImportExportBar';
 
 export function TeachersPage() {
   const qc = useQueryClient();
   const [deptFilter, setDeptFilter] = useState('');
   const [search, setSearch] = useState('');
   const [adding, setAdding] = useState(false);
-  const [exporting, setExporting] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['org-teachers-admin', deptFilter || undefined],
@@ -53,35 +52,24 @@ export function TeachersPage() {
       })
     : allTeachers;
 
-  async function handleExport() {
-    setExporting(true);
-    try {
-      await downloadExport('/org/teachers/export', 'teachers.xlsx');
-    } catch {
-      toast.error('Export failed');
-    } finally {
-      setExporting(false);
-    }
-  }
-
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold">Teachers</h2>
           <p className="text-muted-foreground text-sm">
-            Manage teacher accounts. A temporary password is emailed on creation.
+            Teachers sign in with their email. Initial password is{' '}
+            <code className="bg-muted rounded px-1 py-0.5 text-xs">Teacher@12345</code> (they change
+            it on first login).
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleExport} disabled={exporting}>
-            {exporting ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Download className="size-4" />
-            )}{' '}
-            Export Excel
-          </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <ImportExportBar
+            entity="teachers"
+            label="teachers"
+            exportFilter={deptFilter || undefined}
+            onImported={() => qc.invalidateQueries({ queryKey: ['org-teachers-admin'] })}
+          />
           <Button size="sm" onClick={() => setAdding((v) => !v)}>
             <Plus className="size-4" /> Add teacher
           </Button>
@@ -134,7 +122,9 @@ export function TeachersPage() {
         <Card className="flex flex-col items-center gap-2 py-14 text-center">
           <Users className="text-muted-foreground size-7" />
           <p className="font-medium">No teachers yet</p>
-          <p className="text-muted-foreground text-sm">Add teachers manually or use Bulk import.</p>
+          <p className="text-muted-foreground text-sm">
+            Add teachers manually, or use Import above.
+          </p>
         </Card>
       ) : teachers.length === 0 ? (
         <Card className="flex flex-col items-center gap-2 py-10 text-center">

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { StudentRow } from '@exam/types';
-import { Download, GraduationCap, Loader2, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { GraduationCap, Loader2, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -20,18 +20,17 @@ import {
   changeStudentBatch,
   createStudent,
   deleteStudent,
-  downloadExport,
   fetchBatches,
   fetchStudents,
   updateStudent,
 } from './orgApi';
+import { ImportExportBar } from './ImportExportBar';
 
 export function StudentsPage() {
   const qc = useQueryClient();
   const [batchFilter, setBatchFilter] = useState('');
   const [search, setSearch] = useState('');
   const [adding, setAdding] = useState(false);
-  const [exporting, setExporting] = useState(false);
 
   const batchQuery = useQuery({ queryKey: ['org-batches-all'], queryFn: () => fetchBatches() });
   const { data, isLoading } = useQuery({
@@ -52,20 +51,6 @@ export function StudentsPage() {
       })
     : allStudents;
 
-  async function handleExport() {
-    setExporting(true);
-    try {
-      const path = batchFilter
-        ? `/org/students/export?batch=${batchFilter}`
-        : '/org/students/export';
-      await downloadExport(path, 'students.xlsx');
-    } catch {
-      toast.error('Export failed');
-    } finally {
-      setExporting(false);
-    }
-  }
-
   function invalidate() {
     void qc.invalidateQueries({ queryKey: ['org-students'] });
     void qc.invalidateQueries({ queryKey: ['org-batches-all'] });
@@ -81,15 +66,15 @@ export function StudentsPage() {
             studentId@Exam123.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleExport} disabled={exporting}>
-            {exporting ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Download className="size-4" />
-            )}{' '}
-            Export Excel
-          </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <ImportExportBar
+            entity="students"
+            label="students"
+            batchPublicId={batchFilter || undefined}
+            exportFilter={batchFilter || undefined}
+            disabledReason={batchFilter ? undefined : 'Pick a batch (filter) to import into'}
+            onImported={invalidate}
+          />
           <Button size="sm" onClick={() => setAdding((v) => !v)}>
             <Plus className="size-4" /> Add student
           </Button>

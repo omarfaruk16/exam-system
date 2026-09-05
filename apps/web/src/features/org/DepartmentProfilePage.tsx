@@ -79,6 +79,7 @@ import {
 } from './orgApi';
 import { TeacherSelector } from './TeacherSelector';
 import { ImportModal } from './ImportModal';
+import { ImportExportBar } from './ImportExportBar';
 import { DEGREE_TYPES } from './orgLevelConfig';
 
 type TabKey =
@@ -613,6 +614,8 @@ function ProgramRow({
 
 // ─────────────────────────── Syllabus & Courses ───────────────────────────
 function CoursesTab({ programs, deptPublicId }: { programs: Program[]; deptPublicId: string }) {
+  const qc = useQueryClient();
+  const canManage = useCanManage();
   const [programId, setProgramId] = useState(programs[0]?.publicId ?? '');
   const active = programs.find((p) => p.publicId === programId) ?? programs[0];
 
@@ -671,6 +674,29 @@ function CoursesTab({ programs, deptPublicId }: { programs: Program[]; deptPubli
           </div>
         }
       />
+      {canManage && (
+        <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 border-b pb-4">
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground w-20 text-xs font-medium">Semesters</span>
+            <ImportExportBar
+              entity="semesters"
+              label="semesters"
+              onImported={() => {
+                void qc.invalidateQueries({ queryKey: ['org-semesters'] });
+                void qc.invalidateQueries({ queryKey: ['org-batches'] });
+              }}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground w-20 text-xs font-medium">Courses</span>
+            <ImportExportBar
+              entity="courses"
+              label="courses"
+              onImported={() => void qc.invalidateQueries({ queryKey: ['org-courses'] })}
+            />
+          </div>
+        </div>
+      )}
       {batchesQuery.isLoading ? (
         <Skeleton className="h-20 w-full" />
       ) : batches.length === 0 ? (

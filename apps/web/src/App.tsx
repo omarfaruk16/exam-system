@@ -31,7 +31,6 @@ import { FacultyDashboardPage } from '@/features/org/FacultyDashboardPage';
 import { BatchesPage } from '@/features/org/BatchesPage';
 import { StudentsPage } from '@/features/org/StudentsPage';
 import { TeachersPage } from '@/features/org/TeachersPage';
-import { ImportsPage } from '@/features/org/ImportsPage';
 import { ReviewQueuePage } from '@/features/review/ReviewQueuePage';
 import { ReviewDetailPage } from '@/features/review/ReviewDetailPage';
 import { ReportsPage } from '@/features/reports/ReportsPage';
@@ -108,7 +107,6 @@ export function App() {
           <Route path="batches" element={<BatchesPage />} />
           <Route path="students" element={<StudentsPage />} />
           <Route path="teachers" element={<TeachersPage />} />
-          <Route path="imports" element={<ImportsPage />} />
         </Route>
         <Route path="/org/departments/:publicId" element={<DepartmentProfilePage />} />
         <Route path="/org/faculties/:publicId" element={<FacultyDashboardPage />} />
