@@ -49,9 +49,10 @@ const PORTALS: Portal[] = [
     tag: 'Student Access',
     icon: GraduationCap,
     desc: 'Attend scheduled online tests, submit answers in real time, review performance insights, and download grade sheets.',
-    iconBox: 'bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400',
-    chip: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300',
-    card: 'border-blue-100 hover:border-blue-300 hover:bg-blue-50/60 dark:border-blue-500/20 dark:hover:border-blue-500/40 dark:hover:bg-blue-500/5',
+    iconBox:
+      'bg-blue-100 text-blue-600 dark:bg-blue-500/25 dark:text-blue-400 dark:border dark:border-blue-400/30',
+    chip: 'bg-blue-100 text-blue-700 dark:bg-blue-500/25 dark:text-blue-300 dark:border dark:border-blue-400/30',
+    card: 'bg-blue-50/80 border-blue-200/80 hover:border-blue-400 hover:bg-blue-100/80 dark:bg-[#0f1d36]/90 dark:border-blue-500/30 dark:hover:border-blue-400/60 dark:hover:bg-[#142646] dark:shadow-[0_0_20px_rgba(59,130,246,0.1)]',
     chevron: 'text-blue-600 dark:text-blue-400',
   },
   {
@@ -60,9 +61,10 @@ const PORTALS: Portal[] = [
     tag: 'Faculty & Examiner',
     icon: Users,
     desc: 'Create exam questions, authorize candidate sessions, evaluate results, and manage course-wise updates.',
-    iconBox: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400',
-    chip: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',
-    card: 'border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50/60 dark:border-emerald-500/20 dark:hover:border-emerald-500/40 dark:hover:bg-emerald-500/5',
+    iconBox:
+      'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/25 dark:text-emerald-400 dark:border dark:border-emerald-400/30',
+    chip: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/25 dark:text-emerald-300 dark:border dark:border-emerald-400/30',
+    card: 'bg-emerald-50/80 border-emerald-200/80 hover:border-emerald-400 hover:bg-emerald-100/80 dark:bg-[#09261b]/90 dark:border-emerald-500/30 dark:hover:border-emerald-400/60 dark:hover:bg-[#0d3324] dark:shadow-[0_0_20px_rgba(16,185,129,0.1)]',
     chevron: 'text-emerald-600 dark:text-emerald-400',
   },
   {
@@ -71,10 +73,11 @@ const PORTALS: Portal[] = [
     tag: 'System Access',
     icon: Settings,
     desc: 'Oversee academic examinations, manage degree programs, users, permissions, and ensure system integrity.',
-    iconBox: 'bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-400',
-    chip: 'bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300',
-    card: 'border-violet-100 hover:border-violet-300 hover:bg-violet-50/60 dark:border-violet-500/20 dark:hover:border-violet-500/40 dark:hover:bg-violet-500/5',
-    chevron: 'text-violet-600 dark:text-violet-400',
+    iconBox:
+      'bg-purple-100 text-purple-600 dark:bg-purple-500/25 dark:text-purple-400 dark:border dark:border-purple-400/30',
+    chip: 'bg-purple-100 text-purple-700 dark:bg-purple-500/25 dark:text-purple-300 dark:border dark:border-purple-400/30',
+    card: 'bg-purple-50/80 border-purple-200/80 hover:border-purple-400 hover:bg-purple-100/80 dark:bg-[#1f1535]/90 dark:border-purple-500/30 dark:hover:border-purple-400/60 dark:hover:bg-[#281b45] dark:shadow-[0_0_20px_rgba(168,85,247,0.1)]',
+    chevron: 'text-purple-600 dark:text-purple-400',
   },
 ];
 
@@ -89,35 +92,59 @@ export function LoginPage() {
   const active = PORTALS.find((p) => p.key === portal) ?? null;
 
   return (
-    <div className="relative flex min-h-screen flex-col bg-gradient-to-br from-slate-50 via-white to-blue-50/60 text-slate-800 dark:from-[#0b1120] dark:via-[#0d1526] dark:to-[#111a30] dark:text-slate-100">
-      {/* Soft background tints */}
+    <div className="relative flex min-h-screen flex-col bg-gradient-to-br from-slate-50 via-white to-blue-50/60 text-slate-800 dark:from-[#080d1a] dark:via-[#0c1322] dark:to-[#0f172a] dark:text-slate-100">
+      {/* Background ambient lighting effects */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -right-32 -top-32 size-[28rem] rounded-full bg-blue-200/30 blur-3xl dark:bg-blue-500/10" />
-        <div className="absolute -bottom-40 -left-24 size-[28rem] rounded-full bg-violet-200/25 blur-3xl dark:bg-violet-500/10" />
+        <div className="absolute -right-40 -top-40 size-[36rem] rounded-full bg-blue-500/10 blur-[130px]" />
+        <div className="absolute -left-40 top-1/2 size-[36rem] -translate-y-1/2 rounded-full bg-indigo-500/10 blur-[130px]" />
+        <div className="absolute -bottom-40 right-1/4 size-[32rem] rounded-full bg-purple-500/10 blur-[130px]" />
       </div>
 
       {/* Top bar */}
-      <header className="relative z-10 flex items-center justify-between px-6 py-5 md:px-12 md:py-7">
-        <div className="flex items-center gap-3">
+      <header className="relative z-10 mx-auto flex w-full max-w-[1536px] items-center justify-between px-6 py-5 md:px-12 md:py-7 lg:px-16">
+        <div className="flex items-center gap-3.5">
           <img
             src="/ru-logo.png"
-            alt=""
-            className="size-11 rounded-full border border-slate-200 bg-white p-1 shadow-sm dark:border-white/10"
+            alt="University of Rajshahi Logo"
+            className="size-11 rounded-full border border-slate-200/80 bg-white p-1 shadow-sm dark:border-white/15 dark:bg-slate-900"
             onError={(e) => (e.currentTarget.style.display = 'none')}
           />
           <div className="leading-tight">
             <p className="text-base font-bold tracking-tight text-slate-900 dark:text-white">
               {INSTITUTION}
             </p>
-            <p className="text-muted-foreground text-xs">Examination System</p>
+            <p className="text-muted-foreground text-xs font-medium">Examination System</p>
           </div>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <div className="hidden items-center gap-2.5 sm:flex">
+            <Button
+              size="sm"
+              onClick={() => setPortal('student')}
+              className="h-9 rounded-xl border-transparent bg-blue-600 px-3.5 text-xs font-semibold text-white shadow-md shadow-blue-500/20 transition-all hover:bg-blue-700 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-500"
+            >
+              <GraduationCap className="size-4" /> Student Login
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => setPortal('teacher')}
+              className="h-9 rounded-xl border-transparent bg-emerald-600 px-3.5 text-xs font-semibold text-white shadow-md shadow-emerald-500/20 transition-all hover:bg-emerald-700 dark:bg-emerald-600 dark:text-white dark:hover:bg-emerald-500"
+            >
+              <Users className="size-4" /> Teacher Login
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => setPortal('admin')}
+              className="h-9 rounded-xl border-transparent bg-purple-600 px-3.5 text-xs font-semibold text-white shadow-md shadow-purple-500/20 transition-all hover:bg-purple-700 dark:bg-purple-600 dark:text-white dark:hover:bg-purple-500"
+            >
+              <Settings className="size-4" /> Admin Login
+            </Button>
+          </div>
           <a
             href="https://www.ru.ac.bd"
             target="_blank"
             rel="noopener noreferrer"
-            className="hidden items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-500 sm:inline-flex dark:text-blue-400"
+            className="hidden items-center gap-1.5 text-sm font-semibold text-blue-600 transition-colors hover:text-blue-500 xl:inline-flex dark:text-blue-400 dark:hover:text-blue-300"
           >
             Visit RU Website <ExternalLink className="size-3.5" />
           </a>
@@ -125,57 +152,58 @@ export function LoginPage() {
         </div>
       </header>
 
-      {/* Body */}
-      <div className="relative z-10 mx-auto grid w-full max-w-7xl flex-1 items-center gap-10 px-6 pb-16 md:px-12 lg:grid-cols-2 lg:gap-16">
-        {/* ── Left: brand / marketing ── */}
-        <section className="relative">
-          {/* Gate watermark */}
-          <img
-            src="/ru-gate.png"
-            alt=""
-            aria-hidden
-            className="pointer-events-none absolute -bottom-24 left-1/2 w-[38rem] max-w-none -translate-x-1/2 select-none opacity-[0.06] lg:left-0 lg:translate-x-0 dark:opacity-[0.08] dark:invert"
-            onError={(e) => (e.currentTarget.style.display = 'none')}
-          />
-
+      {/* Body Section with Increased Container Width */}
+      <div className="relative z-10 mx-auto grid w-full max-w-[1536px] flex-1 items-center gap-12 px-6 pb-16 md:px-12 lg:grid-cols-12 lg:gap-16 lg:px-16">
+        {/* ── Left: Brand / Marketing ── */}
+        <section className="relative lg:col-span-6 xl:col-span-7">
           <div className="relative">
-            <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">
-              <span className="h-px w-8 bg-blue-500/50" />
+            <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-400">
+              <span className="h-[2px] w-8 rounded-full bg-blue-500/60 dark:bg-blue-400/60" />
               Online Academic Assessment Portal
             </div>
 
-            <h1 className="mt-5 text-5xl font-extrabold leading-[1.05] tracking-tight text-slate-900 sm:text-6xl dark:text-white">
-              The Paperless
+            <h1 className="mt-5 text-5xl font-extrabold leading-[1.08] tracking-tight text-slate-900 sm:text-6xl lg:text-6xl xl:text-7xl dark:text-white">
+              The Paper-Less
               <br />
               <span className="text-blue-600 dark:text-blue-400">
                 Exam System<span className="text-slate-300 dark:text-slate-600">.</span>
               </span>
             </h1>
 
-            <p className="text-muted-foreground mt-6 max-w-lg text-base leading-relaxed">
+            <p className="text-muted-foreground mt-6 max-w-xl text-base leading-relaxed sm:text-lg">
               A unified platform for {INSTITUTION} students, faculty, and departments to conduct
               examinations, manage question banks, and publish results — entirely paperless.
             </p>
 
-            <ul className="mt-9 space-y-4">
+            <ul className="mt-8 max-w-xl space-y-3.5">
               {HIGHLIGHTS.map((h) => (
                 <li
                   key={h.label}
-                  className="flex items-center gap-3.5 text-slate-700 dark:text-slate-200"
+                  className="flex items-center gap-4 text-slate-700 dark:text-slate-200"
                 >
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400">
+                  <span className="shadow-xs flex size-11 shrink-0 items-center justify-center rounded-2xl bg-blue-100/90 text-blue-600 dark:border dark:border-blue-500/30 dark:bg-blue-500/20 dark:text-blue-400">
                     <h.icon className="size-5" />
                   </span>
-                  <span className="text-[15px] font-medium">{h.label}</span>
+                  <span className="text-base font-medium">{h.label}</span>
                 </li>
               ))}
             </ul>
+
+            {/* RU Gate landmark illustration placed prominently at the bottom-left area */}
+            <div className="relative mt-8 max-w-xl overflow-hidden">
+              <img
+                src="/ru-gate.png"
+                alt="University of Rajshahi Gate"
+                className="pointer-events-none w-full max-w-lg select-none object-contain opacity-95 transition-all duration-300 dark:opacity-85 dark:brightness-110 dark:contrast-125 dark:grayscale dark:invert"
+                onError={(e) => (e.currentTarget.style.display = 'none')}
+              />
+            </div>
           </div>
         </section>
 
-        {/* ── Right: portal chooser card ── */}
-        <section className="relative">
-          <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-xl shadow-slate-200/50 backdrop-blur-sm sm:p-8 dark:border-white/10 dark:bg-white/[0.03] dark:shadow-black/30">
+        {/* ── Right: Portal Chooser Card ── */}
+        <section className="relative lg:col-span-6 xl:col-span-5">
+          <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-2xl backdrop-blur-xl sm:p-9 dark:border-slate-800 dark:bg-slate-900/80 dark:shadow-blue-950/20">
             <div className="text-sm font-semibold text-blue-600 dark:text-blue-400">
               Welcome back
             </div>
@@ -186,7 +214,7 @@ export function LoginPage() {
               Select the portal that matches your role to sign in.
             </p>
 
-            <div className="mt-6 space-y-3.5">
+            <div className="mt-6 space-y-4">
               {PORTALS.map((p) => (
                 <PortalRow key={p.key} portal={p} onLogin={() => setPortal(p.key)} />
               ))}
@@ -195,7 +223,7 @@ export function LoginPage() {
         </section>
       </div>
 
-      <footer className="text-muted-foreground relative z-10 px-6 pb-6 text-xs md:px-12">
+      <footer className="text-muted-foreground relative z-10 mx-auto w-full max-w-[1536px] px-6 pb-6 text-xs md:px-12 lg:px-16">
         © {new Date().getFullYear()} {INSTITUTION}. All rights reserved.
       </footer>
 
@@ -215,13 +243,13 @@ function PortalRow({ portal, onLogin }: { portal: Portal; onLogin: () => void })
       type="button"
       onClick={onLogin}
       className={cn(
-        'group flex w-full items-center gap-4 rounded-2xl border bg-white/60 p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md sm:p-5 dark:bg-white/[0.02]',
+        'gap-4.5 p-4.5 group flex w-full items-center rounded-2xl border text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg sm:p-5',
         portal.card,
       )}
     >
       <div
         className={cn(
-          'flex size-12 shrink-0 items-center justify-center rounded-xl',
+          'shadow-xs flex size-12 shrink-0 items-center justify-center rounded-xl transition-transform duration-200 group-hover:scale-105',
           portal.iconBox,
         )}
       >
@@ -229,14 +257,21 @@ function PortalRow({ portal, onLogin }: { portal: Portal; onLogin: () => void })
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <h3 className="font-semibold text-slate-900 dark:text-white">{portal.title}</h3>
-          <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', portal.chip)}>
+          <h3 className="text-base font-bold text-slate-900 dark:text-white">{portal.title}</h3>
+          <span
+            className={cn(
+              'rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide',
+              portal.chip,
+            )}
+          >
             {portal.tag}
           </span>
         </div>
-        <p className="text-muted-foreground mt-1 text-sm leading-relaxed">{portal.desc}</p>
+        <p className="text-muted-foreground mt-1 text-xs leading-relaxed sm:text-sm">
+          {portal.desc}
+        </p>
       </div>
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-slate-100 transition-transform group-hover:translate-x-0.5 dark:bg-white/5">
+      <span className="shadow-xs flex size-9 shrink-0 items-center justify-center rounded-full border border-slate-200/60 bg-white/80 transition-transform duration-200 group-hover:translate-x-1 dark:border-slate-700/60 dark:bg-slate-800/80">
         <ChevronRight className={cn('size-4', portal.chevron)} />
       </span>
     </button>

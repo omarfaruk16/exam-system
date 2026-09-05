@@ -79,7 +79,7 @@ import {
 } from './orgApi';
 import { TeacherSelector } from './TeacherSelector';
 import { ImportModal } from './ImportModal';
-import { ImportExportBar } from './ImportExportBar';
+// import { ImportExportBar } from './ImportExportBar';
 import { DEGREE_TYPES } from './orgLevelConfig';
 
 type TabKey =
@@ -88,8 +88,8 @@ type TabKey =
 const TABS: { key: TabKey; label: string; icon: typeof BookOpen }[] = [
   { key: 'info', label: 'Info', icon: FileText },
   { key: 'degrees', label: 'Offered Degrees', icon: GraduationCap },
-  { key: 'courses', label: 'Semesters', icon: BookOpen },
   { key: 'batches', label: 'Sessions', icon: Layers },
+  { key: 'courses', label: 'Semesters', icon: BookOpen },
   { key: 'enrollments', label: 'Enrollments & Retakes', icon: ClipboardList },
   { key: 'students', label: 'Students', icon: Users },
   { key: 'teachers', label: 'Teachers & Faculty', icon: UserCog },
@@ -614,8 +614,8 @@ function ProgramRow({
 
 // ─────────────────────────── Syllabus & Courses ───────────────────────────
 function CoursesTab({ programs, deptPublicId }: { programs: Program[]; deptPublicId: string }) {
-  const qc = useQueryClient();
-  const canManage = useCanManage();
+  // const qc = useQueryClient();
+  // const canManage = useCanManage();
   const [programId, setProgramId] = useState(programs[0]?.publicId ?? '');
   const active = programs.find((p) => p.publicId === programId) ?? programs[0];
 
@@ -674,7 +674,7 @@ function CoursesTab({ programs, deptPublicId }: { programs: Program[]; deptPubli
           </div>
         }
       />
-      {canManage && (
+      {/* {canManage && (
         <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 border-b pb-4">
           <div className="flex items-center gap-2">
             <span className="text-muted-foreground w-20 text-xs font-medium">Semesters</span>
@@ -696,7 +696,7 @@ function CoursesTab({ programs, deptPublicId }: { programs: Program[]; deptPubli
             />
           </div>
         </div>
-      )}
+      )} */}
       {batchesQuery.isLoading ? (
         <Skeleton className="h-20 w-full" />
       ) : batches.length === 0 ? (

@@ -153,7 +153,7 @@ export function QuestionBankPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Question Bank</h1>
         <p className="text-muted-foreground mt-1 text-sm">
           Manage chapters and questions for your course parts. Each chapter groups related
-          questions. Use $…$ for inline math and $$…$$ for display math.
+          questions.
         </p>
       </header>
 
@@ -1068,8 +1068,7 @@ function QuestionForm({
             attempted && !validText && 'text-destructive',
           )}
         >
-          Question text{' '}
-          <span className="text-muted-foreground font-normal">(use $…$ for math)</span>
+          Question text <span className="text-muted-foreground font-normal">()</span>
         </label>
         <textarea
           rows={3}
@@ -1126,7 +1125,7 @@ function QuestionForm({
                 onChange={(e) =>
                   setOptions((prev) => prev.map((p, j) => (j === i ? e.target.value : p)))
                 }
-                placeholder={`Option ${i + 1} (use $…$ for math)`}
+                placeholder={`Option ${i + 1} ()`}
                 className="h-9"
               />
             </div>
@@ -1142,7 +1141,7 @@ function QuestionForm({
               rows={2}
               value={explanation}
               onChange={(e) => setExplanation(e.target.value)}
-              placeholder="Use $…$ for math"
+              placeholder=""
               className="border-input bg-background focus-visible:ring-ring w-full rounded-md border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2"
             />
           </div>
@@ -1154,7 +1153,7 @@ function QuestionForm({
             rows={3}
             value={modelAnswer}
             onChange={(e) => setModelAnswer(e.target.value)}
-            placeholder="Use $…$ for math"
+            placeholder=""
             className="border-input bg-background focus-visible:ring-ring w-full rounded-md border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2"
           />
         </div>
