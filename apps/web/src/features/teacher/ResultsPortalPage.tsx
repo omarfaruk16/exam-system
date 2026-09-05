@@ -12,6 +12,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { sessionLabel, sessionRange } from '@/lib/utils';
 import { StatusPill } from '../shared/StatusPill';
 import { fetchConductedResults } from './examResultsApi';
 
@@ -136,7 +137,7 @@ export function ResultsPortalPage() {
           </span>
         </div>
         <label className="flex flex-col gap-1">
-          <span className="text-muted-foreground text-xs">Session (batch)</span>
+          <span className="text-muted-foreground text-xs">Session</span>
           <select
             value={batch}
             onChange={(e) => {
@@ -148,7 +149,7 @@ export function ResultsPortalPage() {
             <option value={CURRENT}>Current session</option>
             {batches.map((b) => (
               <option key={b.publicId} value={b.publicId}>
-                {b.name}
+                {sessionRange({ name: b.name })}
                 {b.isCurrent ? ' (current)' : ''}
               </option>
             ))}
@@ -208,7 +209,7 @@ export function ResultsPortalPage() {
                 </h2>
                 {g.batchName && (
                   <span className="text-muted-foreground inline-flex items-center gap-1 text-xs">
-                    <Users className="size-3" /> {g.batchName}
+                    <Users className="size-3" /> {sessionLabel({ name: g.batchName })}
                     {g.isCurrentBatch && (
                       <span className="text-success ml-0.5 font-medium">· current</span>
                     )}

@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { sessionLabel } from '@/lib/utils';
 import { fetchMyParts } from '@/features/authoring/authoringApi';
 
 export function MyCoursesPage() {
@@ -90,10 +91,11 @@ function CoursePartCard({
             <Users className="text-muted-foreground size-3.5 shrink-0" />
             {part.currentBatch ? (
               <span className="text-foreground">
-                Current batch: <span className="font-medium">{part.currentBatch}</span>
+                Current session:{' '}
+                <span className="font-medium">{sessionLabel({ name: part.currentBatch })}</span>
               </span>
             ) : (
-              <span className="text-muted-foreground italic">No batch in this semester yet</span>
+              <span className="text-muted-foreground italic">No session in this semester yet</span>
             )}
           </p>
         </div>

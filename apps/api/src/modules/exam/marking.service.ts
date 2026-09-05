@@ -418,7 +418,13 @@ export class MarkingService {
       faculties: faculties.map((f) => ({ publicId: f.publicId, label: f.name })),
       departments: departments.map((d) => ({ publicId: d.publicId, label: d.name })),
       programs: programs.map((p) => ({ publicId: p.publicId, label: p.name })),
-      batches: batches.map((b) => ({ publicId: b.publicId, label: `${b.name} (${b.year})` })),
+      batches: batches.map((b) => ({
+        publicId: b.publicId,
+        // Show the academic-year range, e.g. "2021-2022" (falls back to deriving it from the year).
+        label: /^\d{4}\s*-\s*\d{4}$/.test(b.name.trim())
+          ? b.name.trim().replace(/\s*-\s*/, '-')
+          : `${b.year}-${b.year + 1}`,
+      })),
       semesters: semesters.map((s) => ({
         publicId: s.publicId,
         label: s.name?.trim() ? s.name : `Semester ${s.number}`,

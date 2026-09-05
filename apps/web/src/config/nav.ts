@@ -14,12 +14,28 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react';
-import type { RoleName } from '@exam/types';
+import type { RoleName, SessionUser } from '@exam/types';
 
 export interface NavItem {
   label: string;
   path: string;
   icon: LucideIcon;
+}
+
+/**
+ * Where "Organization" should take a user, honouring their scope:
+ * - a department head lands straight on their own department page,
+ * - a faculty-scoped admin lands on their own faculty,
+ * - super admins and unscoped admins get the full faculties list.
+ */
+export function orgHomePath(user: Pick<SessionUser, 'roles'>): string {
+  const roles = user.roles;
+  if (roles.some((r) => r.role === 'super_admin')) return '/org';
+  const dh = roles.find((r) => r.role === 'department_head' && r.scopeDepartment);
+  if (dh?.scopeDepartment) return `/org/departments/${dh.scopeDepartment.publicId}`;
+  const fa = roles.find((r) => r.role === 'admin' && r.scopeFaculty);
+  if (fa?.scopeFaculty) return `/org/faculties/${fa.scopeFaculty.publicId}`;
+  return '/org';
 }
 
 const HOME: NavItem = { label: 'Dashboard', path: '/', icon: LayoutDashboard };

@@ -29,6 +29,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { sessionLabel } from '@/lib/utils';
 import { SemesterList } from './DepartmentProfilePage';
 import {
   assignBatchSemester,
@@ -57,7 +58,7 @@ export function BatchesPage() {
   const batches = batchSearch.trim()
     ? allBatches.filter((b) => {
         const s = batchSearch.toLowerCase();
-        return b.name.toLowerCase().includes(s) || String(b.year).includes(s);
+        return sessionLabel(b).toLowerCase().includes(s) || b.name.toLowerCase().includes(s);
       })
     : allBatches;
 
@@ -65,14 +66,14 @@ export function BatchesPage() {
     <div>
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-semibold">Batches</h2>
+          <h2 className="text-sm font-semibold">Sessions</h2>
           <p className="text-muted-foreground text-sm">
-            Assign a batch to the semester it is currently studying. Its students then see that
+            Assign a session to the semester it is currently studying. Its students then see that
             semester's courses and exams.
           </p>
         </div>
         <Button size="sm" onClick={() => setCreating((v) => !v)}>
-          <Plus className="size-4" /> New batch
+          <Plus className="size-4" /> New session
         </Button>
       </div>
 
@@ -92,7 +93,7 @@ export function BatchesPage() {
           <Input
             value={batchSearch}
             onChange={(e) => setBatchSearch(e.target.value)}
-            placeholder="Search batches…"
+            placeholder="Search sessions…"
             className="h-9 w-56 pl-8"
           />
         </div>
@@ -107,13 +108,13 @@ export function BatchesPage() {
       ) : allBatches.length === 0 ? (
         <Card className="flex flex-col items-center gap-2 py-14 text-center">
           <GraduationCap className="text-muted-foreground size-7" />
-          <p className="font-medium">No batches yet</p>
-          <p className="text-muted-foreground text-sm">Create a batch to enrol students.</p>
+          <p className="font-medium">No sessions yet</p>
+          <p className="text-muted-foreground text-sm">Create a session to enrol students.</p>
         </Card>
       ) : batches.length === 0 ? (
         <Card className="flex flex-col items-center gap-2 py-10 text-center">
           <Search className="text-muted-foreground size-6" />
-          <p className="text-muted-foreground text-sm">No batches match your search.</p>
+          <p className="text-muted-foreground text-sm">No sessions match your search.</p>
         </Card>
       ) : (
         <div className="space-y-2">
@@ -146,7 +147,7 @@ function BatchRow({ batch, allBatches }: { batch: Batch; allBatches: Batch[] }) 
     mutationFn: (semesterPublicId: string | null) =>
       assignBatchSemester(batch.publicId, semesterPublicId),
     onSuccess: async () => {
-      toast.success('Batch semester updated');
+      toast.success('Current semester updated');
       await qc.invalidateQueries({ queryKey: ['org-batches-all'] });
       setAssigning(false);
     },
@@ -157,21 +158,21 @@ function BatchRow({ batch, allBatches }: { batch: Batch; allBatches: Batch[] }) 
     mutationFn: () =>
       updateBatch(batch.publicId, { name: editName.trim(), year: Number(editYear) }),
     onSuccess: async () => {
-      toast.success('Batch updated');
+      toast.success('Session updated');
       await qc.invalidateQueries({ queryKey: ['org-batches-all'] });
       setEditing(false);
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not update batch'),
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not update session'),
   });
 
   const remove = useMutation({
     mutationFn: () => deleteBatch(batch.publicId),
     onSuccess: async () => {
-      toast.success('Batch deleted');
+      toast.success('Session deleted');
       await qc.invalidateQueries({ queryKey: ['org-batches-all'] });
       setConfirmDelete(false);
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not delete batch'),
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not delete session'),
   });
 
   return (
@@ -185,15 +186,16 @@ function BatchRow({ batch, allBatches }: { batch: Batch; allBatches: Batch[] }) 
           }}
         >
           <div>
-            <Label className="text-xs">Batch name</Label>
+            <Label className="text-xs">Session name</Label>
             <Input
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
+              placeholder="e.g. 2021-2022"
               className="mt-1 h-9 w-44"
             />
           </div>
           <div>
-            <Label className="text-xs">Year</Label>
+            <Label className="text-xs">Start year</Label>
             <Input
               type="number"
               value={editYear}
@@ -227,10 +229,7 @@ function BatchRow({ batch, allBatches }: { batch: Batch; allBatches: Batch[] }) 
           >
             {open ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
             <div className="min-w-0">
-              <p className="truncate font-medium">
-                {batch.name}{' '}
-                <span className="text-muted-foreground font-normal">· {batch.year}</span>
-              </p>
+              <p className="truncate font-medium">{sessionLabel(batch)}</p>
               <p className="text-muted-foreground text-xs">
                 {batch.program.name} · {batch._count.students} student
                 {batch._count.students === 1 ? '' : 's'}
@@ -314,8 +313,8 @@ function BatchRow({ batch, allBatches }: { batch: Batch; allBatches: Batch[] }) 
       {showSemesters && (
         <div className="bg-muted/20 border-t p-4">
           <p className="text-muted-foreground mb-3 text-xs">
-            Semesters and courses for <span className="font-medium">{batch.name}</span>. Each
-            session has its own set — build them here, then pick the current one with “Set
+            Semesters and courses for <span className="font-medium">{sessionLabel(batch)}</span>.
+            Each session has its own set — build them here, then pick the current one with “Set
             semester”.
           </p>
           <SemesterList
@@ -334,9 +333,9 @@ function BatchRow({ batch, allBatches }: { batch: Batch; allBatches: Batch[] }) 
       <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete batch?</DialogTitle>
+            <DialogTitle>Delete session?</DialogTitle>
             <DialogDescription>
-              "{batch.name} ({batch.year})" and its {batch._count.students} student link
+              "{sessionLabel(batch)}" and its {batch._count.students} student link
               {batch._count.students === 1 ? '' : 's'} will be removed. This is a soft delete.
             </DialogDescription>
           </DialogHeader>
@@ -491,7 +490,7 @@ function StudentList({
                 <th className="pb-2 font-medium">Student ID</th>
                 <th className="pb-2 font-medium">Name</th>
                 <th className="pb-2 font-medium">Reg. no.</th>
-                <th className="pb-2 font-medium">Move to batch</th>
+                <th className="pb-2 font-medium">Move to session</th>
                 <th className="pb-2" />
               </tr>
             </thead>
@@ -513,7 +512,7 @@ function StudentList({
                     >
                       {allBatches.map((b) => (
                         <option key={b.publicId} value={b.publicId}>
-                          {b.name}
+                          {sessionLabel(b)}
                         </option>
                       ))}
                     </select>
@@ -642,20 +641,23 @@ function CreateBatchForm({ onClose, onCreated }: { onClose: () => void; onCreate
     queryFn: () => fetchPrograms(),
   });
   const [program, setProgram] = useState('');
-  const [name, setName] = useState('');
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [error, setError] = useState<string | null>(null);
+  const startYear = Number(year);
+  const range = Number.isFinite(startYear) ? `${startYear}-${startYear + 1}` : '';
 
   const create = useMutation({
     mutationFn: () => {
-      if (!program) throw new Error('Select a program');
-      return createBatch({ programPublicId: program, name: name.trim(), year: Number(year) });
+      if (!program) throw new Error('Select a programme');
+      if (!range) throw new Error('Enter a valid start year');
+      // The session's academic-year range is its name, e.g. "2021-2022".
+      return createBatch({ programPublicId: program, name: range, year: startYear });
     },
     onSuccess: () => {
-      toast.success('Batch created');
+      toast.success('Session created');
       onCreated();
     },
-    onError: (e) => setError(e instanceof Error ? e.message : 'Could not create batch'),
+    onError: (e) => setError(e instanceof Error ? e.message : 'Could not create session'),
   });
 
   return (
@@ -686,31 +688,27 @@ function CreateBatchForm({ onClose, onCreated }: { onClose: () => void; onCreate
             ))}
           </select>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label htmlFor="b-name" className="text-xs">
-              Batch name
-            </Label>
-            <Input
-              id="b-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. 2024 Batch"
-              className="mt-1 h-9"
-            />
-          </div>
-          <div>
-            <Label htmlFor="b-year" className="text-xs">
-              Year
-            </Label>
-            <Input
-              id="b-year"
-              type="number"
-              value={year}
-              onChange={(e) => setYear(e.target.value)}
-              className="mt-1 h-9"
-            />
-          </div>
+        <div>
+          <Label htmlFor="b-year" className="text-xs">
+            Start year
+          </Label>
+          <Input
+            id="b-year"
+            type="number"
+            value={year}
+            onChange={(e) => setYear(e.target.value)}
+            placeholder="e.g. 2021"
+            className="mt-1 h-9 w-40"
+          />
+          <p className="text-muted-foreground mt-1 text-xs">
+            {range ? (
+              <>
+                This session will be <span className="font-medium">Session {range}</span>.
+              </>
+            ) : (
+              'Enter the admission year; the session spans it and the next year.'
+            )}
+          </p>
         </div>
         {error && <p className="text-destructive text-xs">{error}</p>}
         <div className="flex justify-end gap-2">

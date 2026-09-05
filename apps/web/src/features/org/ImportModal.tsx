@@ -186,7 +186,7 @@ export function ImportModal({
             </button>
 
             {needsBatch && (
-              <p className="text-warning text-xs">Select a batch before importing students.</p>
+              <p className="text-warning text-xs">Select a session before importing students.</p>
             )}
             {phase.kind === 'error' && <p className="text-destructive text-sm">{phase.message}</p>}
             <div className="flex justify-end">

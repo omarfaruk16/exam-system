@@ -1,4 +1,4 @@
-import { ChevronDown, Download, FileSpreadsheet, FileText, Upload } from 'lucide-react';
+import { Download, FileSpreadsheet, FileText, Upload } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -40,12 +40,18 @@ export function ImportExportBar({
   const importDisabled = Boolean(disabledReason);
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      {/* Template */}
+    <div className="flex flex-wrap items-center gap-1.5">
+      {/* Template — icon only */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm">
-            <FileText className="size-4" /> Template <ChevronDown className="size-3.5 opacity-60" />
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-9"
+            title={`Download ${label} template`}
+            aria-label={`Download ${label} template`}
+          >
+            <FileText className="size-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
@@ -64,11 +70,17 @@ export function ImportExportBar({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* Export */}
+      {/* Export — icon only */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm">
-            <Download className="size-4" /> Export <ChevronDown className="size-3.5 opacity-60" />
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-9"
+            title={`Export ${label}`}
+            aria-label={`Export ${label}`}
+          >
+            <Download className="size-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
@@ -87,14 +99,16 @@ export function ImportExportBar({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* Import */}
+      {/* Import — icon only */}
       <Button
-        size="sm"
+        size="icon"
+        className="size-9"
         onClick={() => setImporting(true)}
         disabled={importDisabled}
-        title={disabledReason}
+        title={disabledReason ?? `Import ${label}`}
+        aria-label={disabledReason ?? `Import ${label}`}
       >
-        <Upload className="size-4" /> Import
+        <Upload className="size-4" />
       </Button>
 
       {importing && (

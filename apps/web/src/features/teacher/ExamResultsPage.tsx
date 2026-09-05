@@ -16,7 +16,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { cn } from '@/lib/utils';
+import { cn, sessionLabel } from '@/lib/utils';
 import { requestReport, pollReport } from '../reports/reportsApi';
 import { StatusPill } from '../shared/StatusPill';
 import { fetchExamResultsOverview } from './examResultsApi';
@@ -103,7 +103,7 @@ export function ExamResultsPage() {
                 <th className="px-4 py-2.5 font-medium">Roll</th>
                 <th className="px-4 py-2.5 font-medium">Student ID</th>
                 <th className="px-4 py-2.5 font-medium">Name</th>
-                <th className="px-4 py-2.5 font-medium">Batch</th>
+                <th className="px-4 py-2.5 font-medium">Session</th>
                 <th className="px-4 py-2.5 font-medium">Status</th>
                 <th className="px-4 py-2.5 text-center font-medium">Proctor</th>
                 <th className="px-4 py-2.5 text-right font-medium">Marks</th>
@@ -145,7 +145,9 @@ function RosterRow({
       <td className="text-muted-foreground px-4 py-2.5 tabular-nums">{row.rollNumber ?? '—'}</td>
       <td className="px-4 py-2.5 font-medium tabular-nums">{row.studentId}</td>
       <td className="px-4 py-2.5">{row.name}</td>
-      <td className="text-muted-foreground px-4 py-2.5">{row.batchName}</td>
+      <td className="text-muted-foreground px-4 py-2.5">
+        {row.batchName ? sessionLabel({ name: row.batchName }) : '—'}
+      </td>
       <td className="px-4 py-2.5">
         <AttendanceBadge row={row} />
       </td>

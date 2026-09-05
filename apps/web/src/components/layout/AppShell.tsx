@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import type { SessionUser } from '@exam/types';
-import { navForRoles } from '@/config/nav';
+import { navForRoles, orgHomePath } from '@/config/nav';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 
@@ -10,7 +10,14 @@ const INSTITUTION = import.meta.env.VITE_INSTITUTION_NAME ?? 'University of Rajs
 export function AppShell({ user }: { user: SessionUser }) {
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const location = useLocation();
-  const items = React.useMemo(() => navForRoles(user.roles.map((r) => r.role)), [user.roles]);
+  const items = React.useMemo(() => {
+    const orgHome = orgHomePath(user);
+    // Point "Organization" at the scoped home (own department / own faculty) when the
+    // user isn't a super admin, so scoped staff skip the faculties list entirely.
+    return navForRoles(user.roles.map((r) => r.role)).map((it) =>
+      it.path === '/org' && orgHome !== '/org' ? { ...it, path: orgHome } : it,
+    );
+  }, [user]);
 
   const current = items.find((i) =>
     i.path === '/' ? location.pathname === '/' : location.pathname.startsWith(i.path),

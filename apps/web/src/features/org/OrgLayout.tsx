@@ -20,8 +20,8 @@ export function OrgLayout() {
         <h1 className="text-2xl font-semibold tracking-tight">Organization</h1>
         <p className="text-muted-foreground mt-1 text-sm">
           {isAdmin
-            ? 'Manage the academic structure, batches, students and teachers. Import, export and templates are on each page.'
-            : 'View your department’s structure, batches, students and faculty.'}
+            ? 'Manage the academic structure, sessions, students and teachers. Import, export and templates are on each page.'
+            : 'View your department’s structure, sessions, students and faculty.'}
         </p>
       </header>
 

@@ -65,9 +65,15 @@ export function QuestionBankPage() {
   // Only admins / heads get the Faculty→…→Course filter. A plain teacher sees just their
   // own course parts — no faculty/department filtering needed.
   const { data: sessionUser } = useSession();
-  const isStaff = (sessionUser?.roles ?? []).some(
+  const roles = sessionUser?.roles ?? [];
+  const isStaff = roles.some(
     (r) => r.role === 'admin' || r.role === 'super_admin' || r.role === 'department_head',
   );
+  // A department head is already scoped to one department server-side, so the Faculty and
+  // Department selectors are redundant — start their cascade at Programme.
+  const isDeptHead =
+    roles.some((r) => r.role === 'department_head') &&
+    !roles.some((r) => r.role === 'admin' || r.role === 'super_admin');
 
   const all = parts ?? [];
 
@@ -191,27 +197,31 @@ export function QuestionBankPage() {
 
                 {/* Cascading selectors */}
                 <div className="mt-3 space-y-2">
-                  <FilterSelect
-                    label="Faculty"
-                    value={filters.faculty ?? ''}
-                    options={faculties.map((v) => ({ value: v, label: v }))}
-                    onChange={(v) => selectLevel('faculty', v)}
-                    className={selectClass}
-                  />
-                  <FilterSelect
-                    label="Department"
-                    value={filters.department ?? ''}
-                    options={departments.map((v) => ({ value: v, label: v }))}
-                    onChange={(v) => selectLevel('department', v)}
-                    disabled={!filters.faculty}
-                    className={selectClass}
-                  />
+                  {!isDeptHead && (
+                    <FilterSelect
+                      label="Faculty"
+                      value={filters.faculty ?? ''}
+                      options={faculties.map((v) => ({ value: v, label: v }))}
+                      onChange={(v) => selectLevel('faculty', v)}
+                      className={selectClass}
+                    />
+                  )}
+                  {!isDeptHead && (
+                    <FilterSelect
+                      label="Department"
+                      value={filters.department ?? ''}
+                      options={departments.map((v) => ({ value: v, label: v }))}
+                      onChange={(v) => selectLevel('department', v)}
+                      disabled={!filters.faculty}
+                      className={selectClass}
+                    />
+                  )}
                   <FilterSelect
                     label="Programme"
                     value={filters.program ?? ''}
                     options={programs.map((v) => ({ value: v, label: v }))}
                     onChange={(v) => selectLevel('program', v)}
-                    disabled={!filters.department}
+                    disabled={!isDeptHead && !filters.department}
                     className={selectClass}
                   />
                   <FilterSelect

@@ -37,7 +37,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useSession } from '@/lib/session';
-import { cn } from '@/lib/utils';
+import { cn, sessionLabel } from '@/lib/utils';
 import { fetchDeptBankSummary, fetchDeptExams } from '../authoring/authoringApi';
 import {
   assignBatchSemester,
@@ -558,7 +558,7 @@ function ProgramRow({
       </div>
       <div className="flex items-center gap-2">
         <span className="text-muted-foreground hidden text-xs sm:inline">
-          {program._count.batches} batch{program._count.batches === 1 ? '' : 'es'}
+          {program._count.batches} session{program._count.batches === 1 ? '' : 's'}
         </span>
         {canManage && (
           <>
@@ -589,8 +589,8 @@ function ProgramRow({
           <DialogHeader>
             <DialogTitle>Delete “{program.name}”?</DialogTitle>
             <DialogDescription>
-              This degree and its {program._count.batches} batch
-              {program._count.batches === 1 ? '' : 'es'} (with their semesters and courses) will be
+              This degree and its {program._count.batches} session
+              {program._count.batches === 1 ? '' : 's'} (with their semesters and courses) will be
               removed (soft delete).
             </DialogDescription>
           </DialogHeader>
@@ -631,7 +631,7 @@ function CoursesTab({ programs, deptPublicId }: { programs: Program[]; deptPubli
   if (programs.length === 0) {
     return (
       <Card className="p-6">
-        <Empty text="Add a degree first, then a batch, then build its semesters and courses here." />
+        <Empty text="Add a degree first, then a session, then build its semesters and courses here." />
       </Card>
     );
   }
@@ -666,7 +666,7 @@ function CoursesTab({ programs, deptPublicId }: { programs: Program[]; deptPubli
               >
                 {batches.map((b) => (
                   <option key={b.publicId} value={b.publicId}>
-                    {b.name}
+                    {sessionLabel(b)}
                   </option>
                 ))}
               </select>
@@ -700,7 +700,7 @@ function CoursesTab({ programs, deptPublicId }: { programs: Program[]; deptPubli
       {batchesQuery.isLoading ? (
         <Skeleton className="h-20 w-full" />
       ) : batches.length === 0 ? (
-        <Empty text="No batches in this degree yet. Add a batch in the Batches tab first." />
+        <Empty text="No sessions in this degree yet. Add a session in the Sessions tab first." />
       ) : (
         activeBatch && (
           <SemesterList batchPublicId={activeBatch.publicId} deptPublicId={deptPublicId} />
@@ -1474,16 +1474,15 @@ function BatchesTab({ programs, batches }: { programs: Program[]; batches: Batch
   const canManage = useCanManage();
   const [adding, setAdding] = useState(false);
   const [program, setProgram] = useState(programs[0]?.publicId ?? '');
-  const [name, setName] = useState('');
   const [year, setYear] = useState(String(new Date().getFullYear()));
+  const startYear = Number(year);
+  const range = Number.isFinite(startYear) ? `${startYear}-${startYear + 1}` : '';
 
   const create = useMutation({
-    mutationFn: () =>
-      createBatch({ programPublicId: program, name: name.trim(), year: Number(year) }),
+    mutationFn: () => createBatch({ programPublicId: program, name: range, year: startYear }),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['org-batches'] });
       toast.success('Session created');
-      setName('');
       setAdding(false);
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not create session'),
@@ -1503,10 +1502,10 @@ function BatchesTab({ programs, batches }: { programs: Program[]; batches: Batch
       />
       {adding && (
         <form
-          className="bg-muted/40 mb-4 grid gap-2 rounded-md border p-3 sm:grid-cols-[1fr_1fr_auto_auto]"
+          className="bg-muted/40 mb-4 grid gap-2 rounded-md border p-3 sm:grid-cols-[1fr_auto_auto]"
           onSubmit={(e) => {
             e.preventDefault();
-            if (program && name.trim()) create.mutate();
+            if (program && range) create.mutate();
           }}
         >
           <select
@@ -1521,19 +1520,16 @@ function BatchesTab({ programs, batches }: { programs: Program[]; batches: Batch
             ))}
           </select>
           <Input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Session name, e.g. CSE 2021"
-            className="h-9"
-          />
-          <Input
             type="number"
             value={year}
             onChange={(e) => setYear(e.target.value)}
-            className="h-9 w-24"
+            placeholder="Start year, e.g. 2021"
+            className="h-9 w-40"
+            title="Start year — the session spans it and the next year"
           />
-          <Button type="submit" size="sm" className="h-9" disabled={create.isPending}>
-            {create.isPending && <Loader2 className="size-4 animate-spin" />} Add
+          <Button type="submit" size="sm" className="h-9" disabled={create.isPending || !range}>
+            {create.isPending && <Loader2 className="size-4 animate-spin" />} Add{' '}
+            {range ? `Session ${range}` : 'session'}
           </Button>
         </form>
       )}
@@ -1611,7 +1607,7 @@ function BatchRow({ batch, canManage }: { batch: Batch; canManage: boolean }) {
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
               className="h-8 max-w-[16rem]"
-              placeholder="Session name"
+              placeholder="e.g. 2021-2022"
               autoFocus
             />
             <Input
@@ -1646,10 +1642,7 @@ function BatchRow({ batch, canManage }: { batch: Batch; canManage: boolean }) {
         ) : (
           <>
             <div>
-              <p className="font-medium">
-                {batch.name}{' '}
-                <span className="text-muted-foreground font-normal">· {batch.year}</span>
-              </p>
+              <p className="font-medium">{sessionLabel(batch)}</p>
               <p className="text-muted-foreground text-xs">
                 {batch.program.name} · {batch._count.students} student
                 {batch._count.students === 1 ? '' : 's'}
@@ -1712,7 +1705,7 @@ function BatchRow({ batch, canManage }: { batch: Batch; canManage: boolean }) {
       <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete session “{batch.name}”?</DialogTitle>
+            <DialogTitle>Delete “{sessionLabel(batch)}”?</DialogTitle>
             <DialogDescription>
               {batch._count.students > 0
                 ? `This session has ${batch._count.students} student${batch._count.students === 1 ? '' : 's'}. Deleting it (soft delete) will detach them. This cannot be easily undone.`
@@ -1753,7 +1746,7 @@ function BatchRow({ batch, canManage }: { batch: Batch; canManage: boolean }) {
       {expanded && (
         <BatchStudentsSection
           batchPublicId={batch.publicId}
-          batchName={batch.name}
+          batchName={sessionLabel(batch)}
           canManage={canManage}
         />
       )}
@@ -2165,24 +2158,22 @@ function EnrollmentsTab({ batches }: { batches: Batch[] }) {
     <Card className="p-6">
       <SectionHeading title="Enrollments & Retakes" />
       {batches.length === 0 ? (
-        <Empty text="No batches to show enrollments for yet." />
+        <Empty text="No sessions to show enrollments for yet." />
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-muted-foreground border-b text-left text-xs">
-                <th className="py-2 font-medium">Batch</th>
+                <th className="py-2 font-medium">Session</th>
                 <th className="py-2 font-medium">Program</th>
-                <th className="py-2 font-medium">Current session</th>
+                <th className="py-2 font-medium">Current semester</th>
                 <th className="py-2 text-right font-medium">Enrolled</th>
               </tr>
             </thead>
             <tbody>
               {batches.map((b) => (
                 <tr key={b.publicId} className="border-b last:border-0">
-                  <td className="py-2 font-medium">
-                    {b.name} <span className="text-muted-foreground">· {b.year}</span>
-                  </td>
+                  <td className="py-2 font-medium">{sessionLabel(b)}</td>
                   <td className="text-muted-foreground py-2">{b.program.name}</td>
                   <td className="py-2">
                     {b.currentSemester
@@ -2326,7 +2317,7 @@ function StudentsTab({ batches }: { batches: Batch[] }) {
             >
               {batches.map((b) => (
                 <option key={b.publicId} value={b.publicId}>
-                  {b.name} · {b.year}
+                  {sessionLabel(b)}
                 </option>
               ))}
             </select>

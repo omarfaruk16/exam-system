@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { useSession } from '@/lib/session';
-import { cn } from '@/lib/utils';
+import { cn, sessionLabel } from '@/lib/utils';
 import {
   fetchBatches,
   fetchCourseParts,
@@ -550,10 +550,10 @@ function CascadingPartPicker({
             reset('batch');
           }}
         >
-          <option value="">Batch…</option>
+          <option value="">Session…</option>
           {(batchesQ.data ?? []).map((b) => (
             <option key={b.publicId} value={b.publicId}>
-              {b.name}
+              {sessionLabel(b)}
             </option>
           ))}
         </select>

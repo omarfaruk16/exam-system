@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import { sessionLabel } from '@/lib/utils';
 import { ChangesRequestedBanner } from '../shared/ChangesRequestedBanner';
 import { StartCountdown, LiveCountdown } from '../shared/ExamCountdown';
 import { StatusPill } from '../shared/StatusPill';
@@ -237,7 +238,13 @@ export function ExamListPage() {
                   <Users className="text-primary size-4 shrink-0" />
                   <h2 className="text-base font-semibold tracking-tight">
                     {batch.departmentName}
-                    <span className="text-muted-foreground font-normal"> — {batch.batchLabel}</span>
+                    <span className="text-muted-foreground font-normal">
+                      {' '}
+                      —{' '}
+                      {batch.batchLabel === NO_BATCH
+                        ? NO_BATCH
+                        : sessionLabel({ name: batch.batchLabel })}
+                    </span>
                   </h2>
                   <span className="text-muted-foreground text-xs">
                     {count} exam{count === 1 ? '' : 's'}

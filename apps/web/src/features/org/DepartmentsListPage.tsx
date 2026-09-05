@@ -2,13 +2,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Faculty } from '@exam/types';
 import { ChevronRight, GraduationCap, Loader2, Plus } from 'lucide-react';
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { orgHomePath } from '@/config/nav';
 import { useSession } from '@/lib/session';
 import { createFaculty, fetchFaculties } from './orgApi';
 import { ImportExportBar } from './ImportExportBar';
@@ -17,12 +18,15 @@ export function DepartmentsListPage() {
   const navigate = useNavigate();
   const { data: user } = useSession();
   const canManage = (user?.roles ?? []).some((r) => r.role === 'admin' || r.role === 'super_admin');
-
   const [addingFaculty, setAddingFaculty] = useState(false);
-
   const qc = useQueryClient();
   const facQuery = useQuery({ queryKey: ['org-faculties'], queryFn: fetchFaculties });
   const faculties = facQuery.data ?? [];
+
+  // Scoped staff (department heads, faculty-scoped admins) never see the faculties list —
+  // send them straight to their own department / faculty page. (After hooks, per React rules.)
+  const scopedHome = user ? orgHomePath(user) : '/org';
+  if (user && scopedHome !== '/org') return <Navigate to={scopedHome} replace />;
 
   return (
     <div>

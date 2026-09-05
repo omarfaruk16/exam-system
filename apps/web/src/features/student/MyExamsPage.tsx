@@ -13,6 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { sessionLabel } from '@/lib/utils';
 import { StatusPill } from '../shared/StatusPill';
 import { StartCountdown } from '../shared/ExamCountdown';
 import { useServerNow } from '../shared/useServerNow';
@@ -89,7 +90,9 @@ export function MyExamsPage() {
           <p className="text-muted-foreground mt-1 text-sm">
             {coursesData.semester.programName} · {coursesData.semester.name}
             {coursesData.batchName && (
-              <span className="ml-2 opacity-70">({coursesData.batchName})</span>
+              <span className="ml-2 opacity-70">
+                ({sessionLabel({ name: coursesData.batchName })})
+              </span>
             )}
           </p>
         )}

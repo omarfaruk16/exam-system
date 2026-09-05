@@ -16,6 +16,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { sessionLabel } from '@/lib/utils';
 import {
   changeStudentBatch,
   createStudent,
@@ -61,7 +62,7 @@ export function StudentsPage() {
         <div>
           <h2 className="text-sm font-semibold">Students</h2>
           <p className="text-muted-foreground text-sm">
-            Manage student accounts across all batches. Temp password on creation:
+            Manage student accounts across all sessions. Temp password on creation:
             studentId@Exam123.
           </p>
         </div>
@@ -71,7 +72,7 @@ export function StudentsPage() {
             label="students"
             batchPublicId={batchFilter || undefined}
             exportFilter={batchFilter || undefined}
-            disabledReason={batchFilter ? undefined : 'Pick a batch (filter) to import into'}
+            disabledReason={batchFilter ? undefined : 'Pick a session (filter) to import into'}
             onImported={invalidate}
           />
           <Button size="sm" onClick={() => setAdding((v) => !v)}>
@@ -108,10 +109,10 @@ export function StudentsPage() {
           onChange={(e) => setBatchFilter(e.target.value)}
           className="border-input bg-card focus-visible:ring-ring h-9 rounded-md border px-2 text-sm focus-visible:outline-none focus-visible:ring-2"
         >
-          <option value="">All batches</option>
+          <option value="">All sessions</option>
           {(batchQuery.data ?? []).map((b) => (
             <option key={b.publicId} value={b.publicId}>
-              {b.name} ({b.year})
+              {sessionLabel(b)}
             </option>
           ))}
         </select>
@@ -144,7 +145,7 @@ export function StudentsPage() {
                   <th className="px-4 py-3 font-medium">Name</th>
                   <th className="px-4 py-3 font-medium">Email</th>
                   <th className="px-4 py-3 font-medium">Reg. no.</th>
-                  <th className="px-4 py-3 font-medium">Batch</th>
+                  <th className="px-4 py-3 font-medium">Session</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
@@ -209,10 +210,10 @@ function StudentRowItem({
   const move = useMutation({
     mutationFn: (batchPublicId: string) => changeStudentBatch(student.publicId, batchPublicId),
     onSuccess: () => {
-      toast.success('Batch updated');
+      toast.success('Session updated');
       onMutated();
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not change batch'),
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not change session'),
   });
 
   const remove = useMutation({
@@ -298,12 +299,12 @@ function StudentRowItem({
             >
               {allBatches.map((b) => (
                 <option key={b.publicId} value={b.publicId}>
-                  {b.name} ({b.year})
+                  {sessionLabel(b)}
                 </option>
               ))}
             </select>
           ) : (
-            student.batch.name
+            sessionLabel(student.batch)
           )}
         </td>
         <td className="px-4 py-3">
@@ -403,7 +404,7 @@ function AddStudentForm({
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label htmlFor="s-batch" className="text-xs">
-              Batch
+              Session
             </Label>
             <select
               id="s-batch"
@@ -414,7 +415,7 @@ function AddStudentForm({
               <option value="">Select…</option>
               {batches.map((b) => (
                 <option key={b.publicId} value={b.publicId}>
-                  {b.name} ({b.year})
+                  {sessionLabel(b)}
                 </option>
               ))}
             </select>

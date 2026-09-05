@@ -282,6 +282,7 @@ function UserRow({ user, onMutated }: { user: AdminUserRow; onMutated: () => voi
         <td className="px-4 py-3">
           <div className="flex items-center justify-end gap-1">
             <Button
+              type="button"
               variant="ghost"
               size="sm"
               className="h-7 px-2"
@@ -291,6 +292,7 @@ function UserRow({ user, onMutated }: { user: AdminUserRow; onMutated: () => voi
               <Pencil className="size-3.5" />
             </Button>
             <Button
+              type="button"
               variant="ghost"
               size="sm"
               className="h-7 px-2"
@@ -300,6 +302,7 @@ function UserRow({ user, onMutated }: { user: AdminUserRow; onMutated: () => voi
               <KeyRound className="size-3.5" />
             </Button>
             <Button
+              type="button"
               variant="ghost"
               size="sm"
               className="text-destructive hover:bg-destructive/10 hover:text-destructive h-7 px-2"
