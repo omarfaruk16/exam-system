@@ -6,7 +6,6 @@ export interface ParsedStudentRow {
   name: string;
   email: string | null;
   registrationNumber: string | null;
-  rollNumber: string | null;
   /** Optional password from the sheet; when absent the worker generates a temporary one. */
   password: string | null;
 }
@@ -50,7 +49,6 @@ export function validateStudentRow(
     'reg. no',
     'regno',
   );
-  const rollNumber = cell(raw, 'rollnumber', 'roll number', 'roll no', 'roll');
   const password = cell(raw, 'password', 'temppassword', 'temp password');
 
   if (!studentId) {
@@ -91,7 +89,6 @@ export function validateStudentRow(
       name,
       email: email || null,
       registrationNumber: registrationNumber || null,
-      rollNumber: rollNumber || null,
       password: password || null,
     },
   };

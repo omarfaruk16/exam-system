@@ -78,7 +78,6 @@ export interface StudentRow {
   publicId: string;
   studentId: string;
   registrationNumber: string | null;
-  rollNumber: string | null;
   user: { displayName: string; email: string | null };
   batch: { publicId: string; name: string };
 }

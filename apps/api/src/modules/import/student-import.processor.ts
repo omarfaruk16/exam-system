@@ -119,7 +119,6 @@ export class StudentImportProcessor extends WorkerHost {
               studentId: row.studentId,
               batchId,
               registrationNumber: row.registrationNumber ?? undefined,
-              rollNumber: row.rollNumber ?? undefined,
             },
           });
           await tx.userRole.create({ data: { userId: user.id, roleId: studentRole.id } });

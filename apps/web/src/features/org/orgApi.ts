@@ -151,11 +151,10 @@ export const createStudent = (b: {
   email?: string;
   batchPublicId: string;
   registrationNumber?: string;
-  rollNumber?: string;
 }) => api.post<StudentRow>('/org/students', b);
 export const updateStudent = (
   id: string,
-  b: { displayName?: string; email?: string; registrationNumber?: string; rollNumber?: string },
+  b: { displayName?: string; email?: string; registrationNumber?: string },
 ) => api.patch<StudentRow>(`/org/students/${id}`, b);
 export const deleteStudent = (id: string) => api.del(`/org/students/${id}`);
 export const changeStudentBatch = (studentId: string, batchPublicId: string) =>

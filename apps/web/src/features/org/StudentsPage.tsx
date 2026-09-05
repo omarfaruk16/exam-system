@@ -45,7 +45,6 @@ export function StudentsPage() {
           s.studentId.toLowerCase().includes(q) ||
           s.user.displayName.toLowerCase().includes(q) ||
           (s.registrationNumber?.toLowerCase().includes(q) ?? false) ||
-          (s.rollNumber?.toLowerCase().includes(q) ?? false) ||
           s.batch.name.toLowerCase().includes(q)
         );
       })
@@ -145,7 +144,6 @@ export function StudentsPage() {
                   <th className="px-4 py-3 font-medium">Name</th>
                   <th className="px-4 py-3 font-medium">Email</th>
                   <th className="px-4 py-3 font-medium">Reg. no.</th>
-                  <th className="px-4 py-3 font-medium">Roll</th>
                   <th className="px-4 py-3 font-medium">Batch</th>
                   <th className="px-4 py-3" />
                 </tr>
@@ -185,13 +183,11 @@ function StudentRowItem({
   const [eName, setEName] = useState(student.user.displayName);
   const [eEmail, setEEmail] = useState(student.user.email ?? '');
   const [eReg, setEReg] = useState(student.registrationNumber ?? '');
-  const [eRoll, setERoll] = useState(student.rollNumber ?? '');
 
   function startEdit() {
     setEName(student.user.displayName);
     setEEmail(student.user.email ?? '');
     setEReg(student.registrationNumber ?? '');
-    setERoll(student.rollNumber ?? '');
     setEditing(true);
   }
 
@@ -201,7 +197,6 @@ function StudentRowItem({
         displayName: eName.trim() || undefined,
         email: eEmail.trim() || undefined,
         registrationNumber: eReg.trim() || undefined,
-        rollNumber: eRoll.trim() || undefined,
       }),
     onSuccess: () => {
       toast.success('Student updated');
@@ -233,7 +228,7 @@ function StudentRowItem({
   if (editing) {
     return (
       <tr className="bg-muted/30 border-b last:border-0">
-        <td className="px-4 py-2" colSpan={7}>
+        <td className="px-4 py-2" colSpan={6}>
           <form
             className="flex flex-wrap items-end gap-3"
             onSubmit={(e) => {
@@ -268,15 +263,6 @@ function StudentRowItem({
                 placeholder="—"
               />
             </div>
-            <div>
-              <Label className="mb-1 block text-xs">Roll</Label>
-              <Input
-                value={eRoll}
-                onChange={(e) => setERoll(e.target.value)}
-                className="h-8 w-24 text-sm"
-                placeholder="—"
-              />
-            </div>
             <div className="flex gap-2">
               <Button type="submit" size="sm" disabled={update.isPending}>
                 {update.isPending && <Loader2 className="size-3.5 animate-spin" />} Save
@@ -298,7 +284,6 @@ function StudentRowItem({
         <td className="px-4 py-3">{student.user.displayName}</td>
         <td className="text-muted-foreground px-4 py-3">{student.user.email ?? '—'}</td>
         <td className="text-muted-foreground px-4 py-3">{student.registrationNumber ?? '—'}</td>
-        <td className="text-muted-foreground px-4 py-3">{student.rollNumber ?? '—'}</td>
         <td className="px-4 py-3">
           {allBatches.length > 1 ? (
             <select
@@ -382,7 +367,6 @@ function AddStudentForm({
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [regNo, setRegNo] = useState('');
-  const [roll, setRoll] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const create = useMutation({
@@ -396,7 +380,6 @@ function AddStudentForm({
         email: email.trim() || undefined,
         batchPublicId,
         registrationNumber: regNo.trim() || undefined,
-        rollNumber: roll.trim() || undefined,
       });
     },
     onSuccess: () => {
@@ -481,18 +464,6 @@ function AddStudentForm({
               value={regNo}
               onChange={(e) => setRegNo(e.target.value)}
               placeholder="e.g. RU-2024-CSE-001"
-              className="mt-1 h-9"
-            />
-          </div>
-          <div>
-            <Label htmlFor="s-roll" className="text-xs">
-              Roll (optional)
-            </Label>
-            <Input
-              id="s-roll"
-              value={roll}
-              onChange={(e) => setRoll(e.target.value)}
-              placeholder="e.g. 01"
               className="mt-1 h-9"
             />
           </div>

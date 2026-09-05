@@ -115,7 +115,6 @@ export const studentSelect = {
   publicId: true,
   studentId: true,
   registrationNumber: true,
-  rollNumber: true,
   user: { select: { displayName: true, email: true } },
   batch: { select: { publicId: true, name: true } },
 } satisfies Prisma.StudentSelect;

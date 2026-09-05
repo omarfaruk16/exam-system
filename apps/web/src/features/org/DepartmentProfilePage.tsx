@@ -1784,7 +1784,6 @@ function BatchStudentsSection({
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newReg, setNewReg] = useState('');
-  const [newRoll, setNewRoll] = useState('');
 
   const studentsQuery = useQuery({
     queryKey: ['org-students', batchPublicId],
@@ -1799,7 +1798,6 @@ function BatchStudentsSection({
         email: newEmail.trim() || undefined,
         batchPublicId,
         registrationNumber: newReg.trim() || undefined,
-        rollNumber: newRoll.trim() || undefined,
       }),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['org-students', batchPublicId] });
@@ -1809,7 +1807,6 @@ function BatchStudentsSection({
       setNewName('');
       setNewEmail('');
       setNewReg('');
-      setNewRoll('');
       setAdding(false);
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not add student'),
@@ -1967,12 +1964,6 @@ function BatchStudentsSection({
             placeholder="Reg. no. (optional)"
             className="h-8 text-xs"
           />
-          <Input
-            value={newRoll}
-            onChange={(e) => setNewRoll(e.target.value)}
-            placeholder="Roll (optional)"
-            className="h-8 text-xs"
-          />
           <div className="flex items-center justify-end gap-2">
             <Button
               type="button"
@@ -2022,7 +2013,6 @@ function BatchStudentsSection({
                 <th className="pb-2 pr-3 font-medium">Name</th>
                 <th className="pb-2 pr-3 font-medium">Email</th>
                 <th className="pb-2 pr-3 font-medium">Reg. no.</th>
-                <th className="pb-2 pr-3 font-medium">Roll</th>
                 {canManage && <th className="pb-2" />}
               </tr>
             </thead>
@@ -2059,7 +2049,6 @@ function BatchStudentsSection({
                     <td className="text-muted-foreground py-1.5 pr-3">
                       {s.registrationNumber ?? '—'}
                     </td>
-                    <td className="text-muted-foreground py-1.5 pr-3">{s.rollNumber ?? '—'}</td>
                     {canManage && (
                       <td className="py-1.5">
                         <div className="flex gap-1">
@@ -2104,7 +2093,6 @@ function StudentEditRow({
     studentId: string;
     user: { displayName: string; email: string | null };
     registrationNumber: string | null;
-    rollNumber: string | null;
   };
   batchPublicId: string;
   onDone: () => void;
@@ -2114,7 +2102,6 @@ function StudentEditRow({
   const [name, setName] = useState(student.user.displayName);
   const [email, setEmail] = useState(student.user.email ?? '');
   const [reg, setReg] = useState(student.registrationNumber ?? '');
-  const [roll, setRoll] = useState(student.rollNumber ?? '');
 
   const save = useMutation({
     mutationFn: () =>
@@ -2122,7 +2109,6 @@ function StudentEditRow({
         displayName: name.trim() || undefined,
         email: email.trim() || undefined,
         registrationNumber: reg.trim() || undefined,
-        rollNumber: roll.trim() || undefined,
       }),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['org-students', batchPublicId] });
@@ -2149,9 +2135,6 @@ function StudentEditRow({
       </td>
       <td className="py-1.5 pr-3">
         <Input value={reg} onChange={(e) => setReg(e.target.value)} className="h-7 text-xs" />
-      </td>
-      <td className="py-1.5 pr-3">
-        <Input value={roll} onChange={(e) => setRoll(e.target.value)} className="h-7 text-xs" />
       </td>
       <td className="py-1.5">
         <div className="flex gap-1">
@@ -2235,7 +2218,6 @@ function StudentsTab({ batches }: { batches: Batch[] }) {
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newReg, setNewReg] = useState('');
-  const [newRoll, setNewRoll] = useState('');
 
   const studentsQuery = useQuery({
     queryKey: ['org-students', active?.publicId],
@@ -2251,7 +2233,6 @@ function StudentsTab({ batches }: { batches: Batch[] }) {
         email: newEmail.trim() || undefined,
         batchPublicId: active!.publicId,
         registrationNumber: newReg.trim() || undefined,
-        rollNumber: newRoll.trim() || undefined,
       }),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['org-students', active?.publicId] });
@@ -2261,7 +2242,6 @@ function StudentsTab({ batches }: { batches: Batch[] }) {
       setNewName('');
       setNewEmail('');
       setNewReg('');
-      setNewRoll('');
       setAdding(false);
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not add student'),
@@ -2469,12 +2449,6 @@ function StudentsTab({ batches }: { batches: Batch[] }) {
             placeholder="Registration no. (optional)"
             className="h-9"
           />
-          <Input
-            value={newRoll}
-            onChange={(e) => setNewRoll(e.target.value)}
-            placeholder="Roll no. (optional)"
-            className="h-9"
-          />
           <div className="flex items-center justify-end gap-2">
             <Button type="button" variant="outline" size="sm" onClick={() => setAdding(false)}>
               Cancel
@@ -2514,7 +2488,6 @@ function StudentsTab({ batches }: { batches: Batch[] }) {
                 <th className="py-2 pr-3 font-medium">Name</th>
                 <th className="py-2 pr-3 font-medium">Email</th>
                 <th className="py-2 pr-3 font-medium">Reg. no.</th>
-                <th className="py-2 pr-3 font-medium">Roll</th>
                 {canManage && <th className="py-2" />}
               </tr>
             </thead>
@@ -2547,7 +2520,6 @@ function StudentsTab({ batches }: { batches: Batch[] }) {
                     <td className="text-muted-foreground py-2 pr-3">
                       {s.registrationNumber ?? '—'}
                     </td>
-                    <td className="text-muted-foreground py-2 pr-3">{s.rollNumber ?? '—'}</td>
                     {canManage && (
                       <td className="py-2">
                         <div className="flex gap-1">

@@ -117,12 +117,10 @@ export class CreateStudentManualDto {
   @IsOptional() @IsEmail() email?: string;
   @IsString() batchPublicId!: string;
   @IsOptional() @IsString() @Length(2, 50) registrationNumber?: string;
-  @IsOptional() @IsString() @Length(1, 20) rollNumber?: string;
 }
 
 export class UpdateStudentDto {
   @IsOptional() @IsString() @Length(2, 150) displayName?: string;
   @IsOptional() @IsEmail() email?: string;
   @IsOptional() @IsString() @Length(2, 50) registrationNumber?: string;
-  @IsOptional() @IsString() @Length(1, 20) rollNumber?: string;
 }

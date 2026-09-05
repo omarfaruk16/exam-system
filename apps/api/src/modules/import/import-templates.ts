@@ -11,15 +11,8 @@ interface TemplateSpec {
 
 const TEMPLATES: Record<TemplateType, TemplateSpec> = {
   students: {
-    headers: ['studentId', 'name', 'email', 'registrationNumber', 'rollNumber', 'phone'],
-    example: [
-      '2021099',
-      'Ayesha Rahman',
-      'ayesha99@student.example.edu',
-      'RU-2021-CSE-099',
-      '01',
-      '01700000000',
-    ],
+    headers: ['studentId', 'name', 'email', 'registrationNumber'],
+    example: ['2021099', 'Ayesha Rahman', 'ayesha99@student.example.edu', 'RU-2021-CSE-099'],
   },
   teachers: {
     // Teachers sign in with their email — no username column.

@@ -373,8 +373,7 @@ function StudentList({
         return (
           s.studentId.toLowerCase().includes(q) ||
           s.user.displayName.toLowerCase().includes(q) ||
-          (s.registrationNumber?.toLowerCase().includes(q) ?? false) ||
-          (s.rollNumber?.toLowerCase().includes(q) ?? false)
+          (s.registrationNumber?.toLowerCase().includes(q) ?? false)
         );
       })
     : allStudents;
@@ -451,7 +450,6 @@ function StudentList({
                 <th className="pb-2 font-medium">Student ID</th>
                 <th className="pb-2 font-medium">Name</th>
                 <th className="pb-2 font-medium">Reg. no.</th>
-                <th className="pb-2 font-medium">Roll</th>
                 <th className="pb-2 font-medium">Move to batch</th>
                 <th className="pb-2" />
               </tr>
@@ -462,7 +460,6 @@ function StudentList({
                   <td className="py-2 font-medium tabular-nums">{s.studentId}</td>
                   <td className="py-2">{s.user.displayName}</td>
                   <td className="text-muted-foreground py-2">{s.registrationNumber ?? '—'}</td>
-                  <td className="text-muted-foreground py-2">{s.rollNumber ?? '—'}</td>
                   <td className="py-2">
                     <select
                       className="border-input bg-card h-8 rounded-md border px-2 text-xs"
@@ -514,7 +511,6 @@ function AddStudentForm({
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [regNo, setRegNo] = useState('');
-  const [roll, setRoll] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const create = useMutation({
@@ -527,7 +523,6 @@ function AddStudentForm({
         email: email.trim() || undefined,
         batchPublicId,
         registrationNumber: regNo.trim() || undefined,
-        rollNumber: roll.trim() || undefined,
       });
     },
     onSuccess: () => {
@@ -582,15 +577,6 @@ function AddStudentForm({
               value={regNo}
               onChange={(e) => setRegNo(e.target.value)}
               placeholder="e.g. RU-2024-CSE-001"
-              className="mt-1 h-8"
-            />
-          </div>
-          <div>
-            <Label className="text-xs">Roll</Label>
-            <Input
-              value={roll}
-              onChange={(e) => setRoll(e.target.value)}
-              placeholder="e.g. 01"
               className="mt-1 h-8"
             />
           </div>

@@ -1165,7 +1165,6 @@ export class StructureService {
           batchId: batch.id,
           studentId: dto.studentId,
           registrationNumber: dto.registrationNumber ?? null,
-          rollNumber: dto.rollNumber ?? null,
         },
         select: studentSelect,
       });
@@ -1202,7 +1201,6 @@ export class StructureService {
           ...(dto.registrationNumber !== undefined
             ? { registrationNumber: dto.registrationNumber || null }
             : {}),
-          ...(dto.rollNumber !== undefined ? { rollNumber: dto.rollNumber || null } : {}),
         },
         select: studentSelect,
       });
@@ -1255,7 +1253,7 @@ export class StructureService {
       },
       orderBy: { studentId: 'asc' },
     });
-    // Headers match the students import template (name/email/registrationNumber/rollNumber);
+    // Headers match the students import template (studentId/name/email/registrationNumber);
     // `batch` is included for reference — on import the target batch is chosen in the dialog.
     return this.tableFile(
       'Students',
@@ -1265,7 +1263,6 @@ export class StructureService {
         { header: 'email', key: 'email', width: 30 },
         { header: 'batch', key: 'batch', width: 20 },
         { header: 'registrationNumber', key: 'registrationNumber', width: 25 },
-        { header: 'rollNumber', key: 'rollNumber', width: 15 },
       ],
       rows.map((s) => ({
         studentId: s.studentId,
@@ -1273,7 +1270,6 @@ export class StructureService {
         email: s.user.email ?? '',
         batch: s.batch.name,
         registrationNumber: s.registrationNumber ?? '',
-        rollNumber: s.rollNumber ?? '',
       })),
       'students',
       format,
