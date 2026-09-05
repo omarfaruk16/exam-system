@@ -19,7 +19,18 @@ export function sessionRange(session: { name?: string | null; year?: number | nu
   return name || '—';
 }
 
-/** Full session label, e.g. "Session 2021-2022". */
+/**
+ * Full session label. Year-range names get the "Session " prefix ("Session 2021-2022");
+ * custom free-text names are shown as-is so that "1st Year Batch" doesn't become
+ * "Session 1st Year Batch".
+ */
 export function sessionLabel(session: { name?: string | null; year?: number | null }): string {
-  return `Session ${sessionRange(session)}`;
+  const name = (session.name ?? '').trim();
+  // Named as a year range → prepend "Session"
+  if (/^\d{4}\s*-\s*\d{4}$/.test(name)) return `Session ${name.replace(/\s*-\s*/, '-')}`;
+  // Custom free-text name → show as-is
+  if (name) return name;
+  // Fallback to year-derived range
+  if (typeof session.year === 'number') return `Session ${session.year}-${session.year + 1}`;
+  return '—';
 }

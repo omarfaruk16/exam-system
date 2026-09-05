@@ -237,15 +237,6 @@ function BatchRow({ batch, allBatches }: { batch: Batch; allBatches: Batch[] }) 
             </div>
           </button>
           <div className="flex items-center gap-2">
-            <span className="text-xs">
-              {batch.currentSemester ? (
-                <span className="bg-primary/10 text-primary rounded-full px-2 py-0.5 font-medium">
-                  Semester {batch.currentSemester.number}
-                </span>
-              ) : (
-                <span className="text-muted-foreground">Not assigned</span>
-              )}
-            </span>
             <Button
               variant="outline"
               size="sm"
@@ -254,9 +245,21 @@ function BatchRow({ batch, allBatches }: { batch: Batch; allBatches: Batch[] }) 
             >
               <BookOpen className="size-3.5" /> Semesters & courses
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setAssigning((v) => !v)}>
-              {batch.currentSemester ? 'Change current semester' : 'Set semester'}
-            </Button>
+            <select
+              className="border-input bg-card focus-visible:ring-ring h-9 min-w-[10rem] rounded-md border px-2 text-sm disabled:opacity-60"
+              value={batch.currentSemester?.publicId ?? ''}
+              disabled={assign.isPending}
+              onFocus={() => !assigning && setAssigning(true)}
+              onChange={(e) => assign.mutate(e.target.value || null)}
+              title="Set current semester"
+            >
+              <option value="">{semestersQuery.isLoading ? 'Loading…' : '— No semester —'}</option>
+              {(semestersQuery.data ?? []).map((s) => (
+                <option key={s.publicId} value={s.publicId}>
+                  {s.name?.trim() ? s.name : `Semester ${s.number}`}
+                </option>
+              ))}
+            </select>
             <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => setEditing(true)}>
               <Pencil className="size-3.5" />
             </Button>
@@ -269,44 +272,6 @@ function BatchRow({ batch, allBatches }: { batch: Batch; allBatches: Batch[] }) 
               <Trash2 className="size-3.5" />
             </Button>
           </div>
-        </div>
-      )}
-
-      {assigning && (
-        <div className="bg-muted/40 border-t p-3">
-          <Label className="text-xs">Current semester</Label>
-          <div className="mt-1 flex gap-2">
-            <select
-              className="border-input bg-card focus-visible:ring-ring h-9 flex-1 rounded-md border px-2 text-sm focus-visible:outline-none focus-visible:ring-2"
-              defaultValue={batch.currentSemester?.publicId ?? ''}
-              disabled={assign.isPending || semestersQuery.isLoading}
-              onChange={(e) => assign.mutate(e.target.value || null)}
-            >
-              <option value="">— Not assigned —</option>
-              {(semestersQuery.data ?? []).map((s) => (
-                <option key={s.publicId} value={s.publicId}>
-                  {s.name?.trim() ? s.name : `Semester ${s.number}`}
-                </option>
-              ))}
-            </select>
-            {assign.isPending && <Loader2 className="size-5 animate-spin self-center" />}
-          </div>
-          {!semestersQuery.isLoading && (semestersQuery.data ?? []).length === 0 && (
-            <p className="text-muted-foreground mt-2 text-xs">
-              This session has no semesters yet. Add them under{' '}
-              <button
-                type="button"
-                className="text-primary font-medium underline-offset-2 hover:underline"
-                onClick={() => {
-                  setAssigning(false);
-                  setShowSemesters(true);
-                }}
-              >
-                Semesters &amp; courses
-              </button>{' '}
-              first, then pick the current one here.
-            </p>
-          )}
         </div>
       )}
 
@@ -641,17 +606,17 @@ function CreateBatchForm({ onClose, onCreated }: { onClose: () => void; onCreate
     queryFn: () => fetchPrograms(),
   });
   const [program, setProgram] = useState('');
-  const [year, setYear] = useState(String(new Date().getFullYear()));
+  const [batchName, setBatchName] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const startYear = Number(year);
-  const range = Number.isFinite(startYear) ? `${startYear}-${startYear + 1}` : '';
 
   const create = useMutation({
     mutationFn: () => {
       if (!program) throw new Error('Select a programme');
-      if (!range) throw new Error('Enter a valid start year');
-      // The session's academic-year range is its name, e.g. "2021-2022".
-      return createBatch({ programPublicId: program, name: range, year: startYear });
+      const trimmed = batchName.trim();
+      if (!trimmed) throw new Error('Enter a session name');
+      const yearMatch = /\b(20\d{2})\b/.exec(trimmed);
+      const yr = yearMatch ? Number(yearMatch[1]) : new Date().getFullYear();
+      return createBatch({ programPublicId: program, name: trimmed, year: yr });
     },
     onSuccess: () => {
       toast.success('Session created');
@@ -689,25 +654,18 @@ function CreateBatchForm({ onClose, onCreated }: { onClose: () => void; onCreate
           </select>
         </div>
         <div>
-          <Label htmlFor="b-year" className="text-xs">
-            Start year
+          <Label htmlFor="b-name" className="text-xs">
+            Session name
           </Label>
           <Input
-            id="b-year"
-            type="number"
-            value={year}
-            onChange={(e) => setYear(e.target.value)}
-            placeholder="e.g. 2021"
-            className="mt-1 h-9 w-40"
+            id="b-name"
+            value={batchName}
+            onChange={(e) => setBatchName(e.target.value)}
+            placeholder="e.g. 2022-2023"
+            className="mt-1 h-9 w-full"
           />
           <p className="text-muted-foreground mt-1 text-xs">
-            {range ? (
-              <>
-                This session will be <span className="font-medium">Session {range}</span>.
-              </>
-            ) : (
-              'Enter the admission year; the session spans it and the next year.'
-            )}
+            Use a year range (2022-2023) or any descriptive name.
           </p>
         </div>
         {error && <p className="text-destructive text-xs">{error}</p>}
@@ -715,7 +673,7 @@ function CreateBatchForm({ onClose, onCreated }: { onClose: () => void; onCreate
           <Button type="button" variant="outline" size="sm" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" size="sm" disabled={create.isPending}>
+          <Button type="submit" size="sm" disabled={create.isPending || !batchName.trim()}>
             {create.isPending && <Loader2 className="size-4 animate-spin" />} Create
           </Button>
         </div>

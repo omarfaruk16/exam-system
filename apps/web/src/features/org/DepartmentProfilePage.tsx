@@ -90,8 +90,8 @@ const TABS: { key: TabKey; label: string; icon: typeof BookOpen }[] = [
   { key: 'degrees', label: 'Offered Degrees', icon: GraduationCap },
   { key: 'batches', label: 'Sessions', icon: Layers },
   { key: 'courses', label: 'Semesters', icon: BookOpen },
-  { key: 'enrollments', label: 'Enrollments & Retakes', icon: ClipboardList },
   { key: 'students', label: 'Students', icon: Users },
+  { key: 'enrollments', label: 'Enrollments', icon: ClipboardList },
   { key: 'teachers', label: 'Teachers & Faculty', icon: UserCog },
   { key: 'exams', label: 'Exams & Question Bank', icon: FileText },
 ];
@@ -1474,12 +1474,17 @@ function BatchesTab({ programs, batches }: { programs: Program[]; batches: Batch
   const canManage = useCanManage();
   const [adding, setAdding] = useState(false);
   const [program, setProgram] = useState(programs[0]?.publicId ?? '');
-  const [year, setYear] = useState(String(new Date().getFullYear()));
-  const startYear = Number(year);
-  const range = Number.isFinite(startYear) ? `${startYear}-${startYear + 1}` : '';
+  const [batchName, setBatchName] = useState('');
 
   const create = useMutation({
-    mutationFn: () => createBatch({ programPublicId: program, name: range, year: startYear }),
+    mutationFn: () => {
+      const trimmed = batchName.trim();
+      if (!program) throw new Error('Select a programme');
+      if (!trimmed) throw new Error('Enter a session name');
+      const yearMatch = /\b(20\d{2})\b/.exec(trimmed);
+      const yr = yearMatch ? Number(yearMatch[1]) : new Date().getFullYear();
+      return createBatch({ programPublicId: program, name: trimmed, year: yr });
+    },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['org-batches'] });
       toast.success('Session created');
@@ -1502,10 +1507,10 @@ function BatchesTab({ programs, batches }: { programs: Program[]; batches: Batch
       />
       {adding && (
         <form
-          className="bg-muted/40 mb-4 grid gap-2 rounded-md border p-3 sm:grid-cols-[1fr_auto_auto]"
+          className="bg-muted/40 mb-4 grid gap-2 rounded-md border p-3 sm:grid-cols-[auto_1fr_auto]"
           onSubmit={(e) => {
             e.preventDefault();
-            if (program && range) create.mutate();
+            create.mutate();
           }}
         >
           <select
@@ -1520,16 +1525,18 @@ function BatchesTab({ programs, batches }: { programs: Program[]; batches: Batch
             ))}
           </select>
           <Input
-            type="number"
-            value={year}
-            onChange={(e) => setYear(e.target.value)}
-            placeholder="Start year, e.g. 2021"
-            className="h-9 w-40"
-            title="Start year — the session spans it and the next year"
+            value={batchName}
+            onChange={(e) => setBatchName(e.target.value)}
+            placeholder="Session name, e.g. 2022-2023"
+            className="h-9"
           />
-          <Button type="submit" size="sm" className="h-9" disabled={create.isPending || !range}>
-            {create.isPending && <Loader2 className="size-4 animate-spin" />} Add{' '}
-            {range ? `Session ${range}` : 'session'}
+          <Button
+            type="submit"
+            size="sm"
+            className="h-9"
+            disabled={create.isPending || !batchName.trim()}
+          >
+            {create.isPending && <Loader2 className="size-4 animate-spin" />} Add
           </Button>
         </form>
       )}
@@ -1556,8 +1563,8 @@ function BatchRow({ batch, canManage }: { batch: Batch; canManage: boolean }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const semestersQuery = useQuery({
-    queryKey: ['org-semesters', batch.program.publicId],
-    queryFn: () => fetchSemesters(batch.program.publicId),
+    queryKey: ['org-semesters', batch.publicId],
+    queryFn: () => fetchSemesters(batch.publicId),
     enabled: assigning,
   });
   const assign = useMutation({
@@ -1649,23 +1656,23 @@ function BatchRow({ batch, canManage }: { batch: Batch; canManage: boolean }) {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs">
-                {batch.currentSemester ? (
-                  <span className="bg-primary/10 text-primary rounded-full px-2 py-0.5 font-medium">
-                    {batch.currentSemester.name ?? `Semester ${batch.currentSemester.number}`}
-                  </span>
-                ) : (
-                  <span className="text-muted-foreground">No semester</span>
-                )}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8"
-                onClick={() => setAssigning((v) => !v)}
+              <select
+                className="border-input bg-card focus-visible:ring-ring h-8 min-w-[11rem] rounded-md border px-2 text-sm disabled:opacity-60"
+                value={batch.currentSemester?.publicId ?? ''}
+                disabled={assign.isPending}
+                onFocus={() => !assigning && setAssigning(true)}
+                onChange={(e) => assign.mutate(e.target.value || null)}
+                title="Set current semester"
               >
-                {batch.currentSemester ? 'Change semester' : 'Set semester'}
-              </Button>
+                <option value="">
+                  {semestersQuery.isLoading ? 'Loading…' : '— No semester —'}
+                </option>
+                {(semestersQuery.data ?? []).map((s) => (
+                  <option key={s.publicId} value={s.publicId}>
+                    {s.name?.trim() ? s.name : `Semester ${s.number}`}
+                  </option>
+                ))}
+              </select>
               <Button
                 variant="outline"
                 size="sm"
@@ -1726,22 +1733,6 @@ function BatchRow({ batch, canManage }: { batch: Batch; canManage: boolean }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {assigning && (
-        <select
-          className="border-input bg-card mt-2 h-9 w-full max-w-xs rounded-md border px-2 text-sm"
-          defaultValue={batch.currentSemester?.publicId ?? ''}
-          disabled={assign.isPending}
-          onChange={(e) => assign.mutate(e.target.value || null)}
-        >
-          <option value="">— No semester —</option>
-          {(semestersQuery.data ?? []).map((s) => (
-            <option key={s.publicId} value={s.publicId}>
-              {s.name ?? `Semester ${s.number}`}
-            </option>
-          ))}
-        </select>
-      )}
 
       {expanded && (
         <BatchStudentsSection
