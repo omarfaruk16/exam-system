@@ -280,18 +280,34 @@ function BatchRow({ batch, allBatches }: { batch: Batch; allBatches: Batch[] }) 
             <select
               className="border-input bg-card focus-visible:ring-ring h-9 flex-1 rounded-md border px-2 text-sm focus-visible:outline-none focus-visible:ring-2"
               defaultValue={batch.currentSemester?.publicId ?? ''}
-              disabled={assign.isPending}
+              disabled={assign.isPending || semestersQuery.isLoading}
               onChange={(e) => assign.mutate(e.target.value || null)}
             >
               <option value="">— Not assigned —</option>
               {(semestersQuery.data ?? []).map((s) => (
                 <option key={s.publicId} value={s.publicId}>
-                  Semester {s.number}
+                  {s.name?.trim() ? s.name : `Semester ${s.number}`}
                 </option>
               ))}
             </select>
             {assign.isPending && <Loader2 className="size-5 animate-spin self-center" />}
           </div>
+          {!semestersQuery.isLoading && (semestersQuery.data ?? []).length === 0 && (
+            <p className="text-muted-foreground mt-2 text-xs">
+              This session has no semesters yet. Add them under{' '}
+              <button
+                type="button"
+                className="text-primary font-medium underline-offset-2 hover:underline"
+                onClick={() => {
+                  setAssigning(false);
+                  setShowSemesters(true);
+                }}
+              >
+                Semesters &amp; courses
+              </button>{' '}
+              first, then pick the current one here.
+            </p>
+          )}
         </div>
       )}
 
