@@ -230,6 +230,15 @@ export interface DeptBankRow {
   questionCount: number;
 }
 
+/** A pending exam deletion request (admin view). */
+export interface ExamDeletionRequest {
+  publicId: string;
+  reason?: string | null;
+  requestedAt: string;
+  exam: { publicId: string; title: string; status: string; startAt: string };
+  requestedBy: { publicId: string; user: { displayName: string } };
+}
+
 /** A course part the current teacher is assigned to — for the New Exam / bank pickers. */
 export interface PartOption {
   publicId: string;

@@ -67,6 +67,12 @@ export class ExamController {
     return this.exams.createExam(u, ip, dto);
   }
 
+  @Roles('admin', 'super_admin')
+  @Get('deletion-requests')
+  listDeletionRequests(@CurrentUser() u: AuthUser) {
+    return this.exams.listDeletionRequests(u);
+  }
+
   @Roles('teacher', 'admin', 'super_admin', 'department_head')
   @Get(':publicId')
   get(@CurrentUser() u: AuthUser, @Param('publicId') id: string) {
@@ -193,6 +199,37 @@ export class ExamController {
   @Delete(':publicId')
   remove(@CurrentUser() u: AuthUser, @Ip() ip: string, @Param('publicId') id: string) {
     return this.exams.remove(u, ip, id);
+  }
+
+  @Roles('teacher')
+  @Post(':publicId/request-deletion')
+  @HttpCode(200)
+  requestDeletion(
+    @CurrentUser() u: AuthUser,
+    @Ip() ip: string,
+    @Param('publicId') id: string,
+    @Body('reason') reason?: string,
+  ) {
+    return this.exams.requestDeletion(u, ip, id, reason);
+  }
+
+  @Roles('admin', 'super_admin')
+  @Post('deletion-requests/:requestId/approve')
+  @HttpCode(200)
+  approveDeletion(@CurrentUser() u: AuthUser, @Ip() ip: string, @Param('requestId') id: string) {
+    return this.exams.approveDeletion(u, ip, id);
+  }
+
+  @Roles('admin', 'super_admin')
+  @Post('deletion-requests/:requestId/reject')
+  @HttpCode(200)
+  rejectDeletion(
+    @CurrentUser() u: AuthUser,
+    @Ip() ip: string,
+    @Param('requestId') id: string,
+    @Body('rejectionNote') note?: string,
+  ) {
+    return this.exams.rejectDeletion(u, ip, id, note);
   }
 
   @Roles('admin', 'super_admin')

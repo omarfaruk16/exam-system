@@ -26,6 +26,7 @@ import type {
   UpdateSemesterDto,
   CreateStudentManualDto,
   CreateTeacherManualDto,
+  ImportStructureDto,
   UpdateBatchDto,
   UpdateStudentDto,
   UpdateCourseDto,
@@ -1128,6 +1129,137 @@ export class StructureService {
       });
       return { result, entityId: batchPublicId, after: { semesterId } };
     });
+  }
+
+  // ─────────────────────────────── Batch structure export/import ───────────────────────────────
+
+  async exportBatchStructure(actor: AuthUser, batchPublicId: string) {
+    const scope = this.deptScopeId(actor);
+    const batch = await this.prisma.db.batch.findFirst({
+      where: { publicId: batchPublicId, deletedAt: null },
+      select: {
+        id: true,
+        name: true,
+        program: { select: { department: { select: { id: true, facultyId: true } } } },
+      },
+    });
+    if (!batch) throw new NotFoundException('Batch not found');
+    if (scope != null && batch.program.department.id !== scope) {
+      throw new ForbiddenException('You do not have access to this batch');
+    }
+    const semesters = await this.prisma.db.semester.findMany({
+      where: { batchId: batch.id, deletedAt: null },
+      orderBy: { number: 'asc' },
+      select: {
+        number: true,
+        name: true,
+        courses: {
+          where: { deletedAt: null },
+          orderBy: { code: 'asc' },
+          select: {
+            code: true,
+            name: true,
+            credit: true,
+            parts: {
+              where: { deletedAt: null },
+              orderBy: { name: 'asc' },
+              select: { name: true, marksWeight: true },
+            },
+          },
+        },
+      },
+    });
+    return {
+      version: 1,
+      sourceSession: batch.name,
+      exportedAt: new Date().toISOString(),
+      semesters: semesters.map((s) => ({
+        number: s.number,
+        name: s.name ?? undefined,
+        courses: s.courses.map((c) => ({
+          code: c.code,
+          name: c.name,
+          credit: c.credit,
+          parts: c.parts.map((p) => ({ name: p.name, marksWeight: p.marksWeight })),
+        })),
+      })),
+    };
+  }
+
+  async importBatchStructure(ctx: OrgContext, batchPublicId: string, dto: ImportStructureDto) {
+    const batch = await this.batchRef(batchPublicId);
+    this.acl.assertFaculty(ctx.actor, batch.facultyId);
+
+    let semCount = 0;
+    let courseCount = 0;
+    let partCount = 0;
+
+    for (const sem of dto.semesters) {
+      let semesterId: number | null = null;
+      try {
+        const created = await this.prisma.db.semester.create({
+          data: { batchId: batch.id, number: sem.number, name: sem.name ?? '' },
+          select: { id: true },
+        });
+        semesterId = created.id;
+        semCount++;
+      } catch (e) {
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+          // Semester number already exists in this batch — find it to still import courses
+          const existing = await this.prisma.db.semester.findFirst({
+            where: { batchId: batch.id, number: sem.number },
+            select: { id: true },
+          });
+          if (existing) semesterId = existing.id;
+        } else {
+          throw e;
+        }
+      }
+      if (semesterId == null) continue;
+
+      for (const course of sem.courses) {
+        let courseId: number | null = null;
+        try {
+          const created = await this.prisma.db.course.create({
+            data: {
+              semesterId,
+              code: course.code.trim(),
+              name: course.name.trim(),
+              credit: course.credit,
+            },
+            select: { id: true },
+          });
+          courseId = created.id;
+          courseCount++;
+        } catch (e) {
+          if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+            const existing = await this.prisma.db.course.findFirst({
+              where: { semesterId, code: course.code.trim() },
+              select: { id: true },
+            });
+            if (existing) courseId = existing.id;
+          } else {
+            throw e;
+          }
+        }
+        if (courseId == null) continue;
+
+        for (const part of course.parts) {
+          try {
+            await this.prisma.db.coursePart.create({
+              data: { courseId, name: part.name.trim(), marksWeight: part.marksWeight },
+            });
+            partCount++;
+          } catch (e) {
+            if (!(e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002')) {
+              throw e;
+            }
+          }
+        }
+      }
+    }
+
+    return { semesters: semCount, courses: courseCount, parts: partCount };
   }
 
   // ─────────────────────────────── Students ───────────────────────────────

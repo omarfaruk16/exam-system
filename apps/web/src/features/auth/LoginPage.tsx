@@ -92,7 +92,7 @@ export function LoginPage() {
   const active = PORTALS.find((p) => p.key === portal) ?? null;
 
   return (
-    <div className="relative flex min-h-screen flex-col bg-gradient-to-br from-slate-50 via-white to-blue-50/60 text-slate-800 dark:from-[#080d1a] dark:via-[#0c1322] dark:to-[#0f172a] dark:text-slate-100">
+    <div className="relative flex min-h-screen flex-col justify-between overflow-x-hidden bg-gradient-to-br from-slate-50 via-white to-blue-50/60 text-slate-800 lg:h-screen lg:max-h-screen dark:from-[#080d1a] dark:via-[#0c1322] dark:to-[#0f172a] dark:text-slate-100">
       {/* Background ambient lighting effects */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -right-40 -top-40 size-[36rem] rounded-full bg-blue-500/10 blur-[130px]" />
@@ -101,12 +101,12 @@ export function LoginPage() {
       </div>
 
       {/* Top bar */}
-      <header className="relative z-10 mx-auto flex w-full max-w-[1536px] items-center justify-between px-6 py-5 md:px-12 md:py-7 lg:px-16">
+      <header className="relative z-10 mx-auto flex w-full max-w-[1536px] items-center justify-between px-6 py-3.5 md:px-12 md:py-4 lg:px-16">
         <div className="flex items-center gap-3.5">
           <img
             src="/ru-logo.png"
             alt="University of Rajshahi Logo"
-            className="size-11 rounded-full border border-slate-200/80 bg-white p-1 shadow-sm dark:border-white/15 dark:bg-slate-900"
+            className="shadow-xs size-10 rounded-full border border-slate-200/80 bg-white p-1 dark:border-white/15 dark:bg-slate-900"
             onError={(e) => (e.currentTarget.style.display = 'none')}
           />
           <div className="leading-tight">
@@ -121,21 +121,21 @@ export function LoginPage() {
             <Button
               size="sm"
               onClick={() => setPortal('student')}
-              className="h-9 rounded-xl border-transparent bg-blue-600 px-3.5 text-xs font-semibold text-white shadow-md shadow-blue-500/20 transition-all hover:bg-blue-700 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-500"
+              className="h-8.5 rounded-xl border-transparent bg-blue-600 px-3.5 text-xs font-semibold text-white shadow-md shadow-blue-500/20 transition-all hover:bg-blue-700 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-500"
             >
               <GraduationCap className="size-4" /> Student Login
             </Button>
             <Button
               size="sm"
               onClick={() => setPortal('teacher')}
-              className="h-9 rounded-xl border-transparent bg-emerald-600 px-3.5 text-xs font-semibold text-white shadow-md shadow-emerald-500/20 transition-all hover:bg-emerald-700 dark:bg-emerald-600 dark:text-white dark:hover:bg-emerald-500"
+              className="h-8.5 rounded-xl border-transparent bg-emerald-600 px-3.5 text-xs font-semibold text-white shadow-md shadow-emerald-500/20 transition-all hover:bg-emerald-700 dark:bg-emerald-600 dark:text-white dark:hover:bg-emerald-500"
             >
               <Users className="size-4" /> Teacher Login
             </Button>
             <Button
               size="sm"
               onClick={() => setPortal('admin')}
-              className="h-9 rounded-xl border-transparent bg-purple-600 px-3.5 text-xs font-semibold text-white shadow-md shadow-purple-500/20 transition-all hover:bg-purple-700 dark:bg-purple-600 dark:text-white dark:hover:bg-purple-500"
+              className="h-8.5 rounded-xl border-transparent bg-purple-600 px-3.5 text-xs font-semibold text-white shadow-md shadow-purple-500/20 transition-all hover:bg-purple-700 dark:bg-purple-600 dark:text-white dark:hover:bg-purple-500"
             >
               <Settings className="size-4" /> Admin Login
             </Button>
@@ -152,8 +152,8 @@ export function LoginPage() {
         </div>
       </header>
 
-      {/* Body Section with Increased Container Width */}
-      <div className="relative z-10 mx-auto grid w-full max-w-[1536px] flex-1 items-center gap-12 px-6 pb-16 md:px-12 lg:grid-cols-12 lg:gap-16 lg:px-16">
+      {/* Body Section configured to fit Viewport Height */}
+      <div className="relative z-10 mx-auto grid w-full max-w-[1536px] flex-1 items-center gap-8 px-6 py-2 md:px-12 lg:grid-cols-12 lg:gap-12 lg:px-16 lg:py-3">
         {/* ── Left: Brand / Marketing ── */}
         <section className="relative lg:col-span-6 xl:col-span-7">
           <div className="relative">
@@ -162,39 +162,39 @@ export function LoginPage() {
               Online Academic Assessment Portal
             </div>
 
-            <h1 className="mt-5 text-5xl font-extrabold leading-[1.08] tracking-tight text-slate-900 sm:text-6xl lg:text-6xl xl:text-7xl dark:text-white">
-              The Paper-Less
+            <h1 className="mt-3 text-4xl font-extrabold leading-[1.08] tracking-tight text-slate-900 sm:text-5xl lg:text-5xl xl:text-6xl dark:text-white">
+              The Paperless
               <br />
               <span className="text-blue-600 dark:text-blue-400">
                 Exam System<span className="text-slate-300 dark:text-slate-600">.</span>
               </span>
             </h1>
 
-            <p className="text-muted-foreground mt-6 max-w-xl text-base leading-relaxed sm:text-lg">
+            <p className="text-muted-foreground mt-3 max-w-xl text-sm leading-relaxed sm:text-base">
               A unified platform for {INSTITUTION} students, faculty, and departments to conduct
               examinations, manage question banks, and publish results — entirely paperless.
             </p>
 
-            <ul className="mt-8 max-w-xl space-y-3.5">
+            <ul className="mt-5 max-w-xl space-y-2.5">
               {HIGHLIGHTS.map((h) => (
                 <li
                   key={h.label}
-                  className="flex items-center gap-4 text-slate-700 dark:text-slate-200"
+                  className="flex items-center gap-3.5 text-slate-700 dark:text-slate-200"
                 >
-                  <span className="shadow-xs flex size-11 shrink-0 items-center justify-center rounded-2xl bg-blue-100/90 text-blue-600 dark:border dark:border-blue-500/30 dark:bg-blue-500/20 dark:text-blue-400">
-                    <h.icon className="size-5" />
+                  <span className="shadow-xs flex size-9 shrink-0 items-center justify-center rounded-xl bg-blue-100/90 text-blue-600 dark:border dark:border-blue-500/30 dark:bg-blue-500/20 dark:text-blue-400">
+                    <h.icon className="size-4.5" />
                   </span>
-                  <span className="text-base font-medium">{h.label}</span>
+                  <span className="text-sm font-medium sm:text-base">{h.label}</span>
                 </li>
               ))}
             </ul>
 
             {/* RU Gate landmark illustration placed prominently at the bottom-left area */}
-            <div className="relative mt-8 max-w-xl overflow-hidden">
+            <div className="relative mt-5 max-w-xl overflow-hidden">
               <img
                 src="/ru-gate.png"
                 alt="University of Rajshahi Gate"
-                className="pointer-events-none w-full max-w-lg select-none object-contain opacity-95 transition-all duration-300 dark:opacity-85 dark:brightness-110 dark:contrast-125 dark:grayscale dark:invert"
+                className="pointer-events-none max-h-[160px] w-full max-w-[380px] select-none object-contain opacity-95 transition-all duration-300 xl:max-h-[190px] xl:max-w-[440px] dark:opacity-85 dark:brightness-110 dark:contrast-125 dark:grayscale dark:invert"
                 onError={(e) => (e.currentTarget.style.display = 'none')}
               />
             </div>
@@ -203,18 +203,18 @@ export function LoginPage() {
 
         {/* ── Right: Portal Chooser Card ── */}
         <section className="relative lg:col-span-6 xl:col-span-5">
-          <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-2xl backdrop-blur-xl sm:p-9 dark:border-slate-800 dark:bg-slate-900/80 dark:shadow-blue-950/20">
+          <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-2xl backdrop-blur-xl sm:p-7 dark:border-slate-800 dark:bg-slate-900/80 dark:shadow-blue-950/20">
             <div className="text-sm font-semibold text-blue-600 dark:text-blue-400">
               Welcome back
             </div>
-            <h2 className="mt-1 text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
+            <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl dark:text-white">
               Choose your login portal
             </h2>
-            <p className="text-muted-foreground mt-1.5 text-sm">
+            <p className="text-muted-foreground mt-1 text-sm">
               Select the portal that matches your role to sign in.
             </p>
 
-            <div className="mt-6 space-y-4">
+            <div className="mt-5 space-y-3">
               {PORTALS.map((p) => (
                 <PortalRow key={p.key} portal={p} onLogin={() => setPortal(p.key)} />
               ))}
@@ -223,7 +223,7 @@ export function LoginPage() {
         </section>
       </div>
 
-      <footer className="text-muted-foreground relative z-10 mx-auto w-full max-w-[1536px] px-6 pb-6 text-xs md:px-12 lg:px-16">
+      <footer className="text-muted-foreground relative z-10 mx-auto w-full max-w-[1536px] px-6 py-2.5 text-xs md:px-12 lg:px-16">
         © {new Date().getFullYear()} {INSTITUTION}. All rights reserved.
       </footer>
 

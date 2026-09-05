@@ -1,4 +1,5 @@
 import { DegreeType } from '@prisma/client';
+import { Type } from 'class-transformer';
 import {
   IsEmail,
   IsEnum,
@@ -9,6 +10,8 @@ import {
   Length,
   Max,
   Min,
+  MinLength,
+  ValidateNested,
 } from 'class-validator';
 
 export class CreateFacultyDto {
@@ -95,6 +98,28 @@ export class AssignBatchSemesterDto {
 /** Move a student to a different batch. */
 export class ChangeStudentBatchDto {
   @IsString() batchPublicId!: string;
+}
+
+// ─── Structure import DTOs ───────────────────────────────────────────────────
+
+export class ImportPartDto {
+  @IsString() @MinLength(1) name!: string;
+  @IsNumber() marksWeight!: number;
+}
+export class ImportCourseDto {
+  @IsString() @MinLength(1) code!: string;
+  @IsString() @MinLength(1) name!: string;
+  @IsNumber() credit!: number;
+  @ValidateNested({ each: true }) @Type(() => ImportPartDto) parts!: ImportPartDto[];
+}
+export class ImportSemesterDto {
+  @IsInt() number!: number;
+  @IsOptional() @IsString() name?: string;
+  @ValidateNested({ each: true }) @Type(() => ImportCourseDto) courses!: ImportCourseDto[];
+}
+export class ImportStructureDto {
+  @IsInt() version!: number;
+  @ValidateNested({ each: true }) @Type(() => ImportSemesterDto) semesters!: ImportSemesterDto[];
 }
 
 /** Manually create a single teacher account. */

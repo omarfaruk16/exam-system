@@ -1,6 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ExamListItem } from '@exam/types';
-import { CalendarClock, FileText, Loader2, Plus, Trash2, Users } from 'lucide-react';
+import type { ExamDeletionRequest, ExamListItem } from '@exam/types';
+import {
+  AlertTriangle,
+  CalendarClock,
+  Check,
+  FileText,
+  Loader2,
+  Plus,
+  Trash2,
+  Users,
+  X,
+} from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -15,6 +25,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Textarea } from '@/components/ui/textarea';
 import { sessionLabel } from '@/lib/utils';
 import { ChangesRequestedBanner } from '../shared/ChangesRequestedBanner';
 import { StartCountdown, LiveCountdown } from '../shared/ExamCountdown';
@@ -22,9 +33,18 @@ import { StatusPill } from '../shared/StatusPill';
 import { useServerNow } from '../shared/useServerNow';
 import { useSession } from '@/lib/session';
 import { publishExam } from '../review/reviewApi';
-import { deleteExam, fetchExams, reviseExam } from './authoringApi';
+import {
+  approveDeletion,
+  deleteExam,
+  fetchDeletionRequests,
+  fetchExams,
+  rejectDeletion,
+  requestExamDeletion,
+  reviseExam,
+} from './authoringApi';
 
 const ADMIN_EDITABLE_STATUSES = ['draft', 'in_review', 'approved', 'changes_requested'];
+const PAST_STATUSES = ['ended', 'grading', 'results_published', 'archived'];
 
 // ── Batch → Program → Semester grouping ──────────────────────────────────────
 interface SemesterGroup {
@@ -132,6 +152,119 @@ function groupByBatch(exams: ExamListItem[]): BatchGroup[] {
   });
 }
 
+// ── Admin: pending deletion-request panel ────────────────────────────────────
+function DeletionRequestsPanel() {
+  const qc = useQueryClient();
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [rejectNote, setRejectNote] = useState('');
+
+  const { data: requests = [] } = useQuery<ExamDeletionRequest[]>({
+    queryKey: ['exam-deletion-requests'],
+    queryFn: fetchDeletionRequests,
+    refetchInterval: 30_000,
+  });
+
+  const approve = useMutation({
+    mutationFn: (id: string) => approveDeletion(id),
+    onSuccess: async () => {
+      toast.success('Exam deleted');
+      await qc.invalidateQueries({ queryKey: ['exam-deletion-requests'] });
+      await qc.invalidateQueries({ queryKey: ['authoring-exams'] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not approve'),
+  });
+
+  const reject = useMutation({
+    mutationFn: () => rejectDeletion(rejectingId!, rejectNote.trim() || undefined),
+    onSuccess: async () => {
+      toast.success('Request rejected');
+      setRejectingId(null);
+      setRejectNote('');
+      await qc.invalidateQueries({ queryKey: ['exam-deletion-requests'] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not reject'),
+  });
+
+  if (requests.length === 0) return null;
+
+  return (
+    <div className="mb-6 rounded-xl border border-amber-400/40 bg-amber-50 p-4 dark:bg-amber-950/20">
+      <h2 className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300">
+        <AlertTriangle className="size-3.5" /> Deletion requests ({requests.length})
+      </h2>
+      <ul className="space-y-3">
+        {requests.map((req) => (
+          <li
+            key={req.publicId}
+            className="flex flex-wrap items-start justify-between gap-2 text-sm"
+          >
+            <div className="min-w-0">
+              <p className="font-medium">{req.exam.title}</p>
+              <p className="text-muted-foreground text-xs">
+                Requested by {req.requestedBy.user.displayName} ·{' '}
+                {new Date(req.requestedAt).toLocaleDateString('en-GB')}
+              </p>
+              {req.reason && (
+                <p className="text-muted-foreground mt-0.5 text-xs italic">"{req.reason}"</p>
+              )}
+            </div>
+            <div className="flex shrink-0 gap-2">
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => approve.mutate(req.publicId)}
+                disabled={approve.isPending}
+              >
+                {approve.isPending ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Check className="size-3.5" />
+                )}{' '}
+                Approve & delete
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setRejectingId(req.publicId);
+                  setRejectNote('');
+                }}
+              >
+                <X className="size-3.5" /> Reject
+              </Button>
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      <Dialog open={rejectingId !== null} onOpenChange={(o) => !o && setRejectingId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject deletion request</DialogTitle>
+            <DialogDescription>
+              Optionally explain to the teacher why the exam should not be deleted.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={rejectNote}
+            onChange={(e) => setRejectNote(e.target.value)}
+            placeholder="Optional note for the teacher…"
+            rows={3}
+          />
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setRejectingId(null)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={() => reject.mutate()} disabled={reject.isPending}>
+              {reject.isPending && <Loader2 className="size-4 animate-spin" />} Reject request
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 export function ExamListPage() {
   const navigate = useNavigate();
   const nowMs = useServerNow();
@@ -172,6 +305,8 @@ export function ExamListPage() {
           New Exam
         </Button>
       </header>
+
+      {isAdmin && <DeletionRequestsPanel />}
 
       {startingSoon.length > 0 && (
         <div className="border-primary/30 bg-primary/5 mb-6 rounded-xl border p-4">
@@ -295,6 +430,8 @@ function ExamCard({
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [requestingDeletion, setRequestingDeletion] = useState(false);
+  const [deletionReason, setDeletionReason] = useState('');
 
   const revise = useMutation({
     mutationFn: () => reviseExam(exam.publicId),
@@ -321,8 +458,19 @@ function ExamCard({
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not publish the exam'),
   });
 
+  const requestDeletion = useMutation({
+    mutationFn: () => requestExamDeletion(exam.publicId, deletionReason.trim() || undefined),
+    onSuccess: () => {
+      toast.success('Deletion request sent — admin will review it');
+      setRequestingDeletion(false);
+      setDeletionReason('');
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not send request'),
+  });
+
   const isDraft = exam.status === 'draft';
   const isChanges = exam.status === 'changes_requested';
+  const isPast = PAST_STATUSES.includes(exam.status);
 
   return (
     <Card className="p-5">
@@ -385,6 +533,17 @@ function ExamCard({
               >
                 {ADMIN_EDITABLE_STATUSES.includes(exam.status) ? 'Edit' : 'View'}
               </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setConfirmDelete(true)}
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                title="Delete exam"
+                aria-label="Delete exam"
+              >
+                <Trash2 className="size-4" />
+              </Button>
             </>
           ) : (
             <>
@@ -398,6 +557,7 @@ function ExamCard({
                     Edit
                   </Button>
                   <Button
+                    type="button"
                     variant="ghost"
                     size="sm"
                     onClick={() => setConfirmDelete(true)}
@@ -423,6 +583,19 @@ function ExamCard({
                   View
                 </Button>
               )}
+              {isPast && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setRequestingDeletion(true)}
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  title="Request deletion"
+                  aria-label="Request deletion"
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              )}
             </>
           )}
         </div>
@@ -446,20 +619,53 @@ function ExamCard({
           <DialogHeader>
             <DialogTitle>Delete this exam?</DialogTitle>
             <DialogDescription>
-              “{exam.title}” and its questions will be removed. This cannot be undone.
+              "{exam.title}" and its questions will be permanently removed.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmDelete(false)}>
+            <Button type="button" variant="outline" onClick={() => setConfirmDelete(false)}>
               Cancel
             </Button>
             <Button
+              type="button"
               variant="destructive"
               onClick={() => remove.mutate()}
               disabled={remove.isPending}
             >
               {remove.isPending && <Loader2 className="size-4 animate-spin" />}
               Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={requestingDeletion} onOpenChange={setRequestingDeletion}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Request deletion</DialogTitle>
+            <DialogDescription>
+              "{exam.title}" will be flagged for admin review. An optional reason helps the admin
+              decide.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={deletionReason}
+            onChange={(e) => setDeletionReason(e.target.value)}
+            placeholder="Optional reason…"
+            rows={3}
+          />
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setRequestingDeletion(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => requestDeletion.mutate()}
+              disabled={requestDeletion.isPending}
+            >
+              {requestDeletion.isPending && <Loader2 className="size-4 animate-spin" />}
+              Send request
             </Button>
           </DialogFooter>
         </DialogContent>

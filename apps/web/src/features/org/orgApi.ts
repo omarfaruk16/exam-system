@@ -145,6 +145,16 @@ export const assignTeacher = (coursePartId: string, teacherPublicId: string | nu
 export const assignBatchSemester = (batchId: string, semesterPublicId: string | null) =>
   api.put<Batch>(`/org/batches/${batchId}/semester`, { semesterPublicId });
 
+// ── Session structure export / import ──
+export const exportBatchStructure = (batchPublicId: string) =>
+  api.get<Record<string, unknown>>(`/org/batches/${batchPublicId}/export-structure`);
+
+export const importBatchStructure = (batchPublicId: string, data: unknown) =>
+  api.post<{ semesters: number; courses: number; parts: number }>(
+    `/org/batches/${batchPublicId}/import-structure`,
+    data,
+  );
+
 // ── Students ──
 export const fetchStudents = (batch?: string) =>
   api.get<StudentRow[]>(`/org/students${qs({ batch })}`);

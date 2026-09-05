@@ -32,6 +32,7 @@ import {
   UpdateSemesterDto,
   CreateStudentManualDto,
   CreateTeacherManualDto,
+  ImportStructureDto,
   SetTeacherPasswordDto,
   UpdateBatchDto,
   UpdateCourseDto,
@@ -370,6 +371,24 @@ export class StructureController {
   @Get('teachers/:publicId/assignments')
   teacherAssignments(@CurrentUser() u: AuthUser, @Param('publicId') id: string) {
     return this.svc.listTeacherAssignments(u, id);
+  }
+
+  @Roles('super_admin', 'admin', 'department_head')
+  @Get('batches/:publicId/export-structure')
+  exportBatchStructure(@CurrentUser() u: AuthUser, @Param('publicId') id: string) {
+    return this.svc.exportBatchStructure(u, id);
+  }
+
+  @Roles('super_admin', 'admin', 'department_head')
+  @Post('batches/:publicId/import-structure')
+  @HttpCode(200)
+  importStructure(
+    @CurrentUser() u: AuthUser,
+    @Ip() ip: string,
+    @Param('publicId') id: string,
+    @Body() dto: ImportStructureDto,
+  ) {
+    return this.svc.importBatchStructure(this.ctx(u, ip), id, dto);
   }
 
   // Assign the semester a batch currently sits in (advance it as the batch progresses).

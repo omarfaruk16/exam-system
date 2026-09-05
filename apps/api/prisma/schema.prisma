@@ -209,10 +209,11 @@ model User {
   updatedAt          DateTime   @updatedAt
   deletedAt          DateTime?
 
-  student   Student?
-  teacher   Teacher?
-  roles     UserRole[]
-  auditLogs AuditLog[] @relation("ActorAudit")
+  student           Student?
+  teacher           Teacher?
+  roles             UserRole[]
+  auditLogs         AuditLog[]            @relation("ActorAudit")
+  deletionApprovals ExamDeletionRequest[] @relation("UserDeletionApprovals")
 
   @@index([status])
   @@index([deletedAt])
@@ -249,13 +250,14 @@ model Teacher {
   updatedAt    DateTime  @updatedAt
   deletedAt    DateTime?
 
-  user           User               @relation(fields: [userId], references: [id])
-  department     Department         @relation(fields: [departmentId], references: [id])
-  courseParts    CoursePart[]
-  createdBanks   QuestionBank[]
-  createdExams   Exam[]
-  gradedAnswers  Answer[]
-  finalizedParts CoursePartResult[] @relation("FinalizedPartResults")
+  user             User                  @relation(fields: [userId], references: [id])
+  department       Department            @relation(fields: [departmentId], references: [id])
+  courseParts      CoursePart[]
+  createdBanks     QuestionBank[]
+  createdExams     Exam[]
+  gradedAnswers    Answer[]
+  finalizedParts   CoursePartResult[]    @relation("FinalizedPartResults")
+  deletionRequests ExamDeletionRequest[] @relation("TeacherDeletionRequests")
 
   @@index([departmentId])
 }
@@ -408,14 +410,42 @@ model Exam {
   updatedAt          DateTime   @updatedAt
   deletedAt          DateTime?
 
-  coursePart    CoursePart     @relation(fields: [coursePartId], references: [id])
-  createdBy     Teacher        @relation(fields: [createdByTeacherId], references: [id])
-  examQuestions ExamQuestion[]
-  attempts      ExamAttempt[]
+  coursePart       CoursePart           @relation(fields: [coursePartId], references: [id])
+  createdBy        Teacher              @relation(fields: [createdByTeacherId], references: [id])
+  examQuestions    ExamQuestion[]
+  attempts         ExamAttempt[]
+  deletionRequests ExamDeletionRequest[]
 
   @@index([coursePartId, status])
   @@index([status])
   @@index([deletedAt])
+}
+
+enum DeletionRequestStatus {
+  pending
+  approved
+  rejected
+}
+
+model ExamDeletionRequest {
+  id            Int                   @id @default(autoincrement())
+  publicId      String                @unique @default(uuid())
+  examId        Int
+  requestedById Int
+  status        DeletionRequestStatus @default(pending)
+  reason        String?
+  rejectionNote String?
+  requestedAt   DateTime              @default(now())
+  resolvedById  Int?
+  resolvedAt    DateTime?
+
+  exam        Exam    @relation(fields: [examId], references: [id])
+  requestedBy Teacher @relation("TeacherDeletionRequests", fields: [requestedById], references: [id])
+  resolvedBy  User?   @relation("UserDeletionApprovals", fields: [resolvedById], references: [id])
+
+  @@index([examId])
+  @@index([status])
+  @@index([requestedById])
 }
 
 // Links an exam to a bank question. On publish, the question is SNAPSHOTTED into the snapshot*

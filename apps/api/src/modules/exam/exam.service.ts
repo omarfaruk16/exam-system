@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -810,14 +811,14 @@ export class ExamService {
     const exam = await this.loadExam(publicId);
     if (this.isAdmin(user)) {
       this.access.assertAdminScope(user, exam);
-      if (!ADMIN_EDITABLE_STATUSES.includes(exam.status)) {
-        throw new BadRequestException(`An exam in ${exam.status} cannot be deleted`);
-      }
+      // Admin can delete an exam in any status (including past/ended exams)
     } else {
       // A teacher may delete only their OWN exam, and only while it is still theirs to change.
       await this.assertOwner(user, exam);
       if (exam.status !== 'draft' && exam.status !== 'changes_requested') {
-        throw new BadRequestException('You can only delete a draft exam');
+        throw new BadRequestException(
+          'You can only delete a draft exam. Use "Request deletion" for past exams.',
+        );
       }
     }
     return this.prisma.$transaction(async (tx) => {
@@ -833,6 +834,115 @@ export class ExamService {
       });
       return { status: 'ok' as const };
     });
+  }
+
+  async requestDeletion(user: AuthUser, _ip: string, publicId: string, reason?: string) {
+    const exam = await this.loadExam(publicId);
+    await this.assertOwner(user, exam);
+    const PAST_STATUSES = ['ended', 'grading', 'results_published', 'archived'] as const;
+    if (!PAST_STATUSES.includes(exam.status as (typeof PAST_STATUSES)[number])) {
+      throw new BadRequestException('You can only request deletion of a past exam');
+    }
+    const existing = await this.prisma.db.examDeletionRequest.findFirst({
+      where: { examId: exam.id, status: 'pending' },
+    });
+    if (existing) throw new ConflictException('A deletion request is already pending');
+    const teacher = await this.prisma.db.teacher.findFirst({ where: { userId: user.id } });
+    if (!teacher) throw new ForbiddenException();
+    await this.prisma.db.examDeletionRequest.create({
+      data: { examId: exam.id, requestedById: teacher.id, reason },
+    });
+    return { status: 'ok' as const };
+  }
+
+  async listDeletionRequests(user: AuthUser) {
+    if (!this.isAdmin(user)) throw new ForbiddenException();
+    return this.prisma.db.examDeletionRequest.findMany({
+      where: { status: 'pending' },
+      orderBy: { requestedAt: 'desc' },
+      select: {
+        publicId: true,
+        reason: true,
+        requestedAt: true,
+        exam: { select: { publicId: true, title: true, status: true, startAt: true } },
+        requestedBy: { select: { publicId: true, user: { select: { displayName: true } } } },
+      },
+    });
+  }
+
+  async approveDeletion(user: AuthUser, _ip: string, requestPublicId: string) {
+    if (!this.isAdmin(user)) throw new ForbiddenException();
+    const req = await this.prisma.db.examDeletionRequest.findUnique({
+      where: { publicId: requestPublicId },
+      select: {
+        status: true,
+        exam: {
+          select: {
+            publicId: true,
+            status: true,
+            coursePart: {
+              select: {
+                course: {
+                  select: {
+                    semester: {
+                      select: {
+                        batch: {
+                          select: {
+                            program: {
+                              select: {
+                                departmentId: true,
+                                department: { select: { facultyId: true } },
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!req) throw new NotFoundException('Request not found');
+    if (req.status !== 'pending') throw new BadRequestException('Request already resolved');
+    const prog = req.exam.coursePart.course.semester.batch.program;
+    this.access.assertAdminScope(user, {
+      departmentId: prog.departmentId,
+      facultyId: prog.department.facultyId,
+    });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.examDeletionRequest.update({
+        where: { publicId: requestPublicId },
+        data: { status: 'approved', resolvedById: user.id, resolvedAt: new Date() },
+      });
+      await tx.exam.update({
+        where: { publicId: req.exam.publicId },
+        data: { deletedAt: new Date() },
+      });
+    });
+    return { status: 'ok' as const };
+  }
+
+  async rejectDeletion(
+    user: AuthUser,
+    _ip: string,
+    requestPublicId: string,
+    rejectionNote?: string,
+  ) {
+    if (!this.isAdmin(user)) throw new ForbiddenException();
+    const req = await this.prisma.db.examDeletionRequest.findUnique({
+      where: { publicId: requestPublicId },
+    });
+    if (!req) throw new NotFoundException('Request not found');
+    if (req.status !== 'pending') throw new BadRequestException('Request already resolved');
+    await this.prisma.db.examDeletionRequest.update({
+      where: { publicId: requestPublicId },
+      data: { status: 'rejected', resolvedById: user.id, resolvedAt: new Date(), rejectionNote },
+    });
+    return { status: 'ok' as const };
   }
 
   // ─────────────────────────── Exam questions ───────────────────────────

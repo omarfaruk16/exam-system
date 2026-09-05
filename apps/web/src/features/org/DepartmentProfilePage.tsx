@@ -20,7 +20,7 @@ import {
   UserPlus,
   Users,
 } from 'lucide-react';
-import { Fragment, useState } from 'react';
+import { Fragment, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -57,6 +57,7 @@ import {
   deleteSemester,
   deleteStudent,
   downloadExport,
+  exportBatchStructure,
   fetchBatches,
   fetchCourseParts,
   fetchCourses,
@@ -67,6 +68,7 @@ import {
   fetchTeacherAssignments,
   deleteTeacher,
   fetchTeachersAdmin,
+  importBatchStructure,
   updateBatch,
   updateCourse,
   updateCoursePart,
@@ -720,6 +722,10 @@ export function SemesterList({
   const qc = useQueryClient();
   const canManage = useCanManage();
   const [name, setName] = useState('');
+  const [exportLoading, setExportLoading] = useState(false);
+  const [importLoading, setImportLoading] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
+
   const semestersQuery = useQuery({
     queryKey: ['org-semesters', batchPublicId],
     queryFn: () => fetchSemesters(batchPublicId),
@@ -735,9 +741,99 @@ export function SemesterList({
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not add semester'),
   });
 
+  async function handleExport() {
+    setExportLoading(true);
+    try {
+      const data = await exportBatchStructure(batchPublicId);
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'session-structure.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Export failed');
+    } finally {
+      setExportLoading(false);
+    }
+  }
+
+  function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const text = ev.target?.result;
+      if (typeof text !== 'string') return;
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        toast.error('Invalid JSON file');
+        return;
+      }
+      setImportLoading(true);
+      try {
+        const result = await importBatchStructure(batchPublicId, parsed);
+        await qc.invalidateQueries({ queryKey: ['org-semesters', batchPublicId] });
+        toast.success(
+          `Imported: ${result.semesters} semesters, ${result.courses} courses, ${result.parts} parts`,
+        );
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Import failed');
+      } finally {
+        setImportLoading(false);
+      }
+    };
+    reader.readAsText(file);
+  }
+
   const semesters = semestersQuery.data ?? [];
   return (
     <div>
+      {canManage && (
+        <div className="mb-3 flex items-center justify-end gap-1">
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".json"
+            className="hidden"
+            onChange={handleImportFile}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="size-8"
+            title="Export session structure as JSON"
+            disabled={exportLoading}
+            onClick={handleExport}
+          >
+            {exportLoading ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Download className="size-4" />
+            )}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="size-8"
+            title="Import session structure from JSON"
+            disabled={importLoading}
+            onClick={() => importInputRef.current?.click()}
+          >
+            {importLoading ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Upload className="size-4" />
+            )}
+          </Button>
+        </div>
+      )}
       {canManage && (
         <form
           className="mb-4 flex gap-2"

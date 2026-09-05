@@ -1,6 +1,7 @@
 import type {
   BankQuestion,
   DeptBankRow,
+  ExamDeletionRequest,
   ExamDetail,
   ExamListItem,
   ExamQuestionItem,
@@ -51,6 +52,20 @@ export const updateExam = (publicId: string, input: ExamMetadataInput) =>
   api.patch<ExamDetail>(`/exams/${publicId}`, input);
 
 export const deleteExam = (publicId: string) => api.del<{ status: string }>(`/exams/${publicId}`);
+
+export const requestExamDeletion = (publicId: string, reason?: string) =>
+  api.post<{ status: string }>(`/exams/${publicId}/request-deletion`, { reason });
+
+export const fetchDeletionRequests = () =>
+  api.get<ExamDeletionRequest[]>('/exams/deletion-requests');
+
+export const approveDeletion = (requestPublicId: string) =>
+  api.post<{ status: string }>(`/exams/deletion-requests/${requestPublicId}/approve`, {});
+
+export const rejectDeletion = (requestPublicId: string, rejectionNote?: string) =>
+  api.post<{ status: string }>(`/exams/deletion-requests/${requestPublicId}/reject`, {
+    rejectionNote,
+  });
 
 export const submitExam = (publicId: string) => api.post<ExamDetail>(`/exams/${publicId}/submit`);
 
