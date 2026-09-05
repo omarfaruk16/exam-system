@@ -88,7 +88,7 @@ type TabKey =
 const TABS: { key: TabKey; label: string; icon: typeof BookOpen }[] = [
   { key: 'info', label: 'Info', icon: FileText },
   { key: 'degrees', label: 'Offered Degrees', icon: GraduationCap },
-  { key: 'courses', label: 'Courses', icon: BookOpen },
+  { key: 'courses', label: 'Semesters', icon: BookOpen },
   { key: 'batches', label: 'Sessions', icon: Layers },
   { key: 'enrollments', label: 'Enrollments & Retakes', icon: ClipboardList },
   { key: 'students', label: 'Students', icon: Users },
@@ -639,7 +639,7 @@ function CoursesTab({ programs, deptPublicId }: { programs: Program[]; deptPubli
   return (
     <Card className="p-6">
       <SectionHeading
-        title="Courses"
+        title="Semesters"
         action={
           <div className="flex flex-wrap items-center gap-2">
             {programs.length > 1 && (
