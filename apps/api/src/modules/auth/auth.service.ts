@@ -41,12 +41,15 @@ export class AuthService {
    */
   async validateUser(identifier: string, plainPassword: string): Promise<AuthUser> {
     // `prisma.db` is the soft-delete-aware client: deletedAt filtering is automatic.
+    // Email and student ID match case-insensitively so a teacher typing "Halida_ICE@ru.ac.bd"
+    // still resolves to a stored "halida_ice@ru.ac.bd". Username stays exact (already lowercased).
+    const id = identifier.trim();
     const user = await this.prisma.db.user.findFirst({
       where: {
         OR: [
-          { username: identifier },
-          { email: identifier },
-          { student: { studentId: identifier } },
+          { username: id },
+          { email: { equals: id, mode: 'insensitive' } },
+          { student: { studentId: { equals: id, mode: 'insensitive' } } },
         ],
       },
       ...userWithRoles,

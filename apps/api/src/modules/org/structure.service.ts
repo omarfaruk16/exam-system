@@ -846,6 +846,28 @@ export class StructureService {
     });
   }
 
+  /**
+   * Set (or reset) a teacher's sign-in password. When `password` is omitted the shared default
+   * (Teacher@12345) is applied. The teacher is forced to change it on next login.
+   */
+  async setTeacherPassword(ctx: OrgContext, publicId: string, password?: string) {
+    const teacher = await this.prisma.db.teacher.findFirst({
+      where: { publicId },
+      select: { userId: true, department: { select: { facultyId: true } } },
+    });
+    if (!teacher) throw new NotFoundException('Teacher not found');
+    this.acl.assertFaculty(ctx.actor, teacher.department.facultyId);
+
+    const hash = await this.password.hash(password?.trim() || TEACHER_DEFAULT_PASSWORD);
+    return this.mutate(ctx, 'teacher.set_password', 'Teacher', async (tx) => {
+      await tx.user.update({
+        where: { id: teacher.userId },
+        data: { passwordHash: hash, mustChangePassword: true },
+      });
+      return { result: { publicId }, entityId: publicId, after: { passwordReset: true } };
+    });
+  }
+
   async exportTeachers(
     departmentPublicId?: string,
     format: ExportFormat = 'xlsx',

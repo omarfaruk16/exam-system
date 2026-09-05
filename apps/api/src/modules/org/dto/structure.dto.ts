@@ -110,6 +110,11 @@ export class UpdateTeacherDto {
   @IsOptional() @IsString() @Length(2, 150) displayName?: string;
 }
 
+export class SetTeacherPasswordDto {
+  // Omit to reset to the shared default (Teacher@12345); otherwise at least 8 characters.
+  @IsOptional() @IsString() @Length(8, 100) password?: string;
+}
+
 /** Manually create a single student account. Temp password = Student@123. */
 export class CreateStudentManualDto {
   @IsString() @Length(2, 30) studentId!: string;

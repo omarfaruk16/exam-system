@@ -400,12 +400,16 @@ function AddUserForm({
   const [email, setEmail] = useState('');
   const [scopeFacultyPublicId, setScopeFacultyPublicId] = useState('');
   const [scopeDepartmentPublicId, setScopeDepartmentPublicId] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const create = useMutation({
     mutationFn: () => {
       if (!displayName.trim()) throw new Error('Display name is required');
       if (!email.trim()) throw new Error('Email is required');
+      if (password.trim() && password.trim().length < 8) {
+        throw new Error('Password must be at least 8 characters');
+      }
       if (role === 'department_head' && !scopeDepartmentPublicId) {
         throw new Error('Select a department for a department admin');
       }
@@ -416,6 +420,7 @@ function AddUserForm({
         scopeFacultyPublicId: role === 'admin' ? scopeFacultyPublicId || undefined : undefined,
         scopeDepartmentPublicId:
           role === 'department_head' ? scopeDepartmentPublicId || undefined : undefined,
+        password: password.trim() || undefined,
       });
     },
     onSuccess: () => {
@@ -518,11 +523,27 @@ function AddUserForm({
               </select>
             </div>
           )}
+
+          <div className="col-span-2">
+            <Label htmlFor="au-pw" className="text-xs">
+              Initial password (optional)
+            </Label>
+            <Input
+              id="au-pw"
+              type="text"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Leave blank to email a temporary password"
+              className="mt-1 h-9"
+            />
+          </div>
         </div>
 
         {error && <p className="text-destructive text-xs">{error}</p>}
         <p className="text-muted-foreground text-xs">
-          A temporary password will be sent to the email address.
+          {password.trim()
+            ? 'This password will be set now; the user must change it on first login.'
+            : 'Leave the password blank to email a temporary password instead.'}
         </p>
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" size="sm" onClick={onClose}>

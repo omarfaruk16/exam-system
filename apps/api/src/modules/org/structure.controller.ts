@@ -4,6 +4,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   Ip,
   Param,
   Patch,
@@ -31,6 +32,7 @@ import {
   UpdateSemesterDto,
   CreateStudentManualDto,
   CreateTeacherManualDto,
+  SetTeacherPasswordDto,
   UpdateBatchDto,
   UpdateCourseDto,
   UpdateCoursePartDto,
@@ -341,6 +343,19 @@ export class StructureController {
   @Delete('teachers/:publicId')
   deleteTeacher(@CurrentUser() u: AuthUser, @Ip() ip: string, @Param('publicId') id: string) {
     return this.svc.deleteTeacher(this.ctx(u, ip), id);
+  }
+
+  // Set (or reset) a teacher's sign-in password. Body may omit `password` to reset to the
+  // shared default (Teacher@12345). The teacher must change it on next login.
+  @Post('teachers/:publicId/set-password')
+  @HttpCode(200)
+  setTeacherPassword(
+    @CurrentUser() u: AuthUser,
+    @Ip() ip: string,
+    @Param('publicId') id: string,
+    @Body() dto: SetTeacherPasswordDto,
+  ) {
+    return this.svc.setTeacherPassword(this.ctx(u, ip), id, dto.password);
   }
 
   // Teacher selector for assign-teacher dropdown — dept_head access allowed.

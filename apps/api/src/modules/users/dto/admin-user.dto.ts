@@ -6,6 +6,8 @@ export class CreateAdminUserDto {
   @IsIn(['admin', 'department_head']) role!: 'admin' | 'department_head';
   @IsString() @IsOptional() scopeFacultyPublicId?: string;
   @IsString() @IsOptional() scopeDepartmentPublicId?: string;
+  // Optional: set the initial password directly. When omitted, a temp password is generated.
+  @IsString() @MinLength(8) @IsOptional() password?: string;
 }
 
 export class UpdateAdminUserDto {

@@ -117,8 +117,9 @@ export class AdminUsersService {
     // Auto-generate a username from the email address.
     const username = usernameFromEmail(dto.email);
 
-    const tempPassword = `Exam@${randomBytes(4).toString('hex')}`;
-    const hash = await this.password.hash(tempPassword);
+    // Use the admin-provided password when given; otherwise generate a temp one to email.
+    const initialPassword = dto.password?.trim() || `Exam@${randomBytes(4).toString('hex')}`;
+    const hash = await this.password.hash(initialPassword);
 
     const userRole = await this.prisma.$transaction(async (tx) => {
       const user = await tx.user.create({

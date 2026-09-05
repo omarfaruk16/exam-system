@@ -102,6 +102,9 @@ export const createTeacher = (b: {
 export const updateTeacher = (id: string, b: { designation?: string; displayName?: string }) =>
   api.patch<TeacherRow>(`/org/teachers/${id}`, b);
 export const deleteTeacher = (id: string) => api.del(`/org/teachers/${id}`);
+/** Set (or, with no password, reset to the default Teacher@12345) a teacher's sign-in password. */
+export const setTeacherPassword = (id: string, password?: string) =>
+  api.post<void>(`/org/teachers/${id}/set-password`, password ? { password } : {});
 
 // ── Teacher selector (dept_head-accessible, scoped to department) ──
 export const fetchTeachersSelector = (department: string) =>

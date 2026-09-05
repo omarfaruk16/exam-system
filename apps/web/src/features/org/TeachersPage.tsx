@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { TeacherRow } from '@exam/types';
-import { Loader2, Pencil, Plus, Search, Trash2, Users } from 'lucide-react';
+import { KeyRound, Loader2, Pencil, Plus, Search, ShieldCheck, Trash2, Users } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,7 @@ import {
   deleteTeacher,
   fetchDepartments,
   fetchTeachersAdmin,
+  setTeacherPassword,
   updateTeacher,
 } from './orgApi';
 import { ImportExportBar } from './ImportExportBar';
@@ -173,8 +174,19 @@ function TeacherRow({
 }) {
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [settingPassword, setSettingPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState('Teacher@12345');
   const [designation, setDesignation] = useState(teacher.designation ?? '');
   const [displayName, setDisplayName] = useState(teacher.user.displayName);
+
+  const setPassword = useMutation({
+    mutationFn: () => setTeacherPassword(teacher.publicId, newPassword.trim() || undefined),
+    onSuccess: () => {
+      toast.success('Password set — the teacher changes it on next login');
+      setSettingPassword(false);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not set password'),
+  });
 
   const update = useMutation({
     mutationFn: () =>
@@ -259,6 +271,18 @@ function TeacherRow({
             <Button
               variant="ghost"
               size="sm"
+              className="h-7 px-2"
+              title="Set password"
+              onClick={() => {
+                setNewPassword('Teacher@12345');
+                setSettingPassword(true);
+              }}
+            >
+              <KeyRound className="size-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               className="text-destructive hover:bg-destructive/10 hover:text-destructive h-7 px-2"
               onClick={() => setConfirmDelete(true)}
             >
@@ -267,6 +291,45 @@ function TeacherRow({
           </div>
         </td>
       </tr>
+
+      <Dialog open={settingPassword} onOpenChange={setSettingPassword}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShieldCheck className="size-5" /> Set password
+            </DialogTitle>
+            <DialogDescription>
+              Set a sign-in password for <strong>{teacher.user.displayName}</strong> (
+              {teacher.user.email ?? 'no email'}). They will be prompted to change it on next login.
+              The default is <code>Teacher@12345</code>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor={`tpw-${teacher.publicId}`} className="text-xs">
+              New password
+            </Label>
+            <Input
+              id={`tpw-${teacher.publicId}`}
+              type="text"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="At least 8 characters"
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSettingPassword(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => setPassword.mutate()}
+              disabled={setPassword.isPending || newPassword.trim().length < 8}
+            >
+              {setPassword.isPending && <Loader2 className="size-4 animate-spin" />} Set password
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <DialogContent>

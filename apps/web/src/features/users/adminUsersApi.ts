@@ -9,6 +9,7 @@ export const createAdminUser = (b: {
   role: 'admin' | 'department_head';
   scopeFacultyPublicId?: string;
   scopeDepartmentPublicId?: string;
+  password?: string;
 }) => api.post<AdminUserRow>('/admin-users', b);
 
 export const updateAdminUser = (publicId: string, b: { displayName?: string; email?: string }) =>
