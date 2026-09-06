@@ -43,7 +43,7 @@ export function DashboardPage({ user }: { user: SessionUser }) {
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
         {items.map((item) => (
           <Link
             key={item.path}
@@ -51,14 +51,12 @@ export function DashboardPage({ user }: { user: SessionUser }) {
             className="focus-visible:ring-ring rounded-lg focus-visible:outline-none focus-visible:ring-2"
           >
             <Card className="hover:border-primary/40 h-full transition-colors">
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between">
-                  <div className="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-md">
-                    <item.icon className="size-5" />
-                  </div>
+              <CardContent className="p-4 sm:p-5">
+                <div className="bg-primary/10 text-primary flex h-9 w-9 items-center justify-center rounded-md sm:h-10 sm:w-10">
+                  <item.icon className="size-4 sm:size-5" />
                 </div>
-                <h3 className="mt-4 font-medium">{item.label}</h3>
-                <p className="text-muted-foreground mt-1 text-sm">
+                <h3 className="mt-3 text-sm font-medium sm:mt-4 sm:text-base">{item.label}</h3>
+                <p className="text-muted-foreground mt-1 hidden text-sm sm:block">
                   {DESCRIPTIONS[item.path] ?? ''}
                 </p>
               </CardContent>

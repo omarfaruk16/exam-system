@@ -99,16 +99,16 @@ function CoursePartCard({
             )}
           </p>
         </div>
-        <div className="flex shrink-0 flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={onViewMarks}>
+        <div className="flex flex-wrap gap-2 sm:shrink-0">
+          <Button variant="outline" size="sm" className="flex-1 sm:flex-none" onClick={onViewMarks}>
             <TableProperties className="size-4" />
             Marks sheet
           </Button>
-          <Button variant="outline" size="sm" onClick={onViewExams}>
+          <Button variant="outline" size="sm" className="flex-1 sm:flex-none" onClick={onViewExams}>
             <FileCheck2 className="size-4" />
             View exams
           </Button>
-          <Button size="sm" onClick={onCreateExam}>
+          <Button size="sm" className="flex-1 sm:flex-none" onClick={onCreateExam}>
             <Plus className="size-4" />
             New exam
           </Button>

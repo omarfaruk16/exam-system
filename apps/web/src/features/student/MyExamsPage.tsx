@@ -253,19 +253,22 @@ function SemesterAccordion({
         onClick={onToggle}
         className="hover:bg-muted/40 flex w-full items-center justify-between rounded-xl px-4 py-3 text-left transition-colors"
       >
-        <div className="flex items-center gap-2">
-          <span className="font-medium">{label}</span>
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="min-w-0 truncate font-medium">{label}</span>
           {isCurrent && (
-            <span className="bg-primary/10 text-primary rounded-full px-2 py-0.5 text-[11px] font-semibold">
+            <span className="bg-primary/10 text-primary shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold">
               Current
             </span>
           )}
-          <span className="text-muted-foreground text-xs">
+          <span className="text-muted-foreground shrink-0 text-xs">
             {examCount} exam{examCount === 1 ? '' : 's'}
           </span>
         </div>
         <ChevronDown
-          className={cn('text-muted-foreground size-4 transition-transform', open && 'rotate-180')}
+          className={cn(
+            'text-muted-foreground ml-2 size-4 shrink-0 transition-transform',
+            open && 'rotate-180',
+          )}
         />
       </button>
       {open && <div className="border-t px-4 py-4">{children}</div>}
@@ -381,7 +384,7 @@ function ExamCard({ exam, onResult }: { exam: MyExamListItem; onResult?: () => v
   })();
 
   return (
-    <Card className="flex items-center justify-between gap-3 px-4 py-3">
+    <Card className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-3">
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium">{exam.title}</span>
@@ -422,7 +425,12 @@ function ExamCard({ exam, onResult }: { exam: MyExamListItem; onResult?: () => v
         )}
       </div>
       {completionState === 'results-available' && onResult && (
-        <Button size="sm" variant="outline" onClick={onResult} className="shrink-0">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={onResult}
+          className="shrink-0 self-start sm:self-auto"
+        >
           <Award className="size-3.5" /> Result
         </Button>
       )}
@@ -435,7 +443,7 @@ function ExamCard({ exam, onResult }: { exam: MyExamListItem; onResult?: () => v
 function PastExamCard({ exam, onResult }: { exam: StudentExamResult; onResult: () => void }) {
   const hasScore = exam.showMarks && exam.score !== null;
   return (
-    <Card className="flex items-center justify-between gap-3 px-4 py-3">
+    <Card className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-3">
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium">{exam.title}</span>
@@ -470,7 +478,12 @@ function PastExamCard({ exam, onResult }: { exam: StudentExamResult; onResult: (
           <p className="text-muted-foreground mt-1 text-xs">Results pending</p>
         )}
       </div>
-      <Button size="sm" variant="outline" onClick={onResult} className="shrink-0">
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={onResult}
+        className="shrink-0 self-start sm:self-auto"
+      >
         <Award className="size-3.5" /> Result
       </Button>
     </Card>

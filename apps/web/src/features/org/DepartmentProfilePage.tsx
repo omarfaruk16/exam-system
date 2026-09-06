@@ -1763,11 +1763,22 @@ function BatchRow({ batch, canManage }: { batch: Batch; canManage: boolean }) {
                 <option value="">
                   {semestersQuery.isLoading ? 'Loading…' : '— No semester —'}
                 </option>
-                {(semestersQuery.data ?? []).map((s) => (
-                  <option key={s.publicId} value={s.publicId}>
-                    {s.name?.trim() ? s.name : `Semester ${s.number}`}
+                {/* Always render the currently-assigned semester so the select shows it
+                    even before the full list is fetched (query only loads on focus). */}
+                {batch.currentSemester && (
+                  <option value={batch.currentSemester.publicId}>
+                    {batch.currentSemester.name?.trim()
+                      ? batch.currentSemester.name
+                      : `Semester ${batch.currentSemester.number}`}
                   </option>
-                ))}
+                )}
+                {(semestersQuery.data ?? [])
+                  .filter((s) => s.publicId !== batch.currentSemester?.publicId)
+                  .map((s) => (
+                    <option key={s.publicId} value={s.publicId}>
+                      {s.name?.trim() ? s.name : `Semester ${s.number}`}
+                    </option>
+                  ))}
               </select>
               <Button
                 variant="outline"
