@@ -348,7 +348,7 @@ export class StructureController {
   }
 
   // Set (or reset) a teacher's sign-in password. Body may omit `password` to reset to the
-  // shared default (Teacher@12345). The teacher must change it on next login.
+  // shared default (Teacher@123). The teacher must change it on next login.
   @Post('teachers/:publicId/set-password')
   @HttpCode(200)
   setTeacherPassword(

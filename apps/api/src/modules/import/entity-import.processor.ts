@@ -210,7 +210,7 @@ export class EntityImportProcessor extends WorkerHost {
               email: row.email,
               passwordHash: hash,
               displayName: row.name,
-              mustChangePassword: true,
+              mustChangePassword: false,
             },
           });
           await tx.teacher.create({

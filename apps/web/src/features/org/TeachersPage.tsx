@@ -60,7 +60,7 @@ export function TeachersPage() {
           <h2 className="text-sm font-semibold">Teachers</h2>
           <p className="text-muted-foreground text-sm">
             Teachers sign in with their email. Initial password is{' '}
-            <code className="bg-muted rounded px-1 py-0.5 text-xs">Teacher@12345</code> (they change
+            <code className="bg-muted rounded px-1 py-0.5 text-xs">Teacher@123</code> (they change
             it on first login).
           </p>
         </div>
@@ -175,7 +175,7 @@ function TeacherRow({
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [settingPassword, setSettingPassword] = useState(false);
-  const [newPassword, setNewPassword] = useState('Teacher@12345');
+  const [newPassword, setNewPassword] = useState('Teacher@123');
   const [designation, setDesignation] = useState(teacher.designation ?? '');
   const [displayName, setDisplayName] = useState(teacher.user.displayName);
 
@@ -274,7 +274,7 @@ function TeacherRow({
               className="h-7 px-2"
               title="Set password"
               onClick={() => {
-                setNewPassword('Teacher@12345');
+                setNewPassword('Teacher@123');
                 setSettingPassword(true);
               }}
             >
@@ -301,7 +301,7 @@ function TeacherRow({
             <DialogDescription>
               Set a sign-in password for <strong>{teacher.user.displayName}</strong> (
               {teacher.user.email ?? 'no email'}). They will be prompted to change it on next login.
-              The default is <code>Teacher@12345</code>.
+              The default is <code>Teacher@123</code>.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">

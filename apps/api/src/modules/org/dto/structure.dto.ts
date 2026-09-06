@@ -138,7 +138,7 @@ export class UpdateTeacherDto {
 }
 
 export class SetTeacherPasswordDto {
-  // Omit to reset to the shared default (Teacher@12345); otherwise at least 8 characters.
+  // Omit to reset to the shared default (Teacher@123); otherwise at least 8 characters.
   @IsOptional() @IsString() @Length(8, 100) password?: string;
 }
 

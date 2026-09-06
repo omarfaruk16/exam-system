@@ -59,7 +59,7 @@ export interface OrgContext {
 export type ExportFormat = 'xlsx' | 'csv';
 
 /** Initial password for a newly created/imported teacher (they must change it on first login). */
-export const TEACHER_DEFAULT_PASSWORD = 'Teacher@12345';
+export const TEACHER_DEFAULT_PASSWORD = 'Teacher@123';
 
 /** Initial/reset password for student accounts. */
 export const STUDENT_DEFAULT_PASSWORD = 'Student@123';
@@ -792,7 +792,7 @@ export class StructureService {
           email: dto.email,
           passwordHash: hash,
           displayName: dto.displayName,
-          mustChangePassword: true,
+          mustChangePassword: false,
         },
       });
       const teacher = await tx.teacher.create({
@@ -861,7 +861,7 @@ export class StructureService {
 
   /**
    * Set (or reset) a teacher's sign-in password. When `password` is omitted the shared default
-   * (Teacher@12345) is applied. The teacher is forced to change it on next login.
+   * (Teacher@123) is applied. The teacher is forced to change it on next login.
    */
   async setTeacherPassword(ctx: OrgContext, publicId: string, password?: string) {
     const teacher = await this.prisma.db.teacher.findFirst({
@@ -875,7 +875,7 @@ export class StructureService {
     return this.mutate(ctx, 'teacher.set_password', 'Teacher', async (tx) => {
       await tx.user.update({
         where: { id: teacher.userId },
-        data: { passwordHash: hash, mustChangePassword: true },
+        data: { passwordHash: hash, mustChangePassword: false },
       });
       return { result: { publicId }, entityId: publicId, after: { passwordReset: true } };
     });
