@@ -64,7 +64,7 @@ export function BatchesPage() {
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold">Sessions</h2>
           <p className="text-muted-foreground text-sm">
@@ -72,7 +72,7 @@ export function BatchesPage() {
             semester's courses and exams.
           </p>
         </div>
-        <Button size="sm" onClick={() => setCreating((v) => !v)}>
+        <Button size="sm" className="shrink-0" onClick={() => setCreating((v) => !v)}>
           <Plus className="size-4" /> New session
         </Button>
       </div>

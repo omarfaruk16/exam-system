@@ -172,10 +172,10 @@ export function DepartmentProfilePage() {
                 Active Department
               </span>
             </div>
-            <h1 className="text-3xl font-semibold tracking-tight">{dept.name}</h1>
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{dept.name}</h1>
           </div>
 
-          <div className="bg-background/50 flex gap-6 rounded-xl border px-5 py-3">
+          <div className="bg-background/50 flex gap-6 rounded-xl border px-4 py-3 sm:px-5">
             <Stat value={programs.length} label="Degrees" />
             <Stat value={facultyCount} label="Faculty" />
             <Stat value={studentCount} label="Students" />
@@ -184,13 +184,13 @@ export function DepartmentProfilePage() {
       </div>
 
       {/* Tab menu */}
-      <nav className="mt-4 flex flex-wrap gap-x-1 gap-y-1 border-b">
+      <nav className="mt-4 flex gap-x-1 gap-y-1 overflow-x-auto border-b">
         {TABS.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
             className={cn(
-              '-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors',
+              '-mb-px inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium transition-colors',
               tab === t.key
                 ? 'border-primary text-foreground'
                 : 'text-muted-foreground hover:text-foreground border-transparent',

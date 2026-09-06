@@ -27,7 +27,7 @@ export function OrgLayout() {
         </p>
       </header>
 
-      <nav className="mb-6 flex gap-1 border-b">
+      <nav className="mb-6 flex gap-1 overflow-x-auto border-b">
         {visible.map((t) => (
           <NavLink
             key={t.to}
@@ -35,7 +35,7 @@ export function OrgLayout() {
             end={t.end}
             className={({ isActive }) =>
               cn(
-                '-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors',
+                '-mb-px shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition-colors',
                 isActive
                   ? 'border-primary text-foreground'
                   : 'text-muted-foreground hover:text-foreground border-transparent',
