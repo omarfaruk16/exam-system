@@ -149,7 +149,7 @@ export function LoginPage() {
         <section className="relative lg:col-span-6 xl:col-span-7">
           <div className="relative">
             <h1 className="mt-3 text-4xl font-extrabold leading-[1.08] tracking-tight text-slate-900 sm:text-5xl lg:text-5xl xl:text-6xl dark:text-white">
-              The Paperless
+              The Paper-Less
               <br />
               <span className="text-blue-600 dark:text-blue-400">
                 Exam System<span className="text-slate-300 dark:text-slate-600">.</span>
