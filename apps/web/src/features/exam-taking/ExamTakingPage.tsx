@@ -108,6 +108,7 @@ function ExamRunner({ data }: { data: StartAttemptResponse }) {
   const [warn, setWarn] = useState(false);
   const violationsRef = useRef(0);
   const lastViolationAtRef = useRef(0);
+  const warnTimerRef = useRef<number | null>(null);
   // Holds the latest violation handler so the event-listener effects (declared before the
   // handler, which depends on doSubmit) can always call the current version.
   const onLeaveRef = useRef<(reason: string) => void>(() => {});
@@ -295,6 +296,35 @@ function ExamRunner({ data }: { data: StartAttemptResponse }) {
     return () => {
       document.removeEventListener('visibilitychange', onHide);
       window.removeEventListener('blur', onBlur);
+    };
+  }, [submitted]);
+
+  // Auto-restore: when the student brings the window back, re-enter fullscreen immediately
+  // (focus is a valid user-gesture context that browsers accept for requestFullscreen).
+  // The warning overlay auto-dismisses after 1.5 s so the exam continues without a manual click.
+  useEffect(() => {
+    if (submitted) return;
+    const tryFullscreen = () => {
+      if (!document.fullscreenElement) {
+        Promise.resolve(document.documentElement.requestFullscreen?.())
+          .then(() => setFsPrompt(false))
+          .catch(() => undefined);
+      }
+    };
+    const onFocus = () => {
+      tryFullscreen();
+      if (warnTimerRef.current) window.clearTimeout(warnTimerRef.current);
+      warnTimerRef.current = window.setTimeout(() => setWarn(false), 1500);
+    };
+    const onVisible = () => {
+      if (!document.hidden) tryFullscreen();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
+      if (warnTimerRef.current) window.clearTimeout(warnTimerRef.current);
     };
   }, [submitted]);
 

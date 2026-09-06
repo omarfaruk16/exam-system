@@ -80,7 +80,7 @@ export function ImportExportBar({
             title={`Export ${label}`}
             aria-label={`Export ${label}`}
           >
-            <Download className="size-4" />
+            <Upload className="size-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
@@ -108,7 +108,7 @@ export function ImportExportBar({
         title={disabledReason ?? `Import ${label}`}
         aria-label={disabledReason ?? `Import ${label}`}
       >
-        <Upload className="size-4" />
+        <Download className="size-4" />
       </Button>
 
       {importing && (
