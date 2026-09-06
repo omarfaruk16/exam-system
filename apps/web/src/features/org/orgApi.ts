@@ -106,6 +106,9 @@ export const deleteTeacher = (id: string) => api.del(`/org/teachers/${id}`);
 export const setTeacherPassword = (id: string, password?: string) =>
   api.post<void>(`/org/teachers/${id}/set-password`, password ? { password } : {});
 
+export const setStudentPassword = (id: string) =>
+  api.post<void>(`/org/students/${id}/set-password`, {});
+
 // ── Teacher selector (dept_head-accessible, scoped to department) ──
 export const fetchTeachersSelector = (department: string) =>
   api.get<TeacherOption[]>(`/org/teachers/selector${qs({ department })}`);

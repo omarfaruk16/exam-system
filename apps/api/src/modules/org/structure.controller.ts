@@ -34,6 +34,7 @@ import {
   CreateTeacherManualDto,
   ImportStructureDto,
   SetTeacherPasswordDto,
+  SetStudentPasswordDto,
   UpdateBatchDto,
   UpdateCourseDto,
   UpdateCoursePartDto,
@@ -438,6 +439,18 @@ export class StructureController {
   @Delete('students/:publicId')
   deleteStudent(@CurrentUser() u: AuthUser, @Ip() ip: string, @Param('publicId') id: string) {
     return this.svc.deleteStudent(this.ctx(u, ip), id);
+  }
+
+  // Set (or reset) a student's sign-in password. Omit `password` to reset to Student@123.
+  @Post('students/:publicId/set-password')
+  @HttpCode(200)
+  setStudentPassword(
+    @CurrentUser() u: AuthUser,
+    @Ip() ip: string,
+    @Param('publicId') id: string,
+    @Body() dto: SetStudentPasswordDto,
+  ) {
+    return this.svc.setStudentPassword(this.ctx(u, ip), id, dto.password);
   }
 
   @Roles('super_admin', 'admin', 'department_head')

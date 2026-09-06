@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { StudentRow } from '@exam/types';
-import { GraduationCap, Loader2, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { GraduationCap, KeyRound, Loader2, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,7 @@ import {
   deleteStudent,
   fetchBatches,
   fetchStudents,
+  setStudentPassword,
   updateStudent,
 } from './orgApi';
 import { ImportExportBar } from './ImportExportBar';
@@ -226,6 +227,12 @@ function StudentRowItem({
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not delete'),
   });
 
+  const resetPwd = useMutation({
+    mutationFn: () => setStudentPassword(student.publicId),
+    onSuccess: () => toast.success('Password reset to Student@123'),
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not reset password'),
+  });
+
   if (editing) {
     return (
       <tr className="bg-muted/30 border-b last:border-0">
@@ -309,9 +316,21 @@ function StudentRowItem({
         </td>
         <td className="px-4 py-3">
           <div className="flex items-center justify-end gap-1">
-            {move.isPending && <Loader2 className="text-muted-foreground size-4 animate-spin" />}
+            {(move.isPending || resetPwd.isPending) && (
+              <Loader2 className="text-muted-foreground size-4 animate-spin" />
+            )}
             <Button variant="ghost" size="sm" className="h-7 px-2" onClick={startEdit}>
               <Pencil className="size-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground hover:text-foreground h-7 px-2"
+              title="Reset password to Student@123"
+              onClick={() => resetPwd.mutate()}
+              disabled={resetPwd.isPending}
+            >
+              <KeyRound className="size-3.5" />
             </Button>
             <Button
               variant="ghost"

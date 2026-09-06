@@ -61,6 +61,9 @@ export type ExportFormat = 'xlsx' | 'csv';
 /** Initial password for a newly created/imported teacher (they must change it on first login). */
 export const TEACHER_DEFAULT_PASSWORD = 'Teacher@12345';
 
+/** Initial/reset password for student accounts. */
+export const STUDENT_DEFAULT_PASSWORD = 'Student@123';
+
 @Injectable()
 export class StructureService {
   constructor(
@@ -873,6 +876,27 @@ export class StructureService {
       await tx.user.update({
         where: { id: teacher.userId },
         data: { passwordHash: hash, mustChangePassword: true },
+      });
+      return { result: { publicId }, entityId: publicId, after: { passwordReset: true } };
+    });
+  }
+
+  async setStudentPassword(ctx: OrgContext, publicId: string, password?: string) {
+    const student = await this.prisma.db.student.findFirst({
+      where: { publicId },
+      select: {
+        userId: true,
+        batch: { select: { program: { select: { department: { select: { facultyId: true } } } } } },
+      },
+    });
+    if (!student) throw new NotFoundException('Student not found');
+    this.acl.assertFaculty(ctx.actor, student.batch.program.department.facultyId);
+
+    const hash = await this.password.hash(password?.trim() || STUDENT_DEFAULT_PASSWORD);
+    return this.mutate(ctx, 'student.set_password', 'Student', async (tx) => {
+      await tx.user.update({
+        where: { id: student.userId },
+        data: { passwordHash: hash, mustChangePassword: false },
       });
       return { result: { publicId }, entityId: publicId, after: { passwordReset: true } };
     });

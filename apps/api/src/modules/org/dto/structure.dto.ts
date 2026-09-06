@@ -142,6 +142,11 @@ export class SetTeacherPasswordDto {
   @IsOptional() @IsString() @Length(8, 100) password?: string;
 }
 
+export class SetStudentPasswordDto {
+  // Omit to reset to the shared default (Student@123); otherwise at least 8 characters.
+  @IsOptional() @IsString() @Length(8, 100) password?: string;
+}
+
 /** Manually create a single student account. Temp password = Student@123. */
 export class CreateStudentManualDto {
   @IsString() @Length(2, 30) studentId!: string;
