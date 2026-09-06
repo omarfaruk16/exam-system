@@ -109,6 +109,9 @@ export const setTeacherPassword = (id: string, password?: string) =>
 export const setStudentPassword = (id: string) =>
   api.post<void>(`/org/students/${id}/set-password`, {});
 
+export const resetBatchStudentPasswords = (batchPublicId: string) =>
+  api.post<{ count: number }>(`/org/batches/${batchPublicId}/reset-student-passwords`, {});
+
 // ── Teacher selector (dept_head-accessible, scoped to department) ──
 export const fetchTeachersSelector = (department: string) =>
   api.get<TeacherOption[]>(`/org/teachers/selector${qs({ department })}`);

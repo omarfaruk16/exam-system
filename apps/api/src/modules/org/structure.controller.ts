@@ -403,6 +403,17 @@ export class StructureController {
     return this.svc.assignBatchSemester(this.ctx(u, ip), id, dto);
   }
 
+  // Reset every student in a session (batch) to the default password (Student@123).
+  @Post('batches/:publicId/reset-student-passwords')
+  @HttpCode(200)
+  resetBatchStudentPasswords(
+    @CurrentUser() u: AuthUser,
+    @Ip() ip: string,
+    @Param('publicId') id: string,
+  ) {
+    return this.svc.resetBatchStudentPasswords(this.ctx(u, ip), id);
+  }
+
   // Students
   @Get('students/export')
   exportStudents(

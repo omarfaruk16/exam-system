@@ -144,6 +144,7 @@ export class QuestionImportProcessor extends WorkerHost {
     const summary: ImportSummary = {
       total,
       imported,
+      updated: 0,
       skipped: 0,
       failed: total - imported,
       errors,

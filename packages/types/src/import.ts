@@ -11,6 +11,8 @@ export interface ImportRowError {
 export interface ImportSummary {
   total: number;
   imported: number;
+  /** Rows whose subject already existed and was refreshed in place (details + password reset). */
+  updated: number;
   skipped: number;
   failed: number;
   errors: ImportRowError[];

@@ -179,6 +179,7 @@ export class EntityImportProcessor extends WorkerHost {
     if (!teacherRole) throw new Error('Role "teacher" is missing — run the seed first');
 
     let imported = 0;
+    let updated = 0;
     let skipped = 0;
     for (let i = 0; i < parsed.length; i++) {
       const row = parsed[i]!;
@@ -194,6 +195,64 @@ export class EntityImportProcessor extends WorkerHost {
           });
           continue;
         }
+        // Initial/reset password is the fixed default so teachers can sign in immediately.
+        const hash = await this.password.hash(TEACHER_DEFAULT_PASSWORD);
+
+        // Idempotent: teachers are keyed by email. If a user with this email already exists,
+        // refresh the teacher's record (name, department, designation) and reset the password
+        // to the default so re-running the sheet repairs accounts from older builds.
+        const existingUser = await this.prisma.db.user.findFirst({
+          where: { email: { equals: row.email, mode: 'insensitive' } },
+          select: { id: true, teacher: { select: { id: true } } },
+        });
+
+        // If the email belongs to an existing account that is NOT a teacher (a student or admin),
+        // never convert it — report a conflict instead of escalating its privileges.
+        if (existingUser && !existingUser.teacher) {
+          skipped++;
+          errors.push({
+            row: row.rowNumber,
+            field: 'email',
+            value: row.email,
+            message: 'Email already belongs to a non-teacher account',
+          });
+          await job.updateProgress(Math.round(((i + 1) / Math.max(parsed.length, 1)) * 100));
+          continue;
+        }
+
+        if (existingUser?.teacher) {
+          await this.prisma.$transaction(async (tx) => {
+            await tx.user.update({
+              where: { id: existingUser.id },
+              data: {
+                displayName: row.name,
+                passwordHash: hash,
+                mustChangePassword: false,
+              },
+            });
+            await tx.teacher.update({
+              where: { id: existingUser.teacher!.id },
+              data: { departmentId: dept.id, designation: row.designation },
+            });
+            const hasRole = await tx.userRole.findFirst({
+              where: { userId: existingUser.id, roleId: teacherRole.id },
+              select: { id: true },
+            });
+            if (!hasRole) {
+              await tx.userRole.create({
+                data: {
+                  userId: existingUser.id,
+                  roleId: teacherRole.id,
+                  scopeDepartmentId: dept.id,
+                },
+              });
+            }
+          });
+          updated++;
+          await job.updateProgress(Math.round(((i + 1) / Math.max(parsed.length, 1)) * 100));
+          continue;
+        }
+
         // Username is an internal unique handle derived from the email; teachers sign in by email.
         const base =
           row.email
@@ -201,8 +260,6 @@ export class EntityImportProcessor extends WorkerHost {
             ?.replace(/[^a-z0-9]/gi, '')
             .toLowerCase() || 'teacher';
         const username = `${base}_${Math.random().toString(36).slice(2, 8)}`;
-        // Initial password is the fixed default; teachers must change it on first login.
-        const hash = await this.password.hash(TEACHER_DEFAULT_PASSWORD);
         await this.prisma.$transaction(async (tx) => {
           const user = await tx.user.create({
             data: {
@@ -228,7 +285,7 @@ export class EntityImportProcessor extends WorkerHost {
             row: row.rowNumber,
             field: 'email',
             value: row.email,
-            message: 'A user with this email already exists',
+            message: 'Could not import — the email collides with a different account',
           });
         } else {
           errors.push({ row: row.rowNumber, message: `Unexpected error: ${(e as Error).message}` });
@@ -236,7 +293,7 @@ export class EntityImportProcessor extends WorkerHost {
       }
       await job.updateProgress(Math.round(((i + 1) / Math.max(parsed.length, 1)) * 100));
     }
-    return this.finish(job, parsed.length + validationErrors, imported, skipped, errors);
+    return this.finish(job, parsed.length + validationErrors, imported, skipped, errors, updated);
   }
 
   // ─────────────────────────────── Departments ───────────────────────────────
@@ -384,17 +441,19 @@ export class EntityImportProcessor extends WorkerHost {
     imported: number,
     skipped: number,
     errors: ImportRowError[],
+    updated = 0,
   ): Promise<ImportSummary> {
     const summary: ImportSummary = {
       total,
       imported,
+      updated,
       skipped,
-      failed: total - imported - skipped,
+      failed: total - imported - updated - skipped,
       errors,
     };
     if (errors.length > 0) await this.writeErrorReport(String(job.id), errors);
     this.logger.log(
-      `Entity import ${job.id} (${job.data.entity}): ${imported} imported, ${skipped} skipped, ${summary.failed} failed of ${total}`,
+      `Entity import ${job.id} (${job.data.entity}): ${imported} imported, ${updated} updated, ${skipped} skipped, ${summary.failed} failed of ${total}`,
     );
     return summary;
   }

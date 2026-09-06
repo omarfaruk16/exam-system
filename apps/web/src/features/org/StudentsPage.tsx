@@ -23,6 +23,7 @@ import {
   deleteStudent,
   fetchBatches,
   fetchStudents,
+  resetBatchStudentPasswords,
   setStudentPassword,
   updateStudent,
 } from './orgApi';
@@ -33,11 +34,25 @@ export function StudentsPage() {
   const [batchFilter, setBatchFilter] = useState('');
   const [search, setSearch] = useState('');
   const [adding, setAdding] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   const batchQuery = useQuery({ queryKey: ['org-batches-all'], queryFn: () => fetchBatches() });
   const { data, isLoading } = useQuery({
     queryKey: ['org-students', batchFilter || undefined],
     queryFn: () => fetchStudents(batchFilter || undefined),
+  });
+
+  const selectedBatch = batchFilter
+    ? (batchQuery.data ?? []).find((b) => b.publicId === batchFilter)
+    : undefined;
+
+  const resetAll = useMutation({
+    mutationFn: () => resetBatchStudentPasswords(batchFilter),
+    onSuccess: (r) => {
+      toast.success(`Reset ${r.count} student password${r.count === 1 ? '' : 's'} to Student@123`);
+      setConfirmReset(false);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not reset passwords'),
   });
   const allStudents = data ?? [];
   const students = search.trim()
@@ -76,6 +91,16 @@ export function StudentsPage() {
             disabledReason={batchFilter ? undefined : 'Pick a session (filter) to import into'}
             onImported={invalidate}
           />
+          {batchFilter && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setConfirmReset(true)}
+              title="Reset every student in this session to Student@123"
+            >
+              <KeyRound className="size-4" /> Reset passwords
+            </Button>
+          )}
           <Button size="sm" onClick={() => setAdding((v) => !v)}>
             <Plus className="size-4" /> Add student
           </Button>
@@ -167,6 +192,32 @@ export function StudentsPage() {
           </p>
         </Card>
       )}
+
+      <Dialog open={confirmReset} onOpenChange={setConfirmReset}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reset all passwords in this session?</DialogTitle>
+            <DialogDescription>
+              Every student in{' '}
+              <span className="font-medium">
+                {selectedBatch ? sessionLabel(selectedBatch) : 'this session'}
+              </span>{' '}
+              will have their password set to <code className="font-mono">Student@123</code>. They
+              can sign in with it immediately and change it later. This does not affect their
+              answers, results, or enrolment.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmReset(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => resetAll.mutate()} disabled={resetAll.isPending}>
+              {resetAll.isPending && <Loader2 className="size-4 animate-spin" />} Reset all to
+              Student@123
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

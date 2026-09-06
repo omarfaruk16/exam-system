@@ -902,6 +902,34 @@ export class StructureService {
     });
   }
 
+  /**
+   * Reset EVERY active student in one session (batch) to the default password (Student@123).
+   * The practical repair for accounts imported by older builds that assigned unknowable
+   * random passwords. Returns how many accounts were reset.
+   */
+  async resetBatchStudentPasswords(ctx: OrgContext, batchPublicId: string) {
+    const batch = await this.batchRef(batchPublicId);
+    this.acl.assertFaculty(ctx.actor, batch.facultyId);
+
+    const students = await this.prisma.db.student.findMany({
+      where: { batchId: batch.id },
+      select: { userId: true },
+    });
+    const hash = await this.password.hash(STUDENT_DEFAULT_PASSWORD);
+
+    return this.mutate(ctx, 'student.reset_batch_passwords', 'Batch', async (tx) => {
+      const res = await tx.user.updateMany({
+        where: { id: { in: students.map((s) => s.userId) } },
+        data: { passwordHash: hash, mustChangePassword: false },
+      });
+      return {
+        result: { count: res.count },
+        entityId: batchPublicId,
+        after: { passwordReset: true, count: res.count },
+      };
+    });
+  }
+
   async exportTeachers(
     departmentPublicId?: string,
     format: ExportFormat = 'xlsx',

@@ -125,6 +125,8 @@ export function ImportModal({
               <div className="text-sm">
                 <p className="font-medium">
                   {phase.state.summary?.imported ?? 0} imported
+                  {(phase.state.summary?.updated ?? 0) > 0 &&
+                    `, ${phase.state.summary?.updated} updated`}
                   {(phase.state.summary?.skipped ?? 0) > 0 &&
                     `, ${phase.state.summary?.skipped} skipped`}
                   {(phase.state.summary?.failed ?? 0) > 0 &&

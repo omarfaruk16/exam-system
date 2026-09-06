@@ -20,8 +20,10 @@ const STUDENT_DEFAULT_PASSWORD = 'Student@123';
 /**
  * BullMQ worker for the bulk student import. Never runs on the request thread.
  * Valid rows are imported; malformed rows are rejected into a downloadable error report.
- * Temp passwords are generated when absent (mustChangePassword=true); delivery of credentials
- * via emailed reset links is added in a later phase — plaintext passwords are never persisted.
+ * The import is idempotent: a row whose student ID already exists refreshes that student's
+ * details and resets the password to the shared default (Student@123) so re-running a sheet
+ * repairs accounts. New students also get Student@123; students are never forced to change it.
+ * A per-row `password` column overrides the default for that student.
  */
 @Processor(QUEUE_STUDENT_IMPORT, { concurrency: 1 })
 export class StudentImportProcessor extends WorkerHost {
@@ -71,12 +73,57 @@ export class StudentImportProcessor extends WorkerHost {
 
     const validationErrorCount = errors.length;
     let imported = 0;
+    let updated = 0;
     let skipped = 0;
 
     for (let i = 0; i < parsed.length; i++) {
       const row = parsed[i]!;
       const tempPassword = row.password ?? STUDENT_DEFAULT_PASSWORD;
       try {
+        const hash = await this.password.hash(tempPassword);
+
+        // Idempotent: if an ACTIVE student with this ID already exists, refresh their record
+        // (name, email, session, registration) and reset the password to the known default so
+        // they can sign in. Re-running the same sheet fixes accounts imported with older builds.
+        const existing = await this.prisma.db.student.findFirst({
+          where: { studentId: row.studentId },
+          select: { id: true, userId: true },
+        });
+
+        if (existing) {
+          await this.prisma.$transaction(async (tx) => {
+            await tx.user.update({
+              where: { id: existing.userId },
+              data: {
+                email: row.email,
+                displayName: row.name,
+                passwordHash: hash,
+                mustChangePassword: false,
+              },
+            });
+            await tx.student.update({
+              where: { id: existing.id },
+              data: {
+                batchId,
+                registrationNumber: row.registrationNumber ?? undefined,
+              },
+            });
+            // Ensure the student role is present (harmless if it already is).
+            const hasRole = await tx.userRole.findFirst({
+              where: { userId: existing.userId, roleId: studentRole.id },
+              select: { id: true },
+            });
+            if (!hasRole) {
+              await tx.userRole.create({
+                data: { userId: existing.userId, roleId: studentRole.id },
+              });
+            }
+          });
+          updated++;
+          await job.updateProgress(Math.round(((i + 1) / Math.max(parsed.length, 1)) * 100));
+          continue;
+        }
+
         // Free unique slots held by any prior soft-deleted record with the same studentId.
         const staleUser = await this.prisma.user.findFirst({
           where: { username: row.studentId, deletedAt: { not: null } },
@@ -98,7 +145,6 @@ export class StudentImportProcessor extends WorkerHost {
             data: { studentId: `${row.studentId}__del_${Date.now()}`, registrationNumber: null },
           });
         }
-        const hash = await this.password.hash(tempPassword);
         await this.prisma.$transaction(async (tx) => {
           const user = await tx.user.create({
             data: {
@@ -127,7 +173,7 @@ export class StudentImportProcessor extends WorkerHost {
             row: row.rowNumber,
             field: 'studentId',
             value: row.studentId,
-            message: 'A user with this student ID or email already exists',
+            message: 'Could not import — the email or student ID collides with a different account',
           });
         } else {
           errors.push({ row: row.rowNumber, message: `Unexpected error: ${(e as Error).message}` });
@@ -140,8 +186,9 @@ export class StudentImportProcessor extends WorkerHost {
     const summary: ImportSummary = {
       total,
       imported,
+      updated,
       skipped,
-      failed: total - imported - skipped,
+      failed: total - imported - updated - skipped,
       errors,
     };
 
@@ -150,7 +197,7 @@ export class StudentImportProcessor extends WorkerHost {
     }
 
     this.logger.log(
-      `Import job ${job.id}: ${imported} imported, ${skipped} skipped, ${summary.failed} failed of ${total}`,
+      `Import job ${job.id}: ${imported} imported, ${updated} updated, ${skipped} skipped, ${summary.failed} failed of ${total}`,
     );
     return summary;
   }
