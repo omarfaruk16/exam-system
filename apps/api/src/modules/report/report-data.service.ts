@@ -90,10 +90,14 @@ const examHeaderSelect = {
             select: {
               number: true,
               name: true,
-              program: {
+              batch: {
                 select: {
-                  name: true,
-                  department: { select: { name: true } },
+                  program: {
+                    select: {
+                      name: true,
+                      department: { select: { name: true } },
+                    },
+                  },
                 },
               },
             },
@@ -147,7 +151,7 @@ export class ReportDataService {
         semester: {
           number: number;
           name: string | null;
-          program: { name: string; department: { name: string } };
+          batch: { program: { name: string; department: { name: string } } } | null;
         };
       };
     };
@@ -176,8 +180,8 @@ export class ReportDataService {
 
     return {
       institution: this.config.get('INSTITUTION_NAME', { infer: true }) ?? 'University of Rajshahi',
-      department: sem.program.department.name,
-      program: sem.program.name,
+      department: sem.batch?.program.department.name ?? '—',
+      program: sem.batch?.program.name ?? '—',
       semester: sem.name?.trim() ? sem.name : `Semester ${sem.number}`,
       courseName: course.name,
       courseCode: course.code,
