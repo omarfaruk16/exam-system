@@ -2,7 +2,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
   BarChart3,
   ChevronRight,
-  ExternalLink,
   Eye,
   EyeOff,
   FileText,
@@ -140,14 +139,6 @@ export function LoginPage() {
               <Settings className="size-4" /> Admin Login
             </Button>
           </div>
-          <a
-            href="https://www.ru.ac.bd"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hidden items-center gap-1.5 text-sm font-semibold text-blue-600 transition-colors hover:text-blue-500 xl:inline-flex dark:text-blue-400 dark:hover:text-blue-300"
-          >
-            Visit RU Website <ExternalLink className="size-3.5" />
-          </a>
           <ThemeToggle />
         </div>
       </header>
