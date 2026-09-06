@@ -862,8 +862,13 @@ export function SemesterList({
         <Empty text="No semesters yet." />
       ) : (
         <div className="space-y-3">
-          {semesters.map((s) => (
-            <SemesterCourses key={s.publicId} semester={s} deptPublicId={deptPublicId} />
+          {semesters.map((s, i) => (
+            <SemesterCourses
+              key={s.publicId}
+              semester={s}
+              rank={i + 1}
+              deptPublicId={deptPublicId}
+            />
           ))}
         </div>
       )}
@@ -871,7 +876,15 @@ export function SemesterList({
   );
 }
 
-function SemesterCourses({ semester, deptPublicId }: { semester: Semester; deptPublicId: string }) {
+function SemesterCourses({
+  semester,
+  rank,
+  deptPublicId,
+}: {
+  semester: Semester;
+  rank: number;
+  deptPublicId: string;
+}) {
   const qc = useQueryClient();
   const canManage = useCanManage();
   const [open, setOpen] = useState(false);
@@ -924,7 +937,7 @@ function SemesterCourses({ semester, deptPublicId }: { semester: Semester; deptP
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not delete'),
   });
 
-  const label = semester.name ?? `Semester ${semester.number}`;
+  const label = semester.name ?? `Semester ${rank}`;
   const courses = coursesQuery.data ?? [];
 
   return (
@@ -1769,16 +1782,25 @@ function BatchRow({ batch, canManage }: { batch: Batch; canManage: boolean }) {
                   <option value={batch.currentSemester.publicId}>
                     {batch.currentSemester.name?.trim()
                       ? batch.currentSemester.name
-                      : `Semester ${batch.currentSemester.number}`}
+                      : (() => {
+                          const idx = (semestersQuery.data ?? []).findIndex(
+                            (s) => s.publicId === batch.currentSemester!.publicId,
+                          );
+                          return `Semester ${idx >= 0 ? idx + 1 : batch.currentSemester.number}`;
+                        })()}
                   </option>
                 )}
                 {(semestersQuery.data ?? [])
                   .filter((s) => s.publicId !== batch.currentSemester?.publicId)
-                  .map((s) => (
-                    <option key={s.publicId} value={s.publicId}>
-                      {s.name?.trim() ? s.name : `Semester ${s.number}`}
-                    </option>
-                  ))}
+                  .map((s) => {
+                    const allSems = semestersQuery.data ?? [];
+                    const rank = allSems.findIndex((x) => x.publicId === s.publicId) + 1;
+                    return (
+                      <option key={s.publicId} value={s.publicId}>
+                        {s.name?.trim() ? s.name : `Semester ${rank}`}
+                      </option>
+                    );
+                  })}
               </select>
               <Button
                 variant="outline"

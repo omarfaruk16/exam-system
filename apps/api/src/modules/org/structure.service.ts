@@ -487,7 +487,9 @@ export class StructureService {
     const batch: Prisma.BatchWhereInput = {};
     if (batchPublicId) batch.publicId = batchPublicId;
     if (scope != null) batch.program = { department: { id: scope } };
-    const where: Prisma.SemesterWhereInput = Object.keys(batch).length ? { batch } : {};
+    const where: Prisma.SemesterWhereInput = Object.keys(batch).length
+      ? { batch, deletedAt: null }
+      : { deletedAt: null };
     return this.prisma.db.semester.findMany({
       where,
       select: semesterSelect,

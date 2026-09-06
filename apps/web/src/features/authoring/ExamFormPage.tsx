@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ExamSettings } from '@exam/types';
 import { ArrowLeft, ChevronRight, Loader2 } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -217,31 +217,12 @@ function ExamForm({
                     )}
                   </div>
                 ) : (
-                  <Field
-                    label="Course part"
+                  <TeacherPartPicker
+                    parts={parts}
+                    value={field.value}
+                    onChange={field.onChange}
                     error={errors.coursePartPublicId?.message}
-                    htmlFor="part"
-                  >
-                    <select
-                      id="part"
-                      value={field.value}
-                      onChange={field.onChange}
-                      className="border-input bg-card focus-visible:ring-ring aria-[invalid=true]:border-destructive flex h-10 w-full rounded-md border px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2"
-                      aria-invalid={errors.coursePartPublicId ? 'true' : 'false'}
-                    >
-                      <option value="">Select a course part…</option>
-                      {parts.map((p) => (
-                        <option key={p.publicId} value={p.publicId}>
-                          {p.label}
-                        </option>
-                      ))}
-                    </select>
-                    {parts.length === 0 && (
-                      <p className="text-muted-foreground mt-1 text-xs">
-                        You are not assigned to any course part yet. Ask an admin to assign you.
-                      </p>
-                    )}
-                  </Field>
+                  />
                 )
               }
             />
@@ -394,6 +375,91 @@ function ExamForm({
           </Button>
         </div>
       </form>
+    </div>
+  );
+}
+
+// ── Semester-first picker for teachers ────────────────────────────────────
+
+function TeacherPartPicker({
+  parts,
+  value,
+  onChange,
+  error,
+}: {
+  parts: { publicId: string; label: string; semesterLabel?: string }[];
+  value: string;
+  onChange: (v: string) => void;
+  error?: string;
+}) {
+  const semesters = useMemo(() => {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const p of parts) {
+      const label = p.semesterLabel ?? 'Unknown semester';
+      if (!seen.has(label)) {
+        seen.add(label);
+        result.push(label);
+      }
+    }
+    return result;
+  }, [parts]);
+
+  const [selectedSem, setSelectedSem] = useState(() => {
+    if (value) {
+      const match = parts.find((p) => p.publicId === value);
+      return match?.semesterLabel ?? '';
+    }
+    return semesters.length === 1 ? semesters[0] : '';
+  });
+
+  const filteredParts = selectedSem
+    ? parts.filter((p) => (p.semesterLabel ?? 'Unknown semester') === selectedSem)
+    : [];
+
+  return (
+    <div className="space-y-2">
+      <Field label="Semester" htmlFor="sem-select">
+        <select
+          id="sem-select"
+          value={selectedSem}
+          onChange={(e) => {
+            setSelectedSem(e.target.value);
+            onChange('');
+          }}
+          className="border-input bg-card focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2"
+        >
+          <option value="">Select a semester…</option>
+          {semesters.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+        {parts.length === 0 && (
+          <p className="text-muted-foreground mt-1 text-xs">
+            You are not assigned to any course part yet. Ask an admin to assign you.
+          </p>
+        )}
+      </Field>
+      {selectedSem && (
+        <Field label="Course part" error={error} htmlFor="part">
+          <select
+            id="part"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="border-input bg-card focus-visible:ring-ring aria-[invalid=true]:border-destructive flex h-10 w-full rounded-md border px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2"
+            aria-invalid={error ? 'true' : 'false'}
+          >
+            <option value="">Select a course part…</option>
+            {filteredParts.map((p) => (
+              <option key={p.publicId} value={p.publicId}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
     </div>
   );
 }
@@ -571,9 +637,9 @@ function CascadingPartPicker({
           }}
         >
           <option value="">Semester…</option>
-          {(semestersQ.data ?? []).map((s) => (
+          {(semestersQ.data ?? []).map((s, i) => (
             <option key={s.publicId} value={s.publicId}>
-              {s.name ?? `Semester ${s.number}`}
+              {s.name ?? `Semester ${i + 1}`}
             </option>
           ))}
         </select>
