@@ -40,6 +40,15 @@ export interface StartAttemptResponse {
   paper: ExamPaper;
   /** Answers already persisted for this attempt — lets a reconnect resume where the student left off. */
   savedAnswers: SavedAnswer[];
+  examContext: {
+    batchName: string;
+    semesterNumber: number;
+    semesterName: string | null;
+    courseCode: string;
+    courseName: string;
+    partName: string;
+    teacherName: string | null;
+  };
 }
 
 export interface AutosaveResponse {

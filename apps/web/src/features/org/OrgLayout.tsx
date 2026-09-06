@@ -11,7 +11,9 @@ const tabs = [
 
 export function OrgLayout() {
   const { data: user } = useSession();
-  const isAdmin = (user?.roles ?? []).some((r) => r.role === 'admin' || r.role === 'super_admin');
+  const isAdmin = (user?.roles ?? []).some(
+    (r) => r.role === 'admin' || r.role === 'super_admin' || r.role === 'department_head',
+  );
   const visible = tabs.filter((t) => isAdmin || !t.adminOnly);
 
   return (

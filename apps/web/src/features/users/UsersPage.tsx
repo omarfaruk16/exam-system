@@ -444,7 +444,7 @@ function AddUserForm({
         }}
       >
         <p className="text-sm font-medium">New admin / department admin</p>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <Label htmlFor="au-role" className="text-xs">
               Role

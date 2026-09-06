@@ -73,7 +73,7 @@ export function FacultyDashboardPage() {
       <div className="w-full space-y-4">
         <Skeleton className="h-5 w-32" />
         <Skeleton className="h-10 w-64" />
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[0, 1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-24 rounded-xl" />
           ))}

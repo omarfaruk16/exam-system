@@ -123,7 +123,7 @@ export function OrgDetailPanel({
         </div>
 
         {mode === 'view' ? (
-          <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+          <dl className="mt-4 grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
             {cfg.fields.map((f) => (
               <div key={f.key}>
                 <dt className="text-muted-foreground text-xs">{f.label}</dt>

@@ -4,14 +4,16 @@ import {
   AlertTriangle,
   CalendarClock,
   Check,
+  ChevronDown,
   FileText,
+  Filter,
   Loader2,
   Plus,
   Trash2,
   Users,
   X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -26,7 +28,7 @@ import {
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
-import { sessionLabel } from '@/lib/utils';
+import { cn, sessionLabel } from '@/lib/utils';
 import { ChangesRequestedBanner } from '../shared/ChangesRequestedBanner';
 import { StartCountdown, LiveCountdown } from '../shared/ExamCountdown';
 import { StatusPill } from '../shared/StatusPill';
@@ -45,8 +47,16 @@ import {
 
 const ADMIN_EDITABLE_STATUSES = ['draft', 'in_review', 'approved', 'changes_requested'];
 const PAST_STATUSES = ['ended', 'grading', 'results_published', 'archived'];
+const CURRENT_STATUSES = [
+  'draft',
+  'in_review',
+  'changes_requested',
+  'approved',
+  'published',
+  'live',
+];
 
-// ── Batch → Program → Semester grouping ──────────────────────────────────────
+// ── Batch → Program → Semester grouping (admin view) ─────────────────────────
 interface SemesterGroup {
   key: string;
   label: string;
@@ -65,13 +75,28 @@ interface BatchGroup {
   programs: ProgramGroup[];
 }
 
+// ── Teacher view: Dept → Session → Course grouping ────────────────────────────
+interface CourseAccordionGroup {
+  key: string;
+  courseCode: string;
+  courseName: string;
+  part: string;
+  exams: ExamListItem[];
+}
+interface SessionAccordionGroup {
+  key: string;
+  batchLabel: string;
+  courses: CourseAccordionGroup[];
+}
+interface DeptAccordionGroup {
+  key: string;
+  deptName: string;
+  sessions: SessionAccordionGroup[];
+}
+
 const NO_BATCH = 'No session assigned yet';
 const SEP = '|||';
 
-/**
- * Number every exam within its course part (Exam 1, Exam 2, …) by start time — matching the
- * "Exam N" sequence shown on generated reports. Keyed by exam publicId.
- */
 function computeExamNumbers(exams: ExamListItem[]): Map<string, number> {
   const byPart = new Map<string, ExamListItem[]>();
   for (const e of exams) {
@@ -88,13 +113,7 @@ function computeExamNumbers(exams: ExamListItem[]): Map<string, number> {
   return numbers;
 }
 
-/**
- * Nest the flat exam list as (Department + Session) → Program → Semester so staff browse
- * exams by cohort. Sessions sort newest-first (the "No session" bucket last), programmes
- * alphabetically, semesters by number, and exams within a semester newest-first.
- */
 function groupByBatch(exams: ExamListItem[]): BatchGroup[] {
-  // Top-level key = department + session, so the same session name in two departments stays split.
   const top = new Map<
     string,
     { departmentName: string; batchLabel: string; progs: Map<string, Map<string, ExamListItem[]>> }
@@ -116,7 +135,6 @@ function groupByBatch(exams: ExamListItem[]): BatchGroup[] {
   const keys = [...top.keys()].sort((a, b) => {
     const ea = top.get(a)!;
     const eb = top.get(b)!;
-    // "No session" bucket last; then newest session first; then department name.
     if (ea.batchLabel === NO_BATCH && eb.batchLabel !== NO_BATCH) return 1;
     if (eb.batchLabel === NO_BATCH && ea.batchLabel !== NO_BATCH) return -1;
     return (
@@ -152,7 +170,53 @@ function groupByBatch(exams: ExamListItem[]): BatchGroup[] {
   });
 }
 
-// ── Admin: pending deletion-request panel ────────────────────────────────────
+function groupByDeptSessionCourse(exams: ExamListItem[]): DeptAccordionGroup[] {
+  const deptMap = new Map<string, Map<string, Map<string, ExamListItem[]>>>();
+  for (const e of exams) {
+    const dept = e.departmentName;
+    const batch = e.batch ?? NO_BATCH;
+    const courseKey = `${e.courseCode}${SEP}${e.part}`;
+    if (!deptMap.has(dept)) deptMap.set(dept, new Map());
+    const sessionMap = deptMap.get(dept)!;
+    if (!sessionMap.has(batch)) sessionMap.set(batch, new Map());
+    const courseMap = sessionMap.get(batch)!;
+    if (!courseMap.has(courseKey)) courseMap.set(courseKey, []);
+    courseMap.get(courseKey)!.push(e);
+  }
+
+  return [...deptMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([deptName, sessionMap]) => ({
+      key: deptName,
+      deptName,
+      sessions: [...sessionMap.entries()]
+        .sort(([a], [b]) => {
+          if (a === NO_BATCH) return 1;
+          if (b === NO_BATCH) return -1;
+          return b.localeCompare(a);
+        })
+        .map(([batchLabel, courseMap]) => ({
+          key: `${deptName}${SEP}${batchLabel}`,
+          batchLabel,
+          courses: [...courseMap.entries()]
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([courseKey, items]) => {
+              const first = items[0]!;
+              return {
+                key: `${deptName}${SEP}${batchLabel}${SEP}${courseKey}`,
+                courseCode: first.courseCode,
+                courseName: first.courseName,
+                part: first.part,
+                exams: items.sort(
+                  (x, y) => new Date(y.startAt).getTime() - new Date(x.startAt).getTime(),
+                ),
+              };
+            }),
+        })),
+    }));
+}
+
+// ── Deletion request panel ────────────────────────────────────────────────────
 function DeletionRequestsPanel() {
   const qc = useQueryClient();
   const [rejectingId, setRejectingId] = useState<string | null>(null);
@@ -265,6 +329,7 @@ function DeletionRequestsPanel() {
   );
 }
 
+// ── Main page ─────────────────────────────────────────────────────────────────
 export function ExamListPage() {
   const navigate = useNavigate();
   const nowMs = useServerNow();
@@ -274,13 +339,13 @@ export function ExamListPage() {
     refetchInterval: 20_000,
   });
   const { data: user } = useSession();
-  const isAdmin = (user?.roles ?? []).some((r) => r.role === 'admin' || r.role === 'super_admin');
+  const isAdmin = (user?.roles ?? []).some(
+    (r) => r.role === 'admin' || r.role === 'super_admin' || r.role === 'department_head',
+  );
 
-  const grouped = groupByBatch(data ?? []);
   const examNumbers = computeExamNumbers(data ?? []);
 
-  // "Starting soon" — published exams whose start time is within the next hour
-  // (or already due but not yet flipped live), soonest first.
+  // "Starting soon" strip
   const SOON_WINDOW_MS = 60 * 60 * 1000;
   const startingSoon = (data ?? [])
     .filter((e) => {
@@ -297,7 +362,9 @@ export function ExamListPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Exams</h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            Create, edit, and submit your examinations for review.
+            {isAdmin
+              ? 'Manage and monitor all examinations across departments.'
+              : 'Create, edit, and submit your examinations for review.'}
           </p>
         </div>
         <Button onClick={() => navigate('/exams/new')}>
@@ -357,8 +424,260 @@ export function ExamListPage() {
             <Skeleton key={i} className="h-28 w-full rounded-xl" />
           ))}
         </div>
-      ) : grouped.length === 0 ? (
-        <EmptyState onCreate={() => navigate('/exams/new')} />
+      ) : isAdmin ? (
+        <AdminExamView
+          data={data ?? []}
+          examNumbers={examNumbers}
+          isAdmin={isAdmin}
+          nowMs={nowMs}
+          onNew={() => navigate('/exams/new')}
+        />
+      ) : (
+        <TeacherExamView
+          data={data ?? []}
+          examNumbers={examNumbers}
+          nowMs={nowMs}
+          onNew={() => navigate('/exams/new')}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Admin view: filter bar + hierarchical list ────────────────────────────────
+
+const ALL = '';
+
+function unique(arr: string[]): string[] {
+  return [...new Set(arr)].sort((a, b) => a.localeCompare(b));
+}
+
+function AdminExamView({
+  data,
+  examNumbers,
+  isAdmin,
+  nowMs,
+  onNew,
+}: {
+  data: ExamListItem[];
+  examNumbers: Map<string, number>;
+  isAdmin: boolean;
+  nowMs: number;
+  onNew: () => void;
+}) {
+  const [faculty, setFaculty] = useState(ALL);
+  const [dept, setDept] = useState(ALL);
+  const [session, setSession] = useState(ALL);
+  const [semester, setSemester] = useState(ALL);
+  const [course, setCourse] = useState(ALL);
+  const [status, setStatus] = useState(ALL);
+
+  // derive filter options from full list
+  const faculties = useMemo(() => unique(data.map((e) => e.facultyName).filter(Boolean)), [data]);
+  const depts = useMemo(
+    () =>
+      unique(
+        data.filter((e) => !faculty || e.facultyName === faculty).map((e) => e.departmentName),
+      ),
+    [data, faculty],
+  );
+  const sessions = useMemo(
+    () =>
+      unique(
+        data
+          .filter(
+            (e) => (!faculty || e.facultyName === faculty) && (!dept || e.departmentName === dept),
+          )
+          .map((e) => e.batch ?? NO_BATCH),
+      ),
+    [data, faculty, dept],
+  );
+  const semesters = useMemo(
+    () =>
+      unique(
+        data
+          .filter(
+            (e) =>
+              (!faculty || e.facultyName === faculty) &&
+              (!dept || e.departmentName === dept) &&
+              (!session || (e.batch ?? NO_BATCH) === session),
+          )
+          .map((e) => e.semesterLabel),
+      ),
+    [data, faculty, dept, session],
+  );
+  const courses = useMemo(
+    () =>
+      unique(
+        data
+          .filter(
+            (e) =>
+              (!faculty || e.facultyName === faculty) &&
+              (!dept || e.departmentName === dept) &&
+              (!session || (e.batch ?? NO_BATCH) === session) &&
+              (!semester || e.semesterLabel === semester),
+          )
+          .map((e) => `${e.courseCode} — ${e.courseName}`),
+      ),
+    [data, faculty, dept, session, semester],
+  );
+
+  const activeCount = [faculty, dept, session, semester, course, status].filter(Boolean).length;
+
+  const filtered = useMemo(
+    () =>
+      data.filter(
+        (e) =>
+          (!faculty || e.facultyName === faculty) &&
+          (!dept || e.departmentName === dept) &&
+          (!session || (e.batch ?? NO_BATCH) === session) &&
+          (!semester || e.semesterLabel === semester) &&
+          (!course || `${e.courseCode} — ${e.courseName}` === course) &&
+          (!status || e.status === status),
+      ),
+    [data, faculty, dept, session, semester, course, status],
+  );
+
+  const grouped = groupByBatch(filtered);
+
+  const selectCls =
+    'bg-background border-border h-8 rounded-md border px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer';
+
+  return (
+    <div className="space-y-5">
+      {/* Filter bar */}
+      <div className="rounded-xl border p-3">
+        <div className="mb-2 flex items-center gap-1.5">
+          <Filter className="text-muted-foreground size-3.5" />
+          <span className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
+            Filters
+            {activeCount > 0 && (
+              <span className="bg-primary text-primary-foreground ml-1.5 rounded-full px-1.5 py-0.5 text-[10px]">
+                {activeCount}
+              </span>
+            )}
+          </span>
+          {activeCount > 0 && (
+            <button
+              className="text-muted-foreground hover:text-foreground ml-auto text-xs underline"
+              onClick={() => {
+                setFaculty(ALL);
+                setDept(ALL);
+                setSession(ALL);
+                setSemester(ALL);
+                setCourse(ALL);
+                setStatus(ALL);
+              }}
+            >
+              Clear all
+            </button>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <select
+            className={selectCls}
+            value={faculty}
+            onChange={(e) => {
+              setFaculty(e.target.value);
+              setDept(ALL);
+              setSession(ALL);
+              setSemester(ALL);
+              setCourse(ALL);
+            }}
+          >
+            <option value={ALL}>All Faculties</option>
+            {faculties.map((f) => (
+              <option key={f} value={f}>
+                {f}
+              </option>
+            ))}
+          </select>
+          <select
+            className={selectCls}
+            value={dept}
+            onChange={(e) => {
+              setDept(e.target.value);
+              setSession(ALL);
+              setSemester(ALL);
+              setCourse(ALL);
+            }}
+          >
+            <option value={ALL}>All Departments</option>
+            {depts.map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </select>
+          <select
+            className={selectCls}
+            value={session}
+            onChange={(e) => {
+              setSession(e.target.value);
+              setSemester(ALL);
+              setCourse(ALL);
+            }}
+          >
+            <option value={ALL}>All Sessions</option>
+            {sessions.map((s) => (
+              <option key={s} value={s}>
+                {s === NO_BATCH ? 'No session' : sessionLabel({ name: s })}
+              </option>
+            ))}
+          </select>
+          <select
+            className={selectCls}
+            value={semester}
+            onChange={(e) => {
+              setSemester(e.target.value);
+              setCourse(ALL);
+            }}
+          >
+            <option value={ALL}>All Semesters</option>
+            {semesters.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+          <select className={selectCls} value={course} onChange={(e) => setCourse(e.target.value)}>
+            <option value={ALL}>All Courses</option>
+            {courses.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+          <select className={selectCls} value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value={ALL}>All Statuses</option>
+            {[
+              'draft',
+              'in_review',
+              'changes_requested',
+              'approved',
+              'published',
+              'live',
+              'ended',
+              'grading',
+              'results_published',
+              'archived',
+            ].map((s) => (
+              <option key={s} value={s}>
+                {s.replace(/_/g, ' ')}
+              </option>
+            ))}
+          </select>
+        </div>
+        {filtered.length !== data.length && (
+          <p className="text-muted-foreground mt-2 text-xs">
+            Showing {filtered.length} of {data.length} exams
+          </p>
+        )}
+      </div>
+
+      {/* Hierarchical list */}
+      {grouped.length === 0 ? (
+        <EmptyState onCreate={onNew} />
       ) : (
         <div className="space-y-8">
           {grouped.map((batch) => {
@@ -368,7 +687,6 @@ export function ExamListPage() {
             );
             return (
               <section key={batch.key} className="space-y-4">
-                {/* Department — Session header */}
                 <div className="flex flex-wrap items-center gap-2">
                   <Users className="text-primary size-4 shrink-0" />
                   <h2 className="text-base font-semibold tracking-tight">
@@ -416,6 +734,249 @@ export function ExamListPage() {
   );
 }
 
+// ── Teacher view: Current / Past with Dept→Session→Course accordions ──────────
+
+function TeacherExamView({
+  data,
+  examNumbers,
+  nowMs,
+  onNew,
+}: {
+  data: ExamListItem[];
+  examNumbers: Map<string, number>;
+  nowMs: number;
+  onNew: () => void;
+}) {
+  const current = useMemo(() => data.filter((e) => CURRENT_STATUSES.includes(e.status)), [data]);
+  const past = useMemo(() => data.filter((e) => PAST_STATUSES.includes(e.status)), [data]);
+
+  const currentGroups = useMemo(() => groupByDeptSessionCourse(current), [current]);
+  const pastGroups = useMemo(() => groupByDeptSessionCourse(past), [past]);
+
+  // Auto-open if single dept in current section
+  const singleDeptCurrent =
+    currentGroups.length === 1 ? (currentGroups[0]?.deptName ?? null) : null;
+
+  const [open, setOpen] = useState<Set<string>>(() => {
+    const init = new Set<string>();
+    if (singleDeptCurrent) init.add(`dept-current-${singleDeptCurrent}`);
+    return init;
+  });
+
+  const toggle = (key: string) =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
+  if (data.length === 0) return <EmptyState onCreate={onNew} />;
+
+  return (
+    <div className="space-y-8">
+      {/* Currently assigned */}
+      <section>
+        <h2 className="text-muted-foreground mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide">
+          <span className="bg-primary size-1.5 rounded-full" />
+          Currently Assigned
+          <span className="ml-1">({current.length})</span>
+        </h2>
+        {current.length === 0 ? (
+          <p className="text-muted-foreground text-sm">No active exams assigned.</p>
+        ) : (
+          <DeptAccordionList
+            groups={currentGroups}
+            sectionKey="current"
+            open={open}
+            onToggle={toggle}
+            examNumbers={examNumbers}
+            nowMs={nowMs}
+            isAdmin={false}
+          />
+        )}
+      </section>
+
+      {/* Past assigned */}
+      {past.length > 0 && (
+        <section>
+          <h2 className="text-muted-foreground mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide">
+            <span className="bg-muted-foreground size-1.5 rounded-full" />
+            Past Assigned
+            <span className="ml-1">({past.length})</span>
+          </h2>
+          <DeptAccordionList
+            groups={pastGroups}
+            sectionKey="past"
+            open={open}
+            onToggle={toggle}
+            examNumbers={examNumbers}
+            nowMs={nowMs}
+            isAdmin={false}
+          />
+        </section>
+      )}
+    </div>
+  );
+}
+
+function DeptAccordionList({
+  groups,
+  sectionKey,
+  open,
+  onToggle,
+  examNumbers,
+  nowMs,
+  isAdmin,
+}: {
+  groups: DeptAccordionGroup[];
+  sectionKey: string;
+  open: Set<string>;
+  onToggle: (key: string) => void;
+  examNumbers: Map<string, number>;
+  nowMs: number;
+  isAdmin: boolean;
+}) {
+  return (
+    <div className="space-y-2">
+      {groups.map((dept) => {
+        const deptKey = `dept-${sectionKey}-${dept.deptName}`;
+        const deptOpen = open.has(deptKey);
+        const totalExams = dept.sessions.reduce(
+          (n, s) => n + s.courses.reduce((m, c) => m + c.exams.length, 0),
+          0,
+        );
+        return (
+          <div key={dept.key} className="rounded-xl border">
+            <Accordion
+              label={dept.deptName}
+              count={totalExams}
+              countUnit="exam"
+              open={deptOpen}
+              onToggle={() => onToggle(deptKey)}
+              bold
+            />
+            {deptOpen && (
+              <div className="space-y-2 border-t px-4 py-3">
+                {dept.sessions.map((sess) => {
+                  const sessKey = `sess-${sectionKey}-${sess.key}`;
+                  const sessOpen = open.has(sessKey);
+                  const totalSessExams = sess.courses.reduce((n, c) => n + c.exams.length, 0);
+                  return (
+                    <div key={sess.key} className="rounded-lg border">
+                      <Accordion
+                        label={
+                          sess.batchLabel === NO_BATCH
+                            ? NO_BATCH
+                            : sessionLabel({ name: sess.batchLabel })
+                        }
+                        count={totalSessExams}
+                        countUnit="exam"
+                        open={sessOpen}
+                        onToggle={() => onToggle(sessKey)}
+                        indent
+                      />
+                      {sessOpen && (
+                        <div className="space-y-2 border-t px-4 py-3">
+                          {sess.courses.map((crs) => {
+                            const crsKey = `crs-${sectionKey}-${crs.key}`;
+                            const crsOpen = open.has(crsKey);
+                            return (
+                              <div key={crs.key} className="rounded-lg border">
+                                <Accordion
+                                  label={
+                                    <span>
+                                      <span className="font-mono text-[11px] font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+                                        {crs.courseCode}
+                                      </span>
+                                      <span className="text-muted-foreground ml-2 text-xs">
+                                        {crs.courseName}
+                                      </span>
+                                      <span className="text-muted-foreground ml-1 text-xs">
+                                        · {crs.part}
+                                      </span>
+                                    </span>
+                                  }
+                                  count={crs.exams.length}
+                                  countUnit="exam"
+                                  open={crsOpen}
+                                  onToggle={() => onToggle(crsKey)}
+                                  indent
+                                />
+                                {crsOpen && (
+                                  <div className="space-y-2 border-t px-4 py-3">
+                                    {crs.exams.map((exam) => (
+                                      <ExamCard
+                                        key={exam.publicId}
+                                        exam={exam}
+                                        examNumber={examNumbers.get(exam.publicId) ?? null}
+                                        isAdmin={isAdmin}
+                                        nowMs={nowMs}
+                                      />
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function Accordion({
+  label,
+  count,
+  countUnit,
+  open,
+  onToggle,
+  bold,
+  indent,
+}: {
+  label: React.ReactNode;
+  count: number;
+  countUnit: string;
+  open: boolean;
+  onToggle: () => void;
+  bold?: boolean;
+  indent?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={cn(
+        'hover:bg-muted/40 flex w-full items-center justify-between px-4 py-2.5 text-left transition-colors',
+        indent ? 'rounded-lg' : 'rounded-xl',
+      )}
+    >
+      <div className="flex min-w-0 items-center gap-2">
+        <span className={bold ? 'font-semibold' : 'text-sm font-medium'}>{label}</span>
+        <span className="text-muted-foreground shrink-0 text-xs">
+          {count} {countUnit}
+          {count === 1 ? '' : 's'}
+        </span>
+      </div>
+      <ChevronDown
+        className={cn(
+          'text-muted-foreground size-4 shrink-0 transition-transform',
+          open && 'rotate-180',
+        )}
+      />
+    </button>
+  );
+}
+
+// ── Exam card (shared) ────────────────────────────────────────────────────────
 function ExamCard({
   exam,
   examNumber,
@@ -500,7 +1061,6 @@ function ExamCard({
             </span>
           </div>
 
-          {/* Live countdown once the exam is visible to students */}
           {exam.status === 'published' &&
             (nowMs < new Date(exam.startAt).getTime() ? (
               <div className="mt-2 text-xs">
@@ -601,7 +1161,6 @@ function ExamCard({
         </div>
       </div>
 
-      {/* Status hints */}
       {exam.status === 'in_review' && (
         <p className="text-muted-foreground mt-3 text-xs">Awaiting admin review.</p>
       )}

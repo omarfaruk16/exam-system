@@ -10,6 +10,7 @@ import { DashboardPage } from '@/features/dashboard/DashboardPage';
 import { DevShowcase } from '@/features/exam-taking/DevShowcase';
 import { ExamTakingPage } from '@/features/exam-taking/ExamTakingPage';
 import { MyExamsPage } from '@/features/student/MyExamsPage';
+import { StudentCoursesPage } from '@/features/student/StudentCoursesPage';
 import { ExamListPage } from '@/features/authoring/ExamListPage';
 import { ExamFormPage } from '@/features/authoring/ExamFormPage';
 import { ExamBuilderPage } from '@/features/authoring/ExamBuilderPage';
@@ -143,6 +144,7 @@ export function App() {
         <Route path="/exam-results" element={<ResultsPortalPage />} />
         <Route path="/exam-results/:examPublicId" element={<ExamResultsPage />} />
 
+        <Route path="/my-courses" element={<StudentCoursesPage />} />
         <Route path="/my-exams" element={<MyExamsPage />} />
         <Route path="/my-record" element={<StudentTranscriptPage />} />
         <Route path="/results/:attemptPublicId" element={<ResultPage />} />

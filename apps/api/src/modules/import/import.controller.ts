@@ -28,7 +28,7 @@ import { buildTemplate, buildTemplateCsv, isTemplateType } from './import-templa
 import type { ImportEntity, UploadedExcel } from './import.types';
 
 @Controller('imports')
-@Roles('admin', 'super_admin')
+@Roles('admin', 'super_admin', 'department_head')
 export class ImportController {
   constructor(
     private readonly importService: ImportService,

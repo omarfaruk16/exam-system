@@ -142,7 +142,7 @@ export function ReviewDetailPage() {
               </Button>
             )}
           </div>
-          <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+          <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
             <Detail
               label="Course part"
               value={`${exam.coursePart.course.code} · ${exam.coursePart.name}`}

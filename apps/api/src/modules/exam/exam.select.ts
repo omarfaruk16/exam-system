@@ -76,7 +76,9 @@ export const examListSelect = {
                   program: {
                     select: {
                       name: true,
-                      department: { select: { name: true } },
+                      department: {
+                        select: { name: true, faculty: { select: { name: true } } },
+                      },
                     },
                   },
                 },

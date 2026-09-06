@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { StartAttemptResponse, SubmitResult } from '@exam/types';
 import {
   AlertTriangle,
+  BookOpen,
   CheckCircle2,
   Clock,
   Loader2,
@@ -41,6 +42,7 @@ const INSTITUTION =
 export function ExamTakingPage() {
   const { examPublicId } = useParams<{ examPublicId: string }>();
   const navigate = useNavigate();
+  const [phase, setPhase] = useState<'info' | 'exam'>('info');
   const query = useQuery({
     queryKey: ['exam-start', examPublicId],
     queryFn: () => startExam(examPublicId!),
@@ -73,7 +75,67 @@ export function ExamTakingPage() {
       </div>
     );
   }
+  if (phase === 'info') {
+    return <ExamInfoScreen data={query.data} onStart={() => setPhase('exam')} />;
+  }
   return <ExamRunner data={query.data} />;
+}
+
+function ExamInfoScreen({ data, onStart }: { data: StartAttemptResponse; onStart: () => void }) {
+  const { paper, examContext, attempt } = data;
+  const semLabel = examContext.semesterName
+    ? `${examContext.semesterNumber} — ${examContext.semesterName}`
+    : String(examContext.semesterNumber);
+
+  return (
+    <div className="bg-muted/30 flex min-h-screen flex-col items-center justify-center p-4">
+      <div className="bg-card w-full max-w-lg rounded-2xl border p-8 shadow-sm">
+        <div className="mb-6 text-center">
+          <div className="bg-primary/10 text-primary mx-auto mb-3 flex size-14 items-center justify-center rounded-full">
+            <BookOpen className="size-7" />
+          </div>
+          <h1 className="text-xl font-bold leading-tight">{paper.title}</h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            {examContext.courseCode} · {examContext.courseName}
+          </p>
+        </div>
+
+        <dl className="mb-6 divide-y rounded-xl border text-sm">
+          <ExamInfoRow label="Session" value={examContext.batchName} />
+          <ExamInfoRow label="Semester" value={semLabel} />
+          <ExamInfoRow label="Section" value={examContext.partName} />
+          {examContext.teacherName && (
+            <ExamInfoRow label="Teacher" value={examContext.teacherName} />
+          )}
+          <ExamInfoRow label="Total Marks" value={String(paper.totalMarks)} />
+          <ExamInfoRow label="Duration" value={`${attempt.durationMinutes} minutes`} />
+        </dl>
+
+        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950/30">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+            নির্দেশনা
+          </p>
+          <ul className="space-y-1.5 text-sm text-amber-900 dark:text-amber-200">
+            <li>• নকল করার চেষ্টা করবেন না।</li>
+            <li>• যদি নকল করেন, পরীক্ষা স্বয়ংক্রিয়ভাবে জমা হয়ে যাবে।</li>
+          </ul>
+        </div>
+
+        <Button className="w-full" size="lg" onClick={onStart}>
+          পরীক্ষা শুরু করুন
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ExamInfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between px-4 py-2.5">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="text-right font-medium">{value}</dd>
+    </div>
+  );
 }
 
 function ExamRunner({ data }: { data: StartAttemptResponse }) {

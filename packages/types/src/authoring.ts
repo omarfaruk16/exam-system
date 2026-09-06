@@ -54,6 +54,7 @@ export interface ExamListItem {
   /** Given semester name or "Semester N". */
   semesterLabel: string;
   semesterNumber: number;
+  facultyName: string;
   programName: string;
   departmentName: string;
   /** Batch(es) currently sitting the exam's semester, joined; null if none assigned. */

@@ -84,6 +84,7 @@ const BY_ROLE: Record<RoleName, NavItem[]> = {
   ],
   student: [
     HOME,
+    { label: 'My Courses', path: '/my-courses', icon: BookOpen },
     { label: 'My Exams', path: '/my-exams', icon: GraduationCap },
     { label: 'My Results', path: '/results', icon: BarChart3 },
     { label: 'My Record', path: '/my-record', icon: Layers },

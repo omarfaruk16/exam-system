@@ -548,7 +548,7 @@ function AddStudentForm({
         }}
       >
         <p className="text-xs font-medium">Add student</p>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <div>
             <Label className="text-xs">Student ID *</Label>
             <Input

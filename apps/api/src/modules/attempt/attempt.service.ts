@@ -125,7 +125,26 @@ export class AttemptService {
         startAt: true,
         endAt: true,
         settings: true,
-        coursePart: { select: { course: { select: { semesterId: true } } } },
+        coursePart: {
+          select: {
+            name: true,
+            course: {
+              select: {
+                code: true,
+                name: true,
+                semesterId: true,
+                semester: {
+                  select: {
+                    number: true,
+                    name: true,
+                    batch: { select: { name: true } },
+                  },
+                },
+              },
+            },
+            assignedTeacher: { select: { user: { select: { displayName: true } } } },
+          },
+        },
       },
     });
     if (!exam) throw new NotFoundException('Exam not found');
@@ -256,6 +275,15 @@ export class AttemptService {
         selectedOptionId: a.selectedOptionId,
         writtenText: a.writtenText,
       })),
+      examContext: {
+        batchName: exam.coursePart.course.semester.batch.name,
+        semesterNumber: exam.coursePart.course.semester.number,
+        semesterName: exam.coursePart.course.semester.name,
+        courseCode: exam.coursePart.course.code,
+        courseName: exam.coursePart.course.name,
+        partName: exam.coursePart.name,
+        teacherName: exam.coursePart.assignedTeacher?.user.displayName ?? null,
+      },
     };
   }
 

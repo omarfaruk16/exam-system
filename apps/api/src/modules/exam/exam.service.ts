@@ -246,6 +246,7 @@ export class ExamService {
         semesterLabel: sem.name?.trim() ? sem.name : `Semester ${sem.number}`,
         semesterNumber: sem.number,
         programName: batch.program.name,
+        facultyName: batch.program.department.faculty.name,
         departmentName: batch.program.department.name,
         batch: batch.name,
         startAt: e.startAt.toISOString(),
