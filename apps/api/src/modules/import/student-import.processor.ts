@@ -4,7 +4,6 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import type { Job } from 'bullmq';
 import ExcelJS from 'exceljs';
-import { randomBytes } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ImportRowError, ImportSummary } from '@exam/types';
@@ -16,10 +15,7 @@ import { readImportRows } from './import-file';
 import { validateStudentRow, type ParsedStudentRow } from './student-row';
 import type { StudentImportJobData } from './import.types';
 
-function generateTempPassword(): string {
-  // ~14 chars, url-safe. Users are forced to change it on first login.
-  return randomBytes(11).toString('base64url');
-}
+const STUDENT_DEFAULT_PASSWORD = 'Student@123';
 
 /**
  * BullMQ worker for the bulk student import. Never runs on the request thread.
@@ -79,7 +75,7 @@ export class StudentImportProcessor extends WorkerHost {
 
     for (let i = 0; i < parsed.length; i++) {
       const row = parsed[i]!;
-      const tempPassword = row.password ?? generateTempPassword();
+      const tempPassword = row.password ?? STUDENT_DEFAULT_PASSWORD;
       try {
         // Free unique slots held by any prior soft-deleted record with the same studentId.
         const staleUser = await this.prisma.user.findFirst({
@@ -110,7 +106,7 @@ export class StudentImportProcessor extends WorkerHost {
               email: row.email,
               passwordHash: hash,
               displayName: row.name,
-              mustChangePassword: true,
+              mustChangePassword: false,
             },
           });
           await tx.student.create({

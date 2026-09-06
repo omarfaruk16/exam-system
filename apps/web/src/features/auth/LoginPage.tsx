@@ -157,11 +157,6 @@ export function LoginPage() {
         {/* ── Left: Brand / Marketing ── */}
         <section className="relative lg:col-span-6 xl:col-span-7">
           <div className="relative">
-            <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-400">
-              <span className="h-[2px] w-8 rounded-full bg-blue-500/60 dark:bg-blue-400/60" />
-              Online Academic Assessment Portal
-            </div>
-
             <h1 className="mt-3 text-4xl font-extrabold leading-[1.08] tracking-tight text-slate-900 sm:text-5xl lg:text-5xl xl:text-6xl dark:text-white">
               The Paperless
               <br />

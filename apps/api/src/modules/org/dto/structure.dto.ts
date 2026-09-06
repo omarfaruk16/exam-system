@@ -119,6 +119,8 @@ export class ImportSemesterDto {
 }
 export class ImportStructureDto {
   @IsInt() version!: number;
+  @IsOptional() @IsString() sourceSession?: string;
+  @IsOptional() @IsString() exportedAt?: string;
   @ValidateNested({ each: true }) @Type(() => ImportSemesterDto) semesters!: ImportSemesterDto[];
 }
 

@@ -62,8 +62,8 @@ export function StudentsPage() {
         <div>
           <h2 className="text-sm font-semibold">Students</h2>
           <p className="text-muted-foreground text-sm">
-            Manage student accounts across all sessions. Temp password on creation:
-            studentId@Exam123.
+            Manage student accounts across all sessions. Default password (manual &amp; bulk
+            import): Student@123.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
