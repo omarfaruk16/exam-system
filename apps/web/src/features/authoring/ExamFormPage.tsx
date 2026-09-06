@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ExamSettings } from '@exam/types';
+import type { ExamSettings, PartOption } from '@exam/types';
 import { ArrowLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
@@ -100,7 +100,7 @@ function ExamForm({
   isEdit: boolean;
   isAdminLike: boolean;
   examPublicId?: string;
-  parts: { publicId: string; label: string }[];
+  parts: PartOption[];
   defaults?: import('@exam/types').ExamDetail;
 }) {
   const navigate = useNavigate();
@@ -379,7 +379,9 @@ function ExamForm({
   );
 }
 
-// ── Semester-first picker for teachers ────────────────────────────────────
+// ── Session-first picker for teachers ─────────────────────────────────────
+// The same course part can exist across multiple sessions, so the teacher first
+// picks the session, then the course part scoped to it.
 
 function TeacherPartPicker({
   parts,
@@ -387,16 +389,18 @@ function TeacherPartPicker({
   onChange,
   error,
 }: {
-  parts: { publicId: string; label: string; semesterLabel?: string }[];
+  parts: PartOption[];
   value: string;
   onChange: (v: string) => void;
   error?: string;
 }) {
-  const semesters = useMemo(() => {
+  const sessionOf = (p: PartOption) => sessionLabel({ name: p.sessionName, year: p.sessionYear });
+
+  const sessions = useMemo(() => {
     const seen = new Set<string>();
     const result: string[] = [];
     for (const p of parts) {
-      const label = p.semesterLabel ?? 'Unknown semester';
+      const label = sessionOf(p);
       if (!seen.has(label)) {
         seen.add(label);
         result.push(label);
@@ -405,32 +409,32 @@ function TeacherPartPicker({
     return result;
   }, [parts]);
 
-  const [selectedSem, setSelectedSem] = useState(() => {
+  const [selectedSession, setSelectedSession] = useState(() => {
     if (value) {
       const match = parts.find((p) => p.publicId === value);
-      return match?.semesterLabel ?? '';
+      return match ? sessionOf(match) : '';
     }
-    return semesters.length === 1 ? semesters[0] : '';
+    return sessions.length === 1 ? sessions[0] : '';
   });
 
-  const filteredParts = selectedSem
-    ? parts.filter((p) => (p.semesterLabel ?? 'Unknown semester') === selectedSem)
+  const filteredParts = selectedSession
+    ? parts.filter((p) => sessionOf(p) === selectedSession)
     : [];
 
   return (
     <div className="space-y-2">
-      <Field label="Semester" htmlFor="sem-select">
+      <Field label="Session" htmlFor="session-select">
         <select
-          id="sem-select"
-          value={selectedSem}
+          id="session-select"
+          value={selectedSession}
           onChange={(e) => {
-            setSelectedSem(e.target.value);
+            setSelectedSession(e.target.value);
             onChange('');
           }}
           className="border-input bg-card focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2"
         >
-          <option value="">Select a semester…</option>
-          {semesters.map((s) => (
+          <option value="">Select a session…</option>
+          {sessions.map((s) => (
             <option key={s} value={s}>
               {s}
             </option>
@@ -442,7 +446,7 @@ function TeacherPartPicker({
           </p>
         )}
       </Field>
-      {selectedSem && (
+      {selectedSession && (
         <Field label="Course part" error={error} htmlFor="part">
           <select
             id="part"

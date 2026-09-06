@@ -248,6 +248,9 @@ export interface PartOption {
   courseTitle: string;
   /** Human semester label (given name or "Semester N"). */
   semesterLabel?: string;
+  /** Owning session (batch) that this course part belongs to — the teacher-facing filter. */
+  sessionName?: string | null;
+  sessionYear?: number | null;
   /** Full academic hierarchy — present on the authorable-parts list (used by the admin filter). */
   semesterNumber?: number;
   program?: string;
