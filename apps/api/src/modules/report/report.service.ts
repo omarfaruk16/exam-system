@@ -92,7 +92,7 @@ export class ReportService {
 
   async request(user: AuthUser, dto: RequestReportDto): Promise<{ jobId: string }> {
     const exam = await this.prisma.db.exam.findFirst({
-      where: { publicId: dto.examPublicId },
+      where: { publicId: dto.examPublicId, deletedAt: null },
       select: examScopeSelect,
     });
     if (!exam) throw new NotFoundException('Exam not found');

@@ -50,6 +50,7 @@ export class AttemptService {
     if (student.currentSemesterId === null) return [];
     const exams = await this.prisma.db.exam.findMany({
       where: {
+        deletedAt: null,
         coursePart: { course: { semesterId: student.currentSemesterId } },
         status: { in: ['published', 'live', 'ended', 'grading', 'results_published'] },
       },
@@ -113,7 +114,7 @@ export class AttemptService {
   async start(user: AuthUser, examPublicId: string, ip: string | null) {
     const student = await this.requireStudent(user);
     const exam = await this.prisma.db.exam.findFirst({
-      where: { publicId: examPublicId },
+      where: { publicId: examPublicId, deletedAt: null },
       select: {
         id: true,
         publicId: true,
@@ -522,6 +523,7 @@ export class AttemptService {
       where: {
         studentId: student.id,
         status: { in: ['submitted', 'graded'] },
+        exam: { deletedAt: null },
       },
       select: {
         publicId: true,
@@ -706,7 +708,7 @@ export class AttemptService {
     }
 
     const attempts = await this.prisma.db.examAttempt.findMany({
-      where: { studentId: student.id },
+      where: { studentId: student.id, exam: { deletedAt: null } },
       select: {
         status: true,
         submittedAt: true,
