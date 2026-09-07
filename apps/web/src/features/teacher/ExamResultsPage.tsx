@@ -100,12 +100,12 @@ export function ExamResultsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-muted-foreground border-b text-left text-xs">
-                <th className="px-4 py-2.5 font-medium">Roll</th>
                 <th className="px-4 py-2.5 font-medium">Student ID</th>
                 <th className="px-4 py-2.5 font-medium">Name</th>
                 <th className="px-4 py-2.5 font-medium">Session</th>
                 <th className="px-4 py-2.5 font-medium">Status</th>
                 <th className="px-4 py-2.5 text-center font-medium">Page minimized attempts</th>
+                <th className="px-4 py-2.5 text-right font-medium">Time taken</th>
                 <th className="px-4 py-2.5 text-right font-medium">Marks</th>
                 <th className="px-4 py-2.5 text-right font-medium">Rank</th>
                 <th className="px-4 py-2.5" />
@@ -142,7 +142,6 @@ function RosterRow({
   const pct = row.percentage != null ? Math.round(row.percentage) : null;
   return (
     <tr className="border-b last:border-0">
-      <td className="text-muted-foreground px-4 py-2.5 tabular-nums">{row.rollNumber ?? '—'}</td>
       <td className="px-4 py-2.5 font-medium tabular-nums">{row.studentId}</td>
       <td className="px-4 py-2.5">{row.name}</td>
       <td className="text-muted-foreground px-4 py-2.5">
@@ -163,6 +162,9 @@ function RosterRow({
         ) : (
           <span className="text-muted-foreground text-xs">—</span>
         )}
+      </td>
+      <td className="text-muted-foreground px-4 py-2.5 text-right tabular-nums">
+        {row.timeTaken ?? '—'}
       </td>
       <td className="px-4 py-2.5 text-right tabular-nums">
         {row.score != null ? (

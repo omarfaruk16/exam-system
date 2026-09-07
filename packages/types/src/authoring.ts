@@ -113,6 +113,8 @@ export interface ExamResultRow {
   rank: number | null;
   /** Times the student left the exam window (proctoring signal); 0 when none. */
   proctorViolations: number;
+  /** Formatted elapsed time from attempt start to submission (e.g. "42m 15s"); null if absent. */
+  timeTaken: string | null;
 }
 
 /** Per-exam review portal payload: exam header + every enrolled student's attendance and mark. */

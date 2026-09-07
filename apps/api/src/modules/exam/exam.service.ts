@@ -726,6 +726,7 @@ export class ExamService {
         publicId: true,
         status: true,
         gradingStatus: true,
+        startedAt: true,
         submittedAt: true,
         proctorViolations: true,
         student: { select: { publicId: true } },
@@ -736,6 +737,14 @@ export class ExamService {
 
     const rows = students.map((s) => {
       const a = byStudent.get(s.publicId);
+      let timeTaken: string | null = null;
+      if (a?.submittedAt) {
+        const sec = Math.round((a.submittedAt.getTime() - a.startedAt.getTime()) / 1000);
+        const h = Math.floor(sec / 3600);
+        const m = Math.floor((sec % 3600) / 60);
+        const s2 = sec % 60;
+        timeTaken = h ? `${h}h ${m}m ${s2}s` : m ? `${m}m ${s2}s` : `${s2}s`;
+      }
       return {
         studentPublicId: s.publicId,
         studentId: s.studentId,
@@ -751,6 +760,7 @@ export class ExamService {
         percentage: a?.result?.percentage ?? null,
         rank: a?.result?.rank ?? null,
         proctorViolations: a?.proctorViolations ?? 0,
+        timeTaken,
       };
     });
 
