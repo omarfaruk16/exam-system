@@ -229,7 +229,7 @@ function PortalRow({ portal, onLogin }: { portal: Portal; onLogin: () => void })
       type="button"
       onClick={onLogin}
       className={cn(
-        'gap-4.5 p-4.5 group flex w-full items-center rounded-2xl border text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg sm:p-5',
+        'gap-4.5 p-4.5 group flex w-full flex-col items-start rounded-2xl border text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg sm:flex-row sm:items-center sm:p-5',
         portal.card,
       )}
     >
@@ -257,7 +257,7 @@ function PortalRow({ portal, onLogin }: { portal: Portal; onLogin: () => void })
           {portal.desc}
         </p>
       </div>
-      <span className="shadow-xs flex size-9 shrink-0 items-center justify-center rounded-full border border-slate-200/60 bg-white/80 transition-transform duration-200 group-hover:translate-x-1 dark:border-slate-700/60 dark:bg-slate-800/80">
+      <span className="shadow-xs flex size-9 shrink-0 items-center justify-center self-end rounded-full border border-slate-200/60 bg-white/80 transition-transform duration-200 group-hover:translate-x-1 sm:self-auto dark:border-slate-700/60 dark:bg-slate-800/80">
         <ChevronRight className={cn('size-4', portal.chevron)} />
       </span>
     </button>
