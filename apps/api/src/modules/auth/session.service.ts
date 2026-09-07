@@ -26,6 +26,32 @@ export class SessionService {
     await this.redis.srem(userSessionsKey(userId), sid);
   }
 
+  /**
+   * Whether the user currently holds any live session (its body still in Redis). Prunes
+   * session ids whose bodies have already expired so a stale entry never reports a false
+   * conflict. Used to warn a student that another device is signed in before evicting it.
+   */
+  async hasActiveSession(userId: number): Promise<boolean> {
+    const key = userSessionsKey(userId);
+    const sids = await this.redis.smembers(key);
+    if (sids.length === 0) return false;
+
+    const pipe = this.redis.pipeline();
+    for (const sid of sids) pipe.exists(`${SESSION_KEY_PREFIX}${sid}`);
+    const res = await pipe.exec();
+
+    const dead: string[] = [];
+    let live = false;
+    res?.forEach((entry, i) => {
+      const sid = sids[i];
+      if (sid === undefined) return;
+      if (entry[1] === 1) live = true;
+      else dead.push(sid);
+    });
+    if (dead.length) await this.redis.srem(key, ...dead);
+    return live;
+  }
+
   /** Destroy every other session for this user, keeping only `keepSid` (student single-session). */
   async enforceSingleSession(userId: number, keepSid: string): Promise<void> {
     const key = userSessionsKey(userId);

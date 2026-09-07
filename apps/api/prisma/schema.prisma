@@ -404,6 +404,9 @@ model Exam {
   totalMarks         Float      @default(0)
   status             ExamStatus @default(draft)
   settings           Json
+  // Shared access key a student must enter to start the exam (invigilator announces it at
+  // exam time). Null = no key required (legacy exams). Never sent to a student — only checked.
+  examKey            String?
   reviewNote         String?
   publishedAt        DateTime?
   createdAt          DateTime   @default(now())

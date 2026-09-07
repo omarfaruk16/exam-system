@@ -32,6 +32,7 @@ export const examSelect = {
   totalMarks: true,
   status: true,
   settings: true,
+  examKey: true, // staff/admin only endpoint (GET /exams/:id) — never reaches students
   reviewNote: true,
   publishedAt: true,
   coursePart: {

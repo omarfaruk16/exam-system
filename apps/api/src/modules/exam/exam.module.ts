@@ -6,9 +6,12 @@ import { join } from 'node:path';
 import type { Env } from '../../common/config/env.validation';
 import {
   QUEUE_EXAM_SCHEDULER,
+  QUEUE_GRADING,
   QUEUE_QUESTION_IMPORT,
   QUEUE_RESULTS,
 } from '../../queue/queue.constants';
+import { AttemptFinalizeService } from '../attempt/attempt-finalize.service';
+import { AttemptRedisService } from '../attempt/attempt.redis';
 import { ExamAccessService } from './exam-access.service';
 import { ExamController } from './exam.controller';
 import { ExamSchedulerProcessor } from './exam-scheduler.processor';
@@ -32,6 +35,8 @@ export class ExamModule {
           { name: QUEUE_QUESTION_IMPORT },
           { name: QUEUE_EXAM_SCHEDULER },
           { name: QUEUE_RESULTS },
+          // Live invigilation lets a teacher force-submit an attempt, which enqueues grading.
+          { name: QUEUE_GRADING },
         ),
         MulterModule.registerAsync({
           inject: [ConfigService],
@@ -49,6 +54,9 @@ export class ExamModule {
         ExamSchedulerService,
         QuestionImportService,
         MarkingService,
+        // Reused by live invigilation (force-submit goes through the one finalize path).
+        AttemptRedisService,
+        AttemptFinalizeService,
         // Embedded workers by default; RUN_EMBEDDED_WORKERS=false moves them to worker.ts.
         ...(runEmbeddedWorker ? [ExamSchedulerProcessor, QuestionImportProcessor] : []),
       ],

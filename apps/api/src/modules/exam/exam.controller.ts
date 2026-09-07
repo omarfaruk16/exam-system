@@ -97,6 +97,37 @@ export class ExamController {
     return this.exams.getResultsOverview(u, id);
   }
 
+  // ── live invigilation (exam in progress) ──
+  @Roles('teacher', 'admin', 'super_admin', 'department_head')
+  @Get(':publicId/live')
+  live(@CurrentUser() u: AuthUser, @Param('publicId') id: string) {
+    return this.exams.getLiveOverview(u, id);
+  }
+
+  @Roles('teacher', 'admin', 'super_admin', 'department_head')
+  @Post(':publicId/live/:attemptPublicId/submit')
+  @HttpCode(200)
+  forceSubmit(
+    @CurrentUser() u: AuthUser,
+    @Ip() ip: string,
+    @Param('publicId') id: string,
+    @Param('attemptPublicId') attemptId: string,
+  ) {
+    return this.exams.forceSubmitAttempt(u, ip, id, attemptId);
+  }
+
+  @Roles('teacher', 'admin', 'super_admin', 'department_head')
+  @Post(':publicId/live/:attemptPublicId/absent')
+  @HttpCode(200)
+  markAbsent(
+    @CurrentUser() u: AuthUser,
+    @Ip() ip: string,
+    @Param('publicId') id: string,
+    @Param('attemptPublicId') attemptId: string,
+  ) {
+    return this.exams.markAttemptAbsent(u, ip, id, attemptId);
+  }
+
   @Roles('teacher', 'admin', 'super_admin')
   @Patch(':publicId')
   update(

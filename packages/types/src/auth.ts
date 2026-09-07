@@ -13,6 +13,12 @@ export const loginSchema = z.object({
     .string()
     .regex(/^\d{6}$/u, 'Enter the 6-digit code')
     .optional(),
+  /**
+   * Students may only be signed in on one device at a time. When another device already
+   * holds a live session, login returns `session_conflict` instead of signing in. The SPA
+   * re-submits with this flag set to evict the other device and continue here.
+   */
+  evictOtherSessions: z.boolean().optional(),
 });
 export type LoginInput = z.infer<typeof loginSchema>;
 
@@ -63,9 +69,14 @@ export interface SessionUser {
   roles: SessionRole[];
 }
 
-/** Result of POST /auth/login — fully authenticated, or a 2FA challenge carrying a partial token. */
+/**
+ * Result of POST /auth/login — fully authenticated, a 2FA challenge carrying a partial token,
+ * or (students only) a single-device conflict: another device already holds a live session.
+ */
 export type LoginResult =
-  { status: 'ok'; user: SessionUser } | { status: 'two_factor_required'; partialToken: string };
+  | { status: 'ok'; user: SessionUser }
+  | { status: 'two_factor_required'; partialToken: string }
+  | { status: 'session_conflict' };
 
 /** Payload shown on the 2FA setup screen. */
 export interface TwoFactorSetup {

@@ -1,10 +1,11 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import type { StartAttemptResponse, SubmitResult } from '@exam/types';
 import {
   AlertTriangle,
   BookOpen,
   CheckCircle2,
   Clock,
+  KeyRound,
   Loader2,
   Lock,
   Maximize,
@@ -43,25 +44,59 @@ export function ExamTakingPage() {
   const { examPublicId } = useParams<{ examPublicId: string }>();
   const navigate = useNavigate();
   const [phase, setPhase] = useState<'info' | 'exam'>('info');
-  const query = useQuery({
-    queryKey: ['exam-start', examPublicId],
-    queryFn: () => startExam(examPublicId!),
-    enabled: Boolean(examPublicId),
-    retry: false,
-    refetchOnWindowFocus: false,
-    staleTime: Infinity,
-    gcTime: 0,
+  const [data, setData] = useState<StartAttemptResponse | null>(null);
+  const [needsKey, setNeedsKey] = useState(false);
+  const [keyError, setKeyError] = useState<string | null>(null);
+
+  const start = useMutation({
+    mutationFn: (examKey?: string) => startExam(examPublicId!, examKey),
+    onSuccess: (d) => {
+      setData(d);
+      setNeedsKey(false);
+      setKeyError(null);
+    },
+    onError: (e) => {
+      const msg = e instanceof ApiError ? e.message : '';
+      if (msg === 'EXAM_KEY_REQUIRED') {
+        setNeedsKey(true);
+        setKeyError(null);
+      } else if (msg === 'EXAM_KEY_INVALID') {
+        setNeedsKey(true);
+        setKeyError('Incorrect exam key. Check with your invigilator and try again.');
+      }
+      // Any other error falls through to the error screen below (start.isError).
+    },
   });
 
-  if (query.isLoading) {
+  // On load, try to (re)start with no key: this resumes an in-progress attempt seamlessly, and
+  // reveals whether a key is required for a fresh start (EXAM_KEY_REQUIRED → show the key gate).
+  const mutate = start.mutate;
+  useEffect(() => {
+    if (examPublicId) mutate(undefined);
+  }, [examPublicId, mutate]);
+
+  if (data) {
+    if (phase === 'info') return <ExamInfoScreen data={data} onStart={() => setPhase('exam')} />;
+    return <ExamRunner data={data} />;
+  }
+
+  if (needsKey) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="text-muted-foreground size-6 animate-spin" />
-      </div>
+      <ExamKeyGate
+        pending={start.isPending}
+        error={keyError}
+        onSubmit={(key) => {
+          setKeyError(null);
+          start.mutate(key);
+        }}
+        onBack={() => navigate('/my-exams')}
+      />
     );
   }
-  if (query.isError || !query.data) {
-    const msg = query.error instanceof ApiError ? query.error.message : 'Could not start this exam';
+
+  // A non-key error (not enrolled, not live, already submitted, …) is terminal.
+  if (start.isError) {
+    const msg = start.error instanceof ApiError ? start.error.message : 'Could not start this exam';
     return (
       <div className="flex min-h-screen items-center justify-center p-4">
         <div className="bg-card w-full max-w-md rounded-xl border p-6 text-center shadow-sm">
@@ -75,10 +110,66 @@ export function ExamTakingPage() {
       </div>
     );
   }
-  if (phase === 'info') {
-    return <ExamInfoScreen data={query.data} onStart={() => setPhase('exam')} />;
-  }
-  return <ExamRunner data={query.data} />;
+
+  return (
+    <div className="flex min-h-screen items-center justify-center">
+      <Loader2 className="text-muted-foreground size-6 animate-spin" />
+    </div>
+  );
+}
+
+/** Pre-start gate: the student enters the invigilator's exam key before the attempt begins. */
+function ExamKeyGate({
+  pending,
+  error,
+  onSubmit,
+  onBack,
+}: {
+  pending: boolean;
+  error: string | null;
+  onSubmit: (key: string) => void;
+  onBack: () => void;
+}) {
+  const [key, setKey] = useState('');
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (key.trim()) onSubmit(key.trim());
+  };
+  return (
+    <div className="bg-muted/30 flex min-h-screen flex-col items-center justify-center p-4">
+      <form onSubmit={submit} className="bg-card w-full max-w-sm rounded-2xl border p-8 shadow-sm">
+        <div className="mb-6 text-center">
+          <div className="bg-primary/10 text-primary mx-auto mb-3 flex size-14 items-center justify-center rounded-full">
+            <KeyRound className="size-7" />
+          </div>
+          <h1 className="text-xl font-bold leading-tight">Enter the exam key</h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Your invigilator will give you the key to begin this exam.
+          </p>
+        </div>
+        <input
+          autoFocus
+          value={key}
+          onChange={(e) => setKey(e.target.value)}
+          placeholder="Exam key"
+          aria-invalid={error ? 'true' : 'false'}
+          className="border-input bg-background focus-visible:ring-ring aria-[invalid=true]:border-destructive w-full rounded-lg border px-3 py-2.5 text-center font-mono text-lg tracking-widest focus-visible:outline-none focus-visible:ring-2"
+        />
+        {error && <p className="text-destructive mt-2 text-center text-sm">{error}</p>}
+        <Button type="submit" className="mt-4 w-full" disabled={pending || !key.trim()}>
+          {pending && <Loader2 className="animate-spin" />}
+          Start exam
+        </Button>
+        <button
+          type="button"
+          onClick={onBack}
+          className="text-muted-foreground hover:text-foreground mt-3 w-full text-center text-sm"
+        >
+          Back to my exams
+        </button>
+      </form>
+    </div>
+  );
 }
 
 function ExamInfoScreen({ data, onStart }: { data: StartAttemptResponse; onStart: () => void }) {

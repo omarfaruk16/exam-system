@@ -99,7 +99,8 @@ beforeAll(async () => {
     get: (k: string) => process.env[k],
   } as unknown as ConfigService<Env, true>;
 
-  exams = new ExamService(prisma, audit, access);
+  finalize = new AttemptFinalizeService(prisma, attemptRedis, audit, gradingQueue);
+  exams = new ExamService(prisma, audit, access, finalize, attemptRedis);
   questions = new QuestionService(prisma, audit, access);
   scheduler = new ExamSchedulerService(prisma, audit, resultsQueue);
   attempts = new AttemptService(
@@ -108,7 +109,6 @@ beforeAll(async () => {
     new PaperService(prisma, attemptRedis),
     audit,
   );
-  finalize = new AttemptFinalizeService(prisma, attemptRedis, audit, gradingQueue);
   grading = new GradingService(prisma, attemptGrading);
   written = new WrittenGradingService(prisma, audit, access, attemptGrading);
   results = new ResultsService(prisma, audit);

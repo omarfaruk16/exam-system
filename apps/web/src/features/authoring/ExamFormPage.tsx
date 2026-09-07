@@ -41,6 +41,11 @@ const schema = z.object({
   examDate: z.string().min(1, 'Exam date is required'),
   startTime: z.string().min(1, 'Start time is required'),
   durationMinutes: z.coerce.number().int().positive('Duration must be at least 1 minute'),
+  examKey: z
+    .string()
+    .trim()
+    .min(4, 'Exam key must be at least 4 characters')
+    .max(64, 'Exam key is too long'),
   showMarksAfterSubmit: z.boolean(),
   showExplanation: z.boolean(),
   shuffleQuestions: z.boolean(),
@@ -123,6 +128,7 @@ function ExamForm({
           examDate: isoToDate(defaults.startAt),
           startTime: isoToTime(defaults.startAt),
           durationMinutes: defaults.durationMinutes,
+          examKey: defaults.examKey ?? '',
           ...defaults.settings,
         }
       : {
@@ -132,6 +138,7 @@ function ExamForm({
           examDate: '',
           startTime: '',
           durationMinutes: 60,
+          examKey: '',
           showMarksAfterSubmit: true,
           showExplanation: true,
           shuffleQuestions: false,
@@ -162,6 +169,7 @@ function ExamForm({
         startAt: startAt.toISOString(),
         endAt: endAt.toISOString(),
         durationMinutes: Number(values.durationMinutes),
+        examKey: values.examKey.trim(),
         settings,
       };
       if (isEdit && examPublicId) {
@@ -283,6 +291,35 @@ function ExamForm({
           </Field>
           <p className="text-muted-foreground -mt-2 text-xs">
             The exam ends automatically {watch('durationMinutes') || 0} minutes after it starts.
+          </p>
+
+          <Field label="Exam key" error={errors.examKey?.message} htmlFor="examKey">
+            <div className="flex gap-2">
+              <Input
+                id="examKey"
+                placeholder="e.g. RU2026"
+                autoComplete="off"
+                className="font-mono tracking-wider"
+                {...register('examKey')}
+                aria-invalid={errors.examKey ? 'true' : 'false'}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="shrink-0"
+                onClick={() =>
+                  setValue('examKey', Math.random().toString(36).slice(2, 8).toUpperCase(), {
+                    shouldValidate: true,
+                  })
+                }
+              >
+                Generate
+              </Button>
+            </div>
+          </Field>
+          <p className="text-muted-foreground -mt-2 text-xs">
+            Students must enter this key to start the exam. Share it with them (or announce it) at
+            exam time.
           </p>
         </Card>
 

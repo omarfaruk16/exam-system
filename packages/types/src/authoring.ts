@@ -117,6 +117,29 @@ export interface ExamResultRow {
   timeTaken: string | null;
 }
 
+/** One student currently sitting a live exam (GET /exams/:id/live). */
+export interface LiveExamAttempt {
+  attemptPublicId: string;
+  studentPublicId: string;
+  studentId: string;
+  name: string;
+  rollNumber: string | null;
+  startedAt: string;
+  /** Answers saved so far (persisted), out of the exam's question count. */
+  answered: number;
+  totalQuestions: number;
+  /** Times the student left the exam window so far. */
+  proctorViolations: number;
+}
+
+/** Live invigilation payload: who is currently taking the exam (GET /exams/:id/live). */
+export interface LiveExamOverview {
+  examStatus: string;
+  endAt: string;
+  totalQuestions: number;
+  attempts: LiveExamAttempt[];
+}
+
 /** Per-exam review portal payload: exam header + every enrolled student's attendance and mark. */
 export interface ExamResultsOverview {
   exam: {
@@ -146,6 +169,8 @@ export interface ExamDetail {
   totalMarks: number;
   status: string;
   settings: ExamSettings;
+  /** Access key a student must enter to start (staff-only field; null = no key). */
+  examKey: string | null;
   reviewNote: string | null;
   publishedAt: string | null;
   coursePart: {

@@ -111,7 +111,7 @@ export class AttemptService {
   }
 
   // ─────────────────────────────── START ───────────────────────────────
-  async start(user: AuthUser, examPublicId: string, ip: string | null) {
+  async start(user: AuthUser, examPublicId: string, ip: string | null, examKey?: string) {
     const student = await this.requireStudent(user);
     const exam = await this.prisma.db.exam.findFirst({
       where: { publicId: examPublicId, deletedAt: null },
@@ -123,6 +123,7 @@ export class AttemptService {
         durationMinutes: true,
         totalMarks: true,
         status: true,
+        examKey: true,
         startAt: true,
         endAt: true,
         settings: true,
@@ -194,6 +195,14 @@ export class AttemptService {
       select: { id: true, publicId: true, startedAt: true, status: true },
     });
     if (!attempt) {
+      // Exam key is required only to BEGIN a fresh attempt (invigilator announces it at exam
+      // time). A resume of an existing in-progress attempt never re-prompts. Distinct codes let
+      // the SPA show the key prompt silently on first load vs. an "incorrect key" error.
+      if (exam.examKey && exam.examKey.length > 0) {
+        const provided = examKey?.trim() ?? '';
+        if (provided.length === 0) throw new ForbiddenException('EXAM_KEY_REQUIRED');
+        if (provided !== exam.examKey) throw new ForbiddenException('EXAM_KEY_INVALID');
+      }
       try {
         attempt = await this.prisma.examAttempt.create({
           data: { examId: exam.id, studentId: student.id },

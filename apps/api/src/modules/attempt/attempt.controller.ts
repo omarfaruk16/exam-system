@@ -5,7 +5,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import type { AuthUser } from '../../common/types/auth';
 import { AttemptFinalizeService } from './attempt-finalize.service';
 import { AttemptService } from './attempt.service';
-import { AutosaveDto } from './dto/attempt.dto';
+import { AutosaveDto, StartExamDto } from './dto/attempt.dto';
 
 @Controller()
 export class AttemptController {
@@ -47,8 +47,13 @@ export class AttemptController {
   @Roles('student')
   @Post('exams/:examPublicId/start')
   @HttpCode(200)
-  start(@CurrentUser() u: AuthUser, @Ip() ip: string, @Param('examPublicId') examPublicId: string) {
-    return this.attempts.start(u, examPublicId, ip);
+  start(
+    @CurrentUser() u: AuthUser,
+    @Ip() ip: string,
+    @Param('examPublicId') examPublicId: string,
+    @Body() dto: StartExamDto,
+  ) {
+    return this.attempts.start(u, examPublicId, ip, dto.examKey);
   }
 
   @Roles('student')

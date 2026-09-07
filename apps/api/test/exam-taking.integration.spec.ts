@@ -8,7 +8,7 @@
  *   (f) showMarksAfterSubmit=false -> result 403 until exam is results_published.
  * (g) "zero duplicate (examId, studentId) after load" is verified from the k6 run.
  */
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import IORedis, { type Redis } from 'ioredis';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -79,7 +79,7 @@ beforeAll(async () => {
   attempts = new AttemptService(prisma, attemptRedis, paper, audit);
   finalize = new AttemptFinalizeService(prisma, attemptRedis, audit, gradingQueue);
   grading = new GradingService(prisma, new AttemptGradingService(prisma, resultsQueue));
-  exams = new ExamService(prisma, audit, access);
+  exams = new ExamService(prisma, audit, access, finalize, attemptRedis);
   questions = new QuestionService(prisma, audit, access);
   scheduler = new ExamSchedulerService(prisma, audit, resultsQueue);
 
@@ -125,7 +125,10 @@ afterAll(async () => {
 
 const rand = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-async function publishLiveMcqExam(settingsOverride: Partial<typeof baseSettings> = {}) {
+async function publishLiveMcqExam(
+  settingsOverride: Partial<typeof baseSettings> = {},
+  examKey?: string,
+) {
   const bank = await questions.createBank(teacher1, 't', {
     coursePartPublicId: partA,
     name: `B ${rand()}`,
@@ -146,6 +149,7 @@ async function publishLiveMcqExam(settingsOverride: Partial<typeof baseSettings>
     startAt: new Date(Date.now() - 60_000).toISOString(),
     endAt: new Date(Date.now() + 3_600_000).toISOString(),
     durationMinutes: 60,
+    examKey,
     settings: { ...baseSettings, ...settingsOverride },
   });
   await exams.addQuestion(teacher1, 't', exam.publicId, { questionPublicId: q.publicId, order: 1 });
@@ -336,5 +340,61 @@ describe('Phase 4 — exam-taking engine', () => {
     const result = await attempts.getResult(student, s.attempt.publicId);
     expect(result.showMarks).toBe(true);
     if (result.showMarks) expect(result.totalScore).toBe(5);
+  });
+
+  it('(g) exam key: missing/wrong rejected, correct starts, resume needs no key', async () => {
+    const ex = await publishLiveMcqExam({}, 'RUKEY1');
+    await expect(attempts.start(student, ex.examPublicId, null)).rejects.toThrow(
+      ForbiddenException,
+    );
+    await expect(attempts.start(student, ex.examPublicId, null)).rejects.toThrow(
+      'EXAM_KEY_REQUIRED',
+    );
+    await expect(attempts.start(student, ex.examPublicId, null, 'nope')).rejects.toThrow(
+      'EXAM_KEY_INVALID',
+    );
+
+    const s = await attempts.start(student, ex.examPublicId, null, 'RUKEY1');
+    expect(s.attempt.status).toBe('in_progress');
+
+    // A resume of the same in-progress attempt never re-prompts for the key.
+    const again = await attempts.start(student, ex.examPublicId, null);
+    expect(again.attempt.publicId).toBe(s.attempt.publicId);
+  });
+
+  it('(h) live monitor lists in-progress attempts; invigilator force-submits', async () => {
+    const ex = await publishLiveMcqExam();
+    const s = await attempts.start(student, ex.examPublicId, null);
+    await attempts.autosave(student, s.attempt.publicId, s.sessionId, [
+      { questionPublicId: ex.questionPublicId, selectedOptionId: ex.correctOptionId },
+    ]);
+
+    const live = await exams.getLiveOverview(teacher1, ex.examPublicId);
+    const row = live.attempts.find((a) => a.attemptPublicId === s.attempt.publicId);
+    expect(row).toBeDefined();
+    expect(row!.answered).toBe(1);
+    expect(row!.totalQuestions).toBe(1);
+
+    await exams.forceSubmitAttempt(teacher1, 't', ex.examPublicId, s.attempt.publicId);
+    const att = await prisma.db.examAttempt.findUniqueOrThrow({
+      where: { id: await attemptId(s.attempt.publicId) },
+      select: { status: true },
+    });
+    expect(att.status).toBe('submitted');
+
+    // No longer in the live list once submitted.
+    const live2 = await exams.getLiveOverview(teacher1, ex.examPublicId);
+    expect(live2.attempts.some((a) => a.attemptPublicId === s.attempt.publicId)).toBe(false);
+  });
+
+  it('(i) invigilator marks a live student absent; the attempt is removed', async () => {
+    const ex = await publishLiveMcqExam();
+    const s = await attempts.start(student, ex.examPublicId, null);
+    const id = await attemptId(s.attempt.publicId);
+
+    await exams.markAttemptAbsent(teacher1, 't', ex.examPublicId, s.attempt.publicId);
+
+    const gone = await prisma.db.examAttempt.findUnique({ where: { id } });
+    expect(gone).toBeNull();
   });
 });

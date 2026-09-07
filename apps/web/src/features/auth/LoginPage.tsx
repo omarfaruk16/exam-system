@@ -7,12 +7,13 @@ import {
   FileText,
   GraduationCap,
   Loader2,
+  MonitorSmartphone,
   Settings,
   ShieldCheck,
   Users,
   type LucideIcon,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { loginSchema, type LoginInput } from '@exam/types';
@@ -264,13 +265,15 @@ function PortalRow({ portal, onLogin }: { portal: Portal; onLogin: () => void })
   );
 }
 
-/** The login form (+ 2FA step) inside the modal, tinted for the chosen portal. */
+/** The login form (+ 2FA / single-device steps) inside the modal, tinted for the chosen portal. */
 function LoginPanel({ portal }: { portal: Portal }) {
   const login = useLogin();
   const navigate = useNavigate();
   const Icon = portal.icon;
   const [partialToken, setPartialToken] = useState<string | null>(null);
+  const [conflict, setConflict] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const lastValues = useRef<LoginInput | null>(null);
   const {
     register,
     handleSubmit,
@@ -281,20 +284,40 @@ function LoginPanel({ portal }: { portal: Portal }) {
     defaultValues: { identifier: '', password: '' },
   });
 
-  const onSubmit = handleSubmit(async (values) => {
+  const submitLogin = async (values: LoginInput, evictOtherSessions = false) => {
+    lastValues.current = values;
     try {
-      const res = await login.mutateAsync(values);
+      const res = await login.mutateAsync({ ...values, evictOtherSessions });
       if (res.status === 'two_factor_required') {
         setPartialToken(res.partialToken);
         return;
       }
+      if (res.status === 'session_conflict') {
+        setConflict(true);
+        return;
+      }
       navigate('/', { replace: true });
     } catch (e) {
+      setConflict(false);
       setError('root', {
         message: e instanceof ApiError ? e.message : 'Something went wrong. Please try again.',
       });
     }
-  });
+  };
+
+  const onSubmit = handleSubmit((values) => submitLogin(values));
+
+  if (conflict) {
+    return (
+      <SessionConflictStep
+        pending={login.isPending}
+        onUseHere={() => {
+          if (lastValues.current) void submitLogin(lastValues.current, true);
+        }}
+        onCancel={() => setConflict(false)}
+      />
+    );
+  }
 
   if (partialToken) {
     return (
@@ -378,6 +401,61 @@ function LoginPanel({ portal }: { portal: Portal }) {
           </a>
         </div>
       </form>
+    </>
+  );
+}
+
+/**
+ * Single-device gate (students): another device already holds a live session. The student chooses
+ * to sign out the other device and continue here, or to cancel and leave the other session alone.
+ */
+function SessionConflictStep({
+  pending,
+  onUseHere,
+  onCancel,
+}: {
+  pending: boolean;
+  onUseHere: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <>
+      <DialogHeader>
+        <div className="flex flex-col items-center text-center">
+          <div className="bg-warning/10 text-warning flex size-12 items-center justify-center rounded-full">
+            <MonitorSmartphone className="size-6" />
+          </div>
+          <DialogTitle className="mt-3 text-xl">
+            You&apos;re already signed in elsewhere
+          </DialogTitle>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Your account can only be active on one device at a time. Another device currently has an
+            open session.
+          </p>
+        </div>
+      </DialogHeader>
+
+      <div className="mt-4 space-y-2.5">
+        <Button type="button" className="w-full" onClick={onUseHere} disabled={pending}>
+          {pending && <Loader2 className="animate-spin" />}
+          Sign out from the other device
+        </Button>
+        <p className="text-muted-foreground -mt-1 px-1 text-center text-xs">
+          Ends the other session and signs you in on this device.
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          onClick={onCancel}
+          disabled={pending}
+        >
+          Sign out from this device
+        </Button>
+        <p className="text-muted-foreground -mt-1 px-1 text-center text-xs">
+          Cancels this sign-in and leaves the other device active.
+        </p>
+      </div>
     </>
   );
 }

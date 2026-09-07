@@ -13,8 +13,8 @@ export interface AnswerPayload {
   writtenText?: string | null;
 }
 
-export const startExam = (examPublicId: string) =>
-  api.post<StartAttemptResponse>(`/exams/${examPublicId}/start`);
+export const startExam = (examPublicId: string, examKey?: string) =>
+  api.post<StartAttemptResponse>(`/exams/${examPublicId}/start`, { examKey });
 
 export const autosave = (attemptId: string, sessionId: string, answers: AnswerPayload[]) =>
   api.post<AutosaveResponse>(

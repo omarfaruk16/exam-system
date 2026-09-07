@@ -42,6 +42,7 @@ export interface ExamMetadataInput {
   startAt: string;
   endAt: string;
   durationMinutes: number;
+  examKey?: string;
   settings: ExamSettings;
 }
 

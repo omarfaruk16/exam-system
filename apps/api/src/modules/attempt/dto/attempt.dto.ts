@@ -13,3 +13,8 @@ export class AutosaveDto {
   @Type(() => AnswerInput)
   answers!: AnswerInput[];
 }
+
+export class StartExamDto {
+  /** Access key the invigilator announced; required to begin an exam that has one set. */
+  @IsOptional() @IsString() @MaxLength(64) examKey?: string;
+}

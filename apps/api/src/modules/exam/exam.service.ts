@@ -6,10 +6,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { type ExamStatus, Prisma } from '@prisma/client';
-import type { TeacherConductedExam } from '@exam/types';
+import type { LiveExamOverview, TeacherConductedExam } from '@exam/types';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { AuthUser } from '../../common/types/auth';
 import { AuditService } from '../audit/audit.service';
+import { AttemptFinalizeService } from '../attempt/attempt-finalize.service';
+import { AttemptRedisService } from '../attempt/attempt.redis';
 import type { AddExamQuestionDto, CreateExamDto, UpdateExamDto } from './dto/exam.dto';
 import { ExamAccessService } from './exam-access.service';
 import { ADMIN_EDITABLE_STATUSES, canTransition } from './exam-state';
@@ -31,6 +33,8 @@ export class ExamService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly access: ExamAccessService,
+    private readonly finalize: AttemptFinalizeService,
+    private readonly attemptRedis: AttemptRedisService,
   ) {}
 
   private async loadExam(publicId: string): Promise<ExamHandle> {
@@ -177,6 +181,7 @@ export class ExamService {
           startAt,
           endAt,
           durationMinutes: dto.durationMinutes,
+          examKey: dto.examKey?.trim() || null,
           totalMarks: 0,
           status: 'draft',
           settings: dto.settings as unknown as Prisma.InputJsonValue,
@@ -787,6 +792,124 @@ export class ExamService {
     };
   }
 
+  // ─────────────────────── Live invigilation (exam in progress) ───────────────────────
+
+  /** Who is currently sitting this exam right now (in-progress attempts) + their live progress. */
+  async getLiveOverview(user: AuthUser, publicId: string): Promise<LiveExamOverview> {
+    const exam = await this.loadExam(publicId);
+    await this.assertReadAccess(user, exam);
+
+    const full = await this.prisma.db.exam.findFirstOrThrow({
+      where: { publicId },
+      select: { id: true, status: true, endAt: true, _count: { select: { examQuestions: true } } },
+    });
+    const totalQuestions = full._count.examQuestions;
+
+    const attempts = await this.prisma.db.examAttempt.findMany({
+      where: { examId: full.id, status: 'in_progress' },
+      select: {
+        publicId: true,
+        startedAt: true,
+        proctorViolations: true,
+        _count: { select: { answers: true } },
+        student: {
+          select: {
+            publicId: true,
+            studentId: true,
+            rollNumber: true,
+            user: { select: { displayName: true } },
+          },
+        },
+      },
+      orderBy: { startedAt: 'asc' },
+    });
+
+    return {
+      examStatus: full.status,
+      endAt: full.endAt.toISOString(),
+      totalQuestions,
+      attempts: attempts.map((a) => ({
+        attemptPublicId: a.publicId,
+        studentPublicId: a.student.publicId,
+        studentId: a.student.studentId,
+        name: a.student.user.displayName,
+        rollNumber: a.student.rollNumber,
+        startedAt: a.startedAt.toISOString(),
+        answered: a._count.answers,
+        totalQuestions,
+        proctorViolations: a.proctorViolations,
+      })),
+    };
+  }
+
+  /** Invigilator force-submits a student's in-progress attempt (grades what they have so far). */
+  async forceSubmitAttempt(
+    user: AuthUser,
+    ip: string,
+    publicId: string,
+    attemptPublicId: string,
+  ): Promise<{ status: 'ok' }> {
+    const exam = await this.loadExam(publicId);
+    await this.assertReadAccess(user, exam);
+    const attempt = await this.prisma.db.examAttempt.findFirst({
+      where: { publicId: attemptPublicId, examId: exam.id },
+      select: { id: true, status: true, studentId: true },
+    });
+    if (!attempt) throw new NotFoundException('Attempt not found for this exam');
+    if (attempt.status !== 'in_progress') {
+      throw new BadRequestException('This student is no longer taking the exam');
+    }
+
+    // Kick the live client (its next autosave/submit is rejected), then finalize via the ONE
+    // finalize path — copies Redis-only answers, marks submitted, enqueues grading.
+    await this.attemptRedis.setSession(exam.id, attempt.studentId, 'REVOKED', 120);
+    await this.finalize.finalize(attemptPublicId, {
+      auto: true,
+      actorUserId: user.id,
+      ip,
+      idempotencyKey: `invigilator-force:${attempt.id}`,
+    });
+    return { status: 'ok' };
+  }
+
+  /**
+   * Invigilator marks a currently-attempting student absent: revoke their live session and delete
+   * the in-progress attempt + its answers, so they are recorded as absent (no attempt) everywhere.
+   */
+  async markAttemptAbsent(
+    user: AuthUser,
+    ip: string,
+    publicId: string,
+    attemptPublicId: string,
+  ): Promise<{ status: 'ok' }> {
+    const exam = await this.loadExam(publicId);
+    await this.assertReadAccess(user, exam);
+    const attempt = await this.prisma.db.examAttempt.findFirst({
+      where: { publicId: attemptPublicId, examId: exam.id },
+      select: { id: true, status: true, studentId: true, student: { select: { studentId: true } } },
+    });
+    if (!attempt) throw new NotFoundException('Attempt not found for this exam');
+    if (attempt.status !== 'in_progress') {
+      throw new BadRequestException('This student is no longer taking the exam');
+    }
+
+    await this.attemptRedis.setSession(exam.id, attempt.studentId, 'REVOKED', 120);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.answer.deleteMany({ where: { attemptId: attempt.id } });
+      await tx.examAttempt.delete({ where: { id: attempt.id } });
+      await this.audit.recordTx(tx, {
+        actorUserId: user.id,
+        action: 'attempt.mark_absent',
+        entity: 'ExamAttempt',
+        entityId: attemptPublicId,
+        before: { status: attempt.status, studentId: attempt.student.studentId },
+        after: { deleted: true },
+        ip,
+      });
+    });
+    return { status: 'ok' };
+  }
+
   async updateExam(user: AuthUser, ip: string, publicId: string, dto: UpdateExamDto) {
     const exam = await this.loadExam(publicId);
     if (this.isAdmin(user)) {
@@ -809,6 +932,7 @@ export class ExamService {
     if (dto.startAt) data.startAt = new Date(dto.startAt);
     if (dto.endAt) data.endAt = new Date(dto.endAt);
     if (dto.settings) data.settings = dto.settings as unknown as Prisma.InputJsonValue;
+    if (dto.examKey !== undefined) data.examKey = dto.examKey.trim() || null;
 
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.exam.update({ where: { publicId }, data, select: examSelect });

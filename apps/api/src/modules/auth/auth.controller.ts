@@ -55,6 +55,14 @@ export class AuthController {
   async login(@Body() dto: LoginDto, @Req() req: Request, @Ip() ip: string): Promise<LoginResult> {
     const user = await this.auth.validateUser(dto.identifier, dto.password);
 
+    // Single-device rule (students): if another device already holds a live session, don't sign
+    // in silently — return a conflict so the SPA can ask, then re-submit with evictOtherSessions
+    // to take over here. Checked before 2FA so no partial token is minted for a blocked login.
+    const isStudent = user.roles.some((r) => r.role === 'student');
+    if (isStudent && !dto.evictOtherSessions && (await this.sessions.hasActiveSession(user.id))) {
+      return { status: 'session_conflict' };
+    }
+
     // Enrolled 2FA users must clear the second factor before a session is issued — unless 2FA
     // is switched off globally (STAFF_2FA_REQUIRED=false), in which case sign-in is direct.
     if (user.twoFactorEnabled && this.twoFactor.enforced()) {

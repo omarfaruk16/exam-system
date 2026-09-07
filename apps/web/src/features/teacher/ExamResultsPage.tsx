@@ -19,6 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn, sessionLabel } from '@/lib/utils';
 import { requestReport, pollReport } from '../reports/reportsApi';
 import { StatusPill } from '../shared/StatusPill';
+import { ExamLiveMonitor } from './ExamLiveMonitor';
 import { fetchExamResultsOverview } from './examResultsApi';
 
 export function ExamResultsPage() {
@@ -53,6 +54,12 @@ export function ExamResultsPage() {
   }
 
   const { exam, counts, rows } = data;
+
+  // While the exam is in progress, show live invigilation (who's taking it + force actions)
+  // instead of the post-exam roster.
+  if (exam.status === 'live') {
+    return <ExamLiveMonitor examPublicId={examPublicId!} exam={exam} enrolled={counts.total} />;
+  }
 
   return (
     <div className="w-full">

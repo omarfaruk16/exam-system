@@ -28,6 +28,9 @@ export class CreateExamDto {
   @IsISO8601() startAt!: string;
   @IsISO8601() endAt!: string;
   @IsInt() @Min(1) durationMinutes!: number;
+  // Access key a student enters to start the exam. Optional server-side (legacy exams have none);
+  // the authoring form requires it for new exams.
+  @IsOptional() @IsString() @Length(4, 64) examKey?: string;
   @ValidateNested() @Type(() => ExamSettingsDto) settings!: ExamSettingsDto;
 }
 
@@ -37,6 +40,7 @@ export class UpdateExamDto {
   @IsOptional() @IsISO8601() startAt?: string;
   @IsOptional() @IsISO8601() endAt?: string;
   @IsOptional() @IsInt() @Min(1) durationMinutes?: number;
+  @IsOptional() @IsString() @Length(4, 64) examKey?: string;
   @IsOptional() @ValidateNested() @Type(() => ExamSettingsDto) settings?: ExamSettingsDto;
 }
 

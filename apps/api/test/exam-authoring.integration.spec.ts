@@ -15,6 +15,8 @@ import { AccessControlService } from '../src/common/access/access-control.servic
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import type { AuthUser } from '../src/common/types/auth';
 import { AuditService } from '../src/modules/audit/audit.service';
+import { AttemptFinalizeService } from '../src/modules/attempt/attempt-finalize.service';
+import { AttemptRedisService } from '../src/modules/attempt/attempt.redis';
 import { ExamAccessService } from '../src/modules/exam/exam-access.service';
 import { ExamSchedulerService } from '../src/modules/exam/exam-scheduler.service';
 import { ExamService } from '../src/modules/exam/exam.service';
@@ -60,10 +62,13 @@ beforeAll(async () => {
   await prisma.onModuleInit();
   const audit = new AuditService(prisma);
   const access = new ExamAccessService(prisma, new AccessControlService());
-  exams = new ExamService(prisma, audit, access);
-  questions = new QuestionService(prisma, audit, access);
   redisClient = new IORedis(process.env.REDIS_URL ?? 'redis://localhost:6379');
   resultsQueue = new Queue('results', { connection: redisClient });
+  const attemptRedis = new AttemptRedisService(redisClient);
+  const gradingQueue = new Queue('grading', { connection: redisClient });
+  const finalize = new AttemptFinalizeService(prisma, attemptRedis, audit, gradingQueue);
+  exams = new ExamService(prisma, audit, access, finalize, attemptRedis);
+  questions = new QuestionService(prisma, audit, access);
   scheduler = new ExamSchedulerService(prisma, audit, resultsQueue);
 
   const t1 = await prisma.db.user.findFirstOrThrow({

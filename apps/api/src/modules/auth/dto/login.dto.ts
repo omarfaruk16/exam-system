@@ -1,4 +1,4 @@
-import { IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 
 export class LoginDto {
   @IsString()
@@ -14,4 +14,9 @@ export class LoginDto {
   @IsOptional()
   @Matches(/^\d{6}$/, { message: 'Enter the 6-digit code' })
   totp?: string;
+
+  /** Student single-device: evict the other device's session and continue signing in here. */
+  @IsOptional()
+  @IsBoolean()
+  evictOtherSessions?: boolean;
 }
