@@ -105,7 +105,7 @@ export function ExamResultsPage() {
                 <th className="px-4 py-2.5 font-medium">Name</th>
                 <th className="px-4 py-2.5 font-medium">Session</th>
                 <th className="px-4 py-2.5 font-medium">Status</th>
-                <th className="px-4 py-2.5 text-center font-medium">Proctor</th>
+                <th className="px-4 py-2.5 text-center font-medium">Page minimized attempts</th>
                 <th className="px-4 py-2.5 text-right font-medium">Marks</th>
                 <th className="px-4 py-2.5 text-right font-medium">Rank</th>
                 <th className="px-4 py-2.5" />

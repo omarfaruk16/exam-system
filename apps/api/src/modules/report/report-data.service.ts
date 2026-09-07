@@ -30,6 +30,7 @@ export interface OverallRow {
   totalScore: number;
   percentage: number;
   rank: number | null;
+  timeTaken: string | null; // formatted duration from exam start to submission
 }
 export interface OverallData {
   header: ReportHeader;
@@ -227,7 +228,13 @@ export class ReportDataService {
         percentage: true,
         rank: true,
         breakdown: true,
-        attempt: { select: { student: { select: { studentId: true } } } },
+        attempt: {
+          select: {
+            student: { select: { studentId: true } },
+            startedAt: true,
+            submittedAt: true,
+          },
+        },
       },
     });
     const byStudent = new Map(results.map((r) => [r.attempt.student.studentId, r]));
@@ -240,6 +247,16 @@ export class ReportDataService {
         const bd = (r.breakdown as BreakdownItem[] | null) ?? [];
         for (const item of bd) scores[item.questionPublicId] = item.score;
       }
+      let timeTaken: string | null = null;
+      if (r?.attempt.submittedAt) {
+        const sec = Math.round(
+          (r.attempt.submittedAt.getTime() - r.attempt.startedAt.getTime()) / 1000,
+        );
+        const h = Math.floor(sec / 3600);
+        const m = Math.floor((sec % 3600) / 60);
+        const s2 = sec % 60;
+        timeTaken = h ? `${h}h ${m}m ${s2}s` : m ? `${m}m ${s2}s` : `${s2}s`;
+      }
       return {
         rollNumber: s.rollNumber,
         studentId: s.studentId,
@@ -249,6 +266,7 @@ export class ReportDataService {
         totalScore: r?.finalScore ?? 0,
         percentage: r?.percentage ?? 0,
         rank: r?.rank ?? null,
+        timeTaken,
       };
     });
 

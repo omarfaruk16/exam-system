@@ -154,7 +154,8 @@ export async function writeOverallExcel(data: OverallData, path: string): Promis
 
   // Letterhead block (merged rows).
   const perQ = data.questions.map((q) => `${q.label} (${q.maxMarks})`);
-  const lastCol = 4 + data.questions.length + 3; // Roll, ID, Name, ...Q..., Total, %, Rank, Status
+  // ID, Name, ...Q..., Total, %, Rank, Status, Time
+  const lastCol = 2 + data.questions.length + 5;
   const wide = (r: number, text: string, opts: Partial<ExcelJS.Font> = {}) => {
     ws.mergeCells(r, 1, r, lastCol);
     const c = ws.getCell(r, 1);
@@ -177,7 +178,6 @@ export async function writeOverallExcel(data: OverallData, path: string): Promis
 
   // Table header (row 9).
   const headerRow = ws.addRow([
-    'Roll',
     'Student ID',
     'Name',
     ...perQ,
@@ -185,6 +185,7 @@ export async function writeOverallExcel(data: OverallData, path: string): Promis
     '%',
     'Rank',
     'Status',
+    'Time taken',
   ]);
   headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
   headerRow.eachCell((c) => {
@@ -194,7 +195,6 @@ export async function writeOverallExcel(data: OverallData, path: string): Promis
   });
 
   ws.columns = [
-    { width: 10 },
     { width: 15 },
     { width: 26 },
     ...data.questions.map(() => ({ width: 9 })),
@@ -202,18 +202,20 @@ export async function writeOverallExcel(data: OverallData, path: string): Promis
     { width: 7 },
     { width: 7 },
     { width: 11 },
+    { width: 14 },
   ];
 
+  const statusColIdx = 2 + data.questions.length + 4; // ID, Name, ...Q..., Total, %, Rank, Status
   data.rows.forEach((r, i) => {
     const row = ws.addRow([
-      r.rollNumber ?? '—',
       r.studentId,
       r.name,
       ...data.questions.map((q) => r.scores[q.questionPublicId] ?? 0),
-      r.totalScore,
-      round1(r.percentage),
+      r.status === 'absent' ? '—' : r.totalScore,
+      r.status === 'absent' ? '—' : round1(r.percentage),
       r.rank ?? '—',
       r.status === 'attempted' ? 'Present' : 'Absent',
+      r.timeTaken ?? '—',
     ]);
     if (i % 2 === 1) {
       row.eachCell((c) => {
@@ -221,7 +223,7 @@ export async function writeOverallExcel(data: OverallData, path: string): Promis
       });
     }
     if (r.status === 'absent') {
-      row.getCell(lastCol).font = { color: { argb: 'FFB00020' } };
+      row.getCell(statusColIdx).font = { color: { argb: 'FFB00020' } };
     }
   });
 
@@ -252,13 +254,13 @@ export async function writeOverallPdf(data: OverallData, path: string): Promise<
 
   // ── Result table (summary columns; per-question detail lives in Excel) ──
   const cols = [
-    { key: 'roll', label: 'Roll', w: 52, align: 'left' as const },
     { key: 'sid', label: 'Student ID', w: 92, align: 'left' as const },
     { key: 'name', label: 'Name', w: 0, align: 'left' as const }, // flex
     { key: 'total', label: 'Marks', w: 66, align: 'right' as const },
     { key: 'pct', label: '%', w: 44, align: 'right' as const },
     { key: 'rank', label: 'Rank', w: 40, align: 'right' as const },
     { key: 'status', label: 'Status', w: 56, align: 'center' as const },
+    { key: 'time', label: 'Time taken', w: 72, align: 'right' as const },
   ];
   const fixed = cols.reduce((s, c) => s + c.w, 0);
   const nameCol = cols.find((c) => c.key === 'name')!;
@@ -323,13 +325,13 @@ export async function writeOverallPdf(data: OverallData, path: string): Promise<
     }
     drawRow(
       {
-        roll: r.rollNumber ?? '—',
         sid: r.studentId,
         name: r.name,
         total: r.status === 'absent' ? '—' : `${r.totalScore} / ${data.header.totalMarks}`,
         pct: r.status === 'absent' ? '—' : `${Math.round(r.percentage)}%`,
         rank: r.rank != null ? String(r.rank) : '—',
         status: r.status === 'attempted' ? 'Present' : 'Absent',
+        time: r.timeTaken ?? '—',
       },
       y,
       rh,
