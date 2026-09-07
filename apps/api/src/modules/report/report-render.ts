@@ -264,33 +264,42 @@ export async function writeOverallPdf(data: OverallData, path: string): Promise<
   const nameCol = cols.find((c) => c.key === 'name')!;
   nameCol.w = CONTENT_WIDTH - fixed;
 
-  const rowH = 18;
+  const MIN_ROW_H = 18;
+  const CELL_PAD_Y = 5;
+  // Only the flexible Name column wraps; a long student name grows the row rather
+  // than spilling onto the next one. Every other cell stays on a single line.
+  const rowHeightFor = (name: string): number => {
+    doc.font('Helvetica').fontSize(9);
+    const h = doc.heightOfString(name, { width: nameCol.w - 10 });
+    return Math.max(MIN_ROW_H, Math.ceil(h) + CELL_PAD_Y * 2);
+  };
   const drawRow = (
     cells: Record<string, string>,
     yy: number,
+    rh: number,
     opts: { head?: boolean; zebra?: boolean; danger?: boolean } = {},
   ) => {
     let x = PAGE_MARGIN;
     if (opts.head) {
-      doc.rect(PAGE_MARGIN, yy, CONTENT_WIDTH, rowH).fill(BRAND);
+      doc.rect(PAGE_MARGIN, yy, CONTENT_WIDTH, rh).fill(BRAND);
     } else if (opts.zebra) {
-      doc.rect(PAGE_MARGIN, yy, CONTENT_WIDTH, rowH).fill(ZEBRA);
+      doc.rect(PAGE_MARGIN, yy, CONTENT_WIDTH, rh).fill(ZEBRA);
     }
     doc.font(opts.head ? 'Helvetica-Bold' : 'Helvetica').fontSize(9);
     for (const c of cols) {
       const color = opts.head ? '#ffffff' : opts.danger && c.key === 'status' ? '#b00020' : INK;
-      doc.fillColor(color).text(cells[c.key] ?? '', x + 5, yy + 5, {
+      doc.fillColor(color).text(cells[c.key] ?? '', x + 5, yy + CELL_PAD_Y, {
         width: c.w - 10,
         align: c.align,
-        lineBreak: false,
+        lineBreak: c.key === 'name',
       });
       x += c.w;
     }
     // bottom hairline
     if (!opts.head) {
       doc
-        .moveTo(PAGE_MARGIN, yy + rowH)
-        .lineTo(A4.width - PAGE_MARGIN, yy + rowH)
+        .moveTo(PAGE_MARGIN, yy + rh)
+        .lineTo(A4.width - PAGE_MARGIN, yy + rh)
         .lineWidth(0.5)
         .strokeColor(RULE)
         .stroke();
@@ -298,15 +307,16 @@ export async function writeOverallPdf(data: OverallData, path: string): Promise<
   };
 
   const drawHead = (yy: number): number => {
-    drawRow(Object.fromEntries(cols.map((c) => [c.key, c.label])), yy, { head: true });
-    return yy + rowH;
+    drawRow(Object.fromEntries(cols.map((c) => [c.key, c.label])), yy, MIN_ROW_H, { head: true });
+    return yy + MIN_ROW_H;
   };
 
   y = drawHead(y);
 
   const bottomLimit = A4.height - PAGE_MARGIN - 24;
   data.rows.forEach((r, i) => {
-    if (y + rowH > bottomLimit) {
+    const rh = rowHeightFor(r.name);
+    if (y + rh > bottomLimit) {
       doc.addPage();
       y = PAGE_MARGIN;
       y = drawHead(y);
@@ -322,9 +332,10 @@ export async function writeOverallPdf(data: OverallData, path: string): Promise<
         status: r.status === 'attempted' ? 'Present' : 'Absent',
       },
       y,
+      rh,
       { zebra: i % 2 === 1, danger: r.status === 'absent' },
     );
-    y += rowH;
+    y += rh;
   });
 
   drawFooters(doc);

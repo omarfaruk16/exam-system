@@ -96,6 +96,7 @@ beforeAll(async () => {
   const config = {
     getOrThrow: (k: string) =>
       process.env[k] ?? 'dev_only_session_secret_change_me_please_0123456789abcdef',
+    get: (k: string) => process.env[k],
   } as unknown as ConfigService<Env, true>;
 
   exams = new ExamService(prisma, audit, access);
