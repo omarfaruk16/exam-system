@@ -1,5 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ChangePasswordInput, LoginInput, LoginResult, SessionUser } from '@exam/types';
+import type {
+  ChangePasswordInput,
+  LoginInput,
+  LoginResult,
+  SessionUser,
+  UpdateEmailInput,
+} from '@exam/types';
 import { api, ApiError } from './api';
 
 export const sessionKey = ['session'] as const;
@@ -59,6 +65,15 @@ export function useChangePassword() {
   return useMutation({
     mutationFn: (input: Omit<ChangePasswordInput, 'confirmPassword'>) =>
       api.post<{ user: SessionUser }>('/users/me/change-password', input),
+    onSuccess: (res) => qc.setQueryData(sessionKey, res.user),
+  });
+}
+
+export function useUpdateEmail() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateEmailInput) =>
+      api.patch<{ user: SessionUser }>('/users/me/email', input),
     onSuccess: (res) => qc.setQueryData(sessionKey, res.user),
   });
 }

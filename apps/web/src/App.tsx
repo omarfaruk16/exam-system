@@ -1,6 +1,7 @@
 import { Building2, Loader2, ScrollText, Upload } from 'lucide-react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
+import { AccountPage } from '@/features/auth/AccountPage';
 import { ChangePasswordPage } from '@/features/auth/ChangePasswordPage';
 import { ForgotPasswordPage } from '@/features/auth/ForgotPasswordPage';
 import { LoginPage } from '@/features/auth/LoginPage';
@@ -98,6 +99,7 @@ export function App() {
     <Routes>
       <Route path="/login" element={<Navigate to="/" replace />} />
       <Route path="/change-password" element={<ChangePasswordPage />} />
+      <Route path="/account" element={<AccountPage />} />
       {/* Distraction-free, full-screen — deliberately outside the app shell (no sidebar). */}
       <Route path="/exam/:examPublicId" element={<ExamTakingPage />} />
       {import.meta.env.DEV && <Route path="/dev/exam-ui" element={<DevShowcase />} />}

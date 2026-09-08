@@ -78,6 +78,11 @@ export type LoginResult =
   | { status: 'two_factor_required'; partialToken: string }
   | { status: 'session_conflict' };
 
+export const updateEmailSchema = z.object({
+  newEmail: z.string().email('Enter a valid email address').max(200).toLowerCase(),
+});
+export type UpdateEmailInput = z.infer<typeof updateEmailSchema>;
+
 /** Payload shown on the 2FA setup screen. */
 export interface TwoFactorSetup {
   otpauth: string;

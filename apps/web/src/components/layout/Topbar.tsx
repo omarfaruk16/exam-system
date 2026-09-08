@@ -1,4 +1,4 @@
-import { KeyRound, LogOut, Menu } from 'lucide-react';
+import { KeyRound, LogOut, Mail, Menu } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { SessionUser } from '@exam/types';
 import { ThemeToggle } from '@/components/theme';
@@ -24,6 +24,7 @@ interface TopbarProps {
 export function Topbar({ title, user, onMenu }: TopbarProps) {
   const logout = useLogout();
   const navigate = useNavigate();
+  const isStudent = user.roles.some((r) => r.role === 'student');
 
   return (
     <header className="border-border bg-background/85 sticky top-0 z-20 flex h-16 items-center gap-3 border-b px-4 backdrop-blur lg:px-8">
@@ -57,6 +58,12 @@ export function Topbar({ title, user, onMenu }: TopbarProps) {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            {isStudent && (
+              <DropdownMenuItem onSelect={() => navigate('/account')}>
+                <Mail />
+                Edit email
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onSelect={() => navigate('/change-password')}>
               <KeyRound />
               Change password

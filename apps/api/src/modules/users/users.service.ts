@@ -23,6 +23,34 @@ export class UsersService {
     private readonly auth: AuthService,
   ) {}
 
+  async updateEmail(
+    user: AuthUser,
+    newEmail: string,
+    ctx: ChangePasswordContext,
+  ): Promise<{ user: SessionUser }> {
+    const normalized = newEmail.toLowerCase().trim();
+
+    const existing = await this.prisma.db.user.findFirst({
+      where: { email: { equals: normalized, mode: 'insensitive' }, NOT: { id: user.id } },
+      select: { id: true },
+    });
+    if (existing) throw new BadRequestException('That email address is already in use');
+
+    await this.prisma.user.update({ where: { id: user.id }, data: { email: normalized } });
+
+    await this.audit.record({
+      actorUserId: user.id,
+      action: 'user.update_email',
+      entity: 'User',
+      entityId: user.id,
+      ip: ctx.ip ?? null,
+      userAgent: ctx.userAgent ?? null,
+    });
+
+    const fresh = await this.auth.buildAuthUser(user.id);
+    return { user: await this.auth.toSessionUser(fresh ?? user) };
+  }
+
   /**
    * Change the current user's password (also used to satisfy mustChangePassword on first login).
    * Verifies the current password, clears the force-change flag, and revokes the user's *other*
