@@ -126,8 +126,10 @@ export class QuestionService {
   async listBanks(user: AuthUser, coursePartPublicId: string) {
     // Assigned teacher, or an admin / super_admin / department_head in scope.
     await this.access.requireAuthorablePartAny(user, coursePartPublicId);
+    // Share the bank across every session/year of the same course part.
+    const partIds = await this.access.siblingCoursePartIds(coursePartPublicId);
     return this.prisma.db.questionBank.findMany({
-      where: { coursePart: { publicId: coursePartPublicId }, deletedAt: null },
+      where: { coursePartId: { in: partIds }, deletedAt: null },
       select: questionBankSelect,
       orderBy: { createdAt: 'desc' },
     });
@@ -285,9 +287,10 @@ export class QuestionService {
 
   async listQuestionsByPart(user: AuthUser, coursePartPublicId: string) {
     await this.access.requireAuthorablePartAny(user, coursePartPublicId);
+    const partIds = await this.access.siblingCoursePartIds(coursePartPublicId);
     return this.prisma.db.question.findMany({
       where: {
-        bank: { coursePart: { publicId: coursePartPublicId }, deletedAt: null },
+        bank: { coursePartId: { in: partIds }, deletedAt: null },
         deletedAt: null,
       },
       select: questionSelect,
@@ -487,6 +490,43 @@ export class QuestionService {
         ip,
       });
       return full;
+    });
+  }
+
+  /**
+   * Soft-delete a single question. Blocked when the question is used by a published/live (or
+   * later) exam, so live papers never lose their source — the same rule that locks edits.
+   */
+  async deleteQuestion(user: AuthUser, ip: string, publicId: string) {
+    const question = await this.prisma.db.question.findFirst({
+      where: { publicId, deletedAt: null },
+      select: { id: true, bank: { select: { coursePart: { select: { publicId: true } } } } },
+    });
+    if (!question) throw new NotFoundException('Question not found');
+    await this.access.requireAuthorablePartAny(user, question.bank.coursePart.publicId);
+
+    const inUse = await this.prisma.db.examQuestion.findFirst({
+      where: { question: { publicId }, exam: { status: { in: [...LOCKED_EXAM_STATUSES] } } },
+      select: { id: true },
+    });
+    if (inUse) {
+      throw new BadRequestException(
+        'This question is used in a published or live exam and cannot be deleted.',
+      );
+    }
+
+    const now = new Date();
+    return this.prisma.$transaction(async (tx) => {
+      await tx.question.update({ where: { id: question.id }, data: { deletedAt: now } });
+      await this.audit.recordTx(tx, {
+        actorUserId: user.id,
+        action: 'question.delete',
+        entity: 'Question',
+        entityId: publicId,
+        after: { deletedAt: now.toISOString() },
+        ip,
+      });
+      return { status: 'ok' as const };
     });
   }
 }

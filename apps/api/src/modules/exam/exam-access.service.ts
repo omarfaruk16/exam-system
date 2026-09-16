@@ -76,6 +76,48 @@ export class ExamAccessService {
   }
 
   /**
+   * All course-part ids that share this part's identity across sessions/years — same
+   * department + course code + (case-insensitive) part name. The same course taught to a
+   * different batch is a separate CoursePart row; grouping them lets one question bank be
+   * shared across every session. Always includes the given part itself.
+   */
+  async siblingCoursePartIds(coursePartPublicId: string): Promise<number[]> {
+    const part = await this.prisma.db.coursePart.findFirst({
+      where: { publicId: coursePartPublicId },
+      select: {
+        id: true,
+        name: true,
+        course: {
+          select: {
+            code: true,
+            semester: {
+              select: { batch: { select: { program: { select: { departmentId: true } } } } },
+            },
+          },
+        },
+      },
+    });
+    if (!part) throw new NotFoundException('Course part not found');
+    const code = part.course.code.trim().toLowerCase();
+    const name = part.name.trim().toLowerCase();
+    const departmentId = part.course.semester.batch.program.departmentId;
+
+    const candidates = await this.prisma.db.coursePart.findMany({
+      where: {
+        deletedAt: null,
+        course: { semester: { batch: { program: { departmentId } } } },
+      },
+      select: { id: true, name: true, course: { select: { code: true } } },
+    });
+    const ids = candidates
+      .filter(
+        (c) => c.course.code.trim().toLowerCase() === code && c.name.trim().toLowerCase() === name,
+      )
+      .map((c) => c.id);
+    return ids.includes(part.id) ? ids : [part.id, ...ids];
+  }
+
+  /**
    * Authoring guard: the course part must be active AND assigned to the requesting teacher.
    */
   async requireAuthorablePart(

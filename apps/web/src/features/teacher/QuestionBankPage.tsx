@@ -36,6 +36,7 @@ import {
   createBank,
   createQuestion,
   deleteBank,
+  deleteQuestion,
   downloadExport,
   downloadTemplate,
   fetchAuthorableParts,
@@ -293,7 +294,9 @@ export function QuestionBankPage() {
           {/* Bank + questions */}
           <div className="min-w-0 flex-1">
             {selectedPart ? (
-              <BankView part={selectedPart} />
+              // Key by part so all per-part state (active chapter, forms) resets on switch —
+              // otherwise a stale active chapter id leaks the previous part's question list.
+              <BankView key={selectedPart.publicId} part={selectedPart} />
             ) : (
               <Card className="flex flex-col items-center gap-3 py-16 text-center">
                 <BookOpen className="text-muted-foreground size-7" />
@@ -918,6 +921,17 @@ function QuestionCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const deleteMut = useMutation({
+    mutationFn: () => deleteQuestion(q.publicId),
+    onSuccess: () => {
+      setConfirmDelete(false);
+      toast.success('Question deleted');
+      onSaved();
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not delete question'),
+  });
 
   if (editing) {
     return (
@@ -970,15 +984,51 @@ function QuestionCard({
             <ChevronRight className="text-muted-foreground mt-0.5 size-4 shrink-0" />
           )}
         </button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 shrink-0 px-2 text-xs"
-          onClick={() => setEditing(true)}
-        >
-          <Pencil className="size-3.5" /> Edit
-        </Button>
+        <div className="flex shrink-0 items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={() => setEditing(true)}
+          >
+            <Pencil className="size-3.5" /> Edit
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground hover:text-destructive h-7 px-2 text-xs"
+            onClick={() => setConfirmDelete(true)}
+            aria-label="Delete question"
+          >
+            <Trash2 className="size-3.5" />
+          </Button>
+        </div>
       </div>
+
+      <Dialog open={confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this question?</DialogTitle>
+            <DialogDescription>
+              This question will be removed from the chapter. Questions already used in a published
+              or live exam are kept safe and cannot be deleted. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDelete(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteMut.mutate()}
+              disabled={deleteMut.isPending}
+            >
+              {deleteMut.isPending && <Loader2 className="size-4 animate-spin" />}
+              Delete question
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {expanded && (
         <div className="space-y-2 border-t px-4 pb-4 pt-3">

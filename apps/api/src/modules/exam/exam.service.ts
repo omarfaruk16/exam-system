@@ -459,6 +459,7 @@ export class ExamService {
     const parts = await this.prisma.db.coursePart.findMany({
       where,
       select: {
+        id: true,
         publicId: true,
         name: true,
         course: {
@@ -490,7 +491,22 @@ export class ExamService {
       orderBy: [{ course: { code: 'asc' } }, { name: 'asc' }],
     });
 
-    return parts.map((p) => {
+    // Collapse sessions/years of the same course part — same faculty + course code +
+    // (case-insensitive) part name — into one entry, since its question bank is shared across
+    // sessions. Keep the most recent (largest id) as the representative so the batch/semester
+    // context shown is the current one.
+    const byIdentity = new Map<string, (typeof parts)[number]>();
+    for (const p of parts) {
+      const dept = p.course.semester.batch.program.department;
+      const key = `${dept.faculty.name}||${dept.name}||${p.course.code.trim().toLowerCase()}||${p.name.trim().toLowerCase()}`;
+      const cur = byIdentity.get(key);
+      if (!cur || p.id > cur.id) byIdentity.set(key, p);
+    }
+    const unique = [...byIdentity.values()].sort(
+      (a, b) => a.course.code.localeCompare(b.course.code) || a.name.localeCompare(b.name),
+    );
+
+    return unique.map((p) => {
       const sem = p.course.semester;
       const batch = sem.batch;
       const semLabel = sem.name?.trim() ? sem.name : `Semester ${sem.number}`;
@@ -1110,10 +1126,13 @@ export class ExamService {
     }
     const q = await this.prisma.db.question.findFirst({
       where: { publicId: dto.questionPublicId },
-      select: { id: true, bank: { select: { coursePart: { select: { publicId: true } } } } },
+      select: { id: true, bank: { select: { coursePartId: true } } },
     });
     if (!q) throw new NotFoundException('Question not found');
-    if (q.bank.coursePart.publicId !== exam.coursePartPublicId) {
+    // The bank is shared across sessions/years, so accept any question whose part is a
+    // sibling of the exam's course part (same course + section, any batch).
+    const siblingIds = await this.access.siblingCoursePartIds(exam.coursePartPublicId);
+    if (!siblingIds.includes(q.bank.coursePartId)) {
       throw new BadRequestException('Question is not from this course part');
     }
 

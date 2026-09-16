@@ -10,7 +10,7 @@
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Queue, type Job } from 'bullmq';
 import ExcelJS from 'exceljs';
@@ -340,5 +340,114 @@ describe('Phase 3 — exam authoring guards & lifecycle', () => {
     });
     expect(created).toHaveLength(2);
     expect(created.every((q) => q.type === 'written')).toBe(true);
+  });
+
+  // ── Feature: one question bank shared across sessions/years of the same course part ──
+  it('(i) the bank is shared across sessions of the same course part, and the list shows it once', async () => {
+    const t1 = await prisma.db.teacher.findFirstOrThrow({
+      where: { user: { username: 'teacher1' } },
+      select: { id: true },
+    });
+    const partA = await prisma.db.coursePart.findFirstOrThrow({
+      where: { publicId: csePartAPublicId },
+      select: {
+        name: true,
+        course: {
+          select: {
+            code: true,
+            name: true,
+            credit: true,
+            semester: { select: { batch: { select: { programId: true } } } },
+          },
+        },
+      },
+    });
+    const programId = partA.course.semester.batch.programId;
+
+    // A second session/year of the SAME course + section (a fresh batch → semester → course →
+    // part), assigned to the same teacher.
+    const batch = await prisma.batch.create({
+      data: { programId, name: `TmpBatch ${Date.now()}-${Math.random()}`, year: 1990 },
+      select: { id: true },
+    });
+    const semester = await prisma.semester.create({
+      data: { batchId: batch.id, number: 1, name: 'Tmp Semester' },
+      select: { id: true },
+    });
+    const course = await prisma.course.create({
+      data: {
+        semesterId: semester.id,
+        code: partA.course.code,
+        name: partA.course.name,
+        credit: partA.course.credit,
+      },
+      select: { id: true },
+    });
+    const session2 = await prisma.coursePart.create({
+      data: { courseId: course.id, name: partA.name, marksWeight: 0, assignedTeacherId: t1.id },
+      select: { id: true, publicId: true },
+    });
+
+    // A bank + question created under session 1…
+    const bank = await questions.createBank(teacher1, 'test', {
+      coursePartPublicId: csePartAPublicId,
+      name: `Shared Bank ${Date.now()}-${Math.random()}`,
+    });
+    const q = await questions.createQuestion(teacher1, 'test', {
+      bankPublicId: bank.publicId,
+      type: 'written',
+      text: 'Shared across sessions?',
+      marks: 2,
+    });
+    const bankRow = await prisma.db.questionBank.findFirstOrThrow({
+      where: { publicId: bank.publicId },
+      select: { id: true },
+    });
+
+    try {
+      // …is visible when browsing session 2's bank (shared across sessions).
+      const banksViaSession2 = await questions.listBanks(teacher1, session2.publicId);
+      expect(banksViaSession2.some((b) => b.publicId === bank.publicId)).toBe(true);
+      const qsViaSession2 = await questions.listQuestionsByPart(teacher1, session2.publicId);
+      expect(qsViaSession2.some((x) => x.publicId === q.publicId)).toBe(true);
+
+      // …and the authoring list shows this course + section exactly once (no per-session dupes).
+      const authorable = await exams.listAuthorableParts(teacher1);
+      const same = authorable.filter(
+        (p) => p.courseCode === partA.course.code && p.partName === partA.name,
+      );
+      expect(same).toHaveLength(1);
+    } finally {
+      await prisma.questionOption.deleteMany({ where: { question: { bankId: bankRow.id } } });
+      await prisma.question.deleteMany({ where: { bankId: bankRow.id } });
+      await prisma.questionBank.delete({ where: { id: bankRow.id } });
+      await prisma.coursePart.delete({ where: { id: session2.id } });
+      await prisma.course.delete({ where: { id: course.id } });
+      await prisma.semester.delete({ where: { id: semester.id } });
+      await prisma.batch.delete({ where: { id: batch.id } });
+    }
+  });
+
+  // ── Feature: a bank question can be deleted (unless locked into a published/live exam) ──
+  it('(j) deleteQuestion soft-deletes a bank question and drops it from the list', async () => {
+    const bank = await questions.createBank(teacher1, 'test', {
+      coursePartPublicId: csePartAPublicId,
+      name: `Del Bank ${Date.now()}-${Math.random()}`,
+    });
+    const q = await questions.createQuestion(teacher1, 'test', {
+      bankPublicId: bank.publicId,
+      type: 'written',
+      text: 'To be deleted',
+      marks: 1,
+    });
+
+    await questions.deleteQuestion(teacher1, 'test', q.publicId);
+
+    const remaining = await questions.listQuestions(teacher1, bank.publicId);
+    expect(remaining.some((x) => x.publicId === q.publicId)).toBe(false);
+    // Deleting again is a clean 404 (already gone), never a silent success.
+    await expect(questions.deleteQuestion(teacher1, 'test', q.publicId)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 });

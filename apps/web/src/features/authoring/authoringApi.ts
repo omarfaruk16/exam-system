@@ -127,6 +127,9 @@ export type UpdateQuestionInput = {
 export const updateQuestion = (publicId: string, input: UpdateQuestionInput) =>
   api.patch<BankQuestion>(`/questions/${publicId}`, input);
 
+export const deleteQuestion = (publicId: string) =>
+  api.del<{ status: string }>(`/questions/${publicId}`);
+
 /** Download all questions in a chapter as an xlsx file and trigger browser save. */
 export async function downloadExport(bankPublicId: string, chapterName: string): Promise<void> {
   const { blob, filename } = await api.blob(

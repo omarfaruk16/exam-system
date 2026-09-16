@@ -130,6 +130,12 @@ export class QuestionController {
   }
 
   @Roles('teacher', 'admin', 'super_admin', 'department_head')
+  @Delete('questions/:publicId')
+  deleteQuestion(@CurrentUser() u: AuthUser, @Ip() ip: string, @Param('publicId') id: string) {
+    return this.questions.deleteQuestion(u, ip, id);
+  }
+
+  @Roles('teacher', 'admin', 'super_admin', 'department_head')
   @Post('questions/import')
   @UseInterceptors(FileInterceptor('file'))
   async importQuestions(
