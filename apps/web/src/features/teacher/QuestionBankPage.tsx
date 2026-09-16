@@ -584,13 +584,19 @@ function BankQuestions({ bankId, bank }: { bankId: string; bank: QuestionBankSum
   const [showCreate, setShowCreate] = useState(false);
   const [importJobId, setImportJobId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
-  const [templateDl, setTemplateDl] = useState(false);
+  const [templateDl, setTemplateDl] = useState<QType | null>(null);
+  // Which question type the list shows, and the type the last import targeted (for the banner).
+  const [viewType, setViewType] = useState<'all' | QType>('all');
 
   const questionsQuery = useQuery({
     queryKey: ['bank-questions', bankId],
     queryFn: () => fetchBankQuestions(bankId),
   });
-  const questions = questionsQuery.data ?? [];
+  const allQuestions = questionsQuery.data ?? [];
+  const mcqCount = allQuestions.filter((q) => q.type === 'mcq').length;
+  const writtenCount = allQuestions.filter((q) => q.type === 'written').length;
+  const questions =
+    viewType === 'all' ? allQuestions : allQuestions.filter((q) => q.type === viewType);
 
   // Poll import job until done
   const jobQuery = useQuery({
@@ -626,18 +632,18 @@ function BankQuestions({ bankId, bank }: { bankId: string; bank: QuestionBankSum
     }
   }
 
-  async function handleTemplate() {
-    setTemplateDl(true);
+  async function handleTemplate(kind: QType) {
+    setTemplateDl(kind);
     try {
-      await downloadTemplate();
+      await downloadTemplate(kind);
     } catch {
       toast.error('Could not download template');
     } finally {
-      setTemplateDl(false);
+      setTemplateDl(null);
     }
   }
 
-  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleImport(kind: QType, e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
@@ -646,10 +652,10 @@ function BankQuestions({ bankId, bank }: { bankId: string; bank: QuestionBankSum
       return;
     }
     try {
-      const { jobId } = await importQuestions(bankId, file);
+      const { jobId } = await importQuestions(bankId, file, kind);
       setImportJobId(jobId);
       prevStatus[1](null);
-      toast.info('Importing questions…');
+      toast.info(`Importing ${kind === 'mcq' ? 'MCQ' : 'short'} questions…`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Import failed');
     }
@@ -658,64 +664,74 @@ function BankQuestions({ bankId, bank }: { bankId: string; bank: QuestionBankSum
   return (
     <div className="space-y-3">
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-muted-foreground text-sm">
-          {questions.length} question{questions.length !== 1 ? 's' : ''}
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Template download */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 text-xs"
-            onClick={handleTemplate}
-            disabled={templateDl}
-            title="Download blank xlsx template"
-          >
-            {templateDl ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <FileDown className="size-3.5" />
-            )}
-            Template
-          </Button>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {/* View filter: All / MCQ / Short question */}
+          <div className="flex items-center gap-1 rounded-md border p-0.5 text-xs">
+            {(
+              [
+                ['all', `All (${allQuestions.length})`],
+                ['mcq', `MCQ (${mcqCount})`],
+                ['written', `Short (${writtenCount})`],
+              ] as const
+            ).map(([val, label]) => (
+              <button
+                key={val}
+                type="button"
+                onClick={() => setViewType(val)}
+                className={cn(
+                  'rounded px-2.5 py-1 font-medium transition-colors',
+                  viewType === val
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
 
-          {/* Export */}
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 text-xs"
-            onClick={handleExport}
-            disabled={exporting || questions.length === 0}
-            title="Export questions to xlsx"
-          >
-            {exporting ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <Download className="size-3.5" />
-            )}
-            Export
-          </Button>
-
-          {/* Import */}
-          <label className="cursor-pointer">
-            <Button variant="outline" size="sm" className="pointer-events-none h-8 text-xs" asChild>
-              <span>
-                <Upload className="size-3.5" /> Import xlsx
-              </span>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Export (both types) */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={handleExport}
+              disabled={exporting || allQuestions.length === 0}
+              title="Export all questions to xlsx"
+            >
+              {exporting ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Download className="size-3.5" />
+              )}
+              Export
             </Button>
-            <input
-              type="file"
-              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-              className="sr-only"
-              onChange={handleImport}
-            />
-          </label>
 
-          {/* New question */}
-          <Button size="sm" className="h-8" onClick={() => setShowCreate((v) => !v)}>
-            <Plus className="size-4" /> New question
-          </Button>
+            {/* New question */}
+            <Button size="sm" className="h-8" onClick={() => setShowCreate((v) => !v)}>
+              <Plus className="size-4" /> New question
+            </Button>
+          </div>
+        </div>
+
+        {/* Two separate import lanes — one for MCQ, one for short (written) questions. */}
+        <div className="grid gap-2 sm:grid-cols-2">
+          <ImportLane
+            title="MCQ questions"
+            kind="mcq"
+            templateBusy={templateDl === 'mcq'}
+            onTemplate={() => handleTemplate('mcq')}
+            onImport={(e) => handleImport('mcq', e)}
+          />
+          <ImportLane
+            title="Short questions"
+            kind="written"
+            templateBusy={templateDl === 'written'}
+            onTemplate={() => handleTemplate('written')}
+            onImport={(e) => handleImport('written', e)}
+          />
         </div>
       </div>
 
@@ -745,10 +761,24 @@ function BankQuestions({ bankId, bank }: { bankId: string; bank: QuestionBankSum
         </div>
       ) : questions.length === 0 && !showCreate ? (
         <Card className="flex flex-col items-center gap-2 py-12 text-center">
-          <p className="text-sm font-medium">No questions yet</p>
-          <p className="text-muted-foreground text-xs">
-            Click "New question" to add one, or import from an xlsx file.
-          </p>
+          {allQuestions.length > 0 ? (
+            <>
+              <p className="text-sm font-medium">
+                No {viewType === 'mcq' ? 'MCQ' : 'short'} questions in this chapter
+              </p>
+              <p className="text-muted-foreground text-xs">
+                Switch the filter to “All”, or import {viewType === 'mcq' ? 'MCQ' : 'short'}{' '}
+                questions above.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-medium">No questions yet</p>
+              <p className="text-muted-foreground text-xs">
+                Click "New question" to add one, or import from an xlsx file above.
+              </p>
+            </>
+          )}
         </Card>
       ) : (
         <ul className="space-y-2">
@@ -763,6 +793,57 @@ function BankQuestions({ bankId, bank }: { bankId: string; bank: QuestionBankSum
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+/** One import lane: a labeled row with its own template download + xlsx import for a single type. */
+function ImportLane({
+  title,
+  kind,
+  templateBusy,
+  onTemplate,
+  onImport,
+}: {
+  title: string;
+  kind: QType;
+  templateBusy: boolean;
+  onTemplate: () => void;
+  onImport: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}) {
+  return (
+    <div className="bg-muted/30 flex items-center justify-between gap-2 rounded-lg border px-3 py-2">
+      <span className="text-sm font-medium">{title}</span>
+      <div className="flex items-center gap-1.5">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 text-xs"
+          onClick={onTemplate}
+          disabled={templateBusy}
+          title={`Download the ${kind === 'mcq' ? 'MCQ' : 'short question'} template`}
+        >
+          {templateBusy ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            <FileDown className="size-3.5" />
+          )}
+          Template
+        </Button>
+        <label className="cursor-pointer">
+          <Button variant="outline" size="sm" className="pointer-events-none h-8 text-xs" asChild>
+            <span>
+              <Upload className="size-3.5" /> Import
+            </span>
+          </Button>
+          <input
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            className="sr-only"
+            onChange={onImport}
+          />
+        </label>
+      </div>
     </div>
   );
 }

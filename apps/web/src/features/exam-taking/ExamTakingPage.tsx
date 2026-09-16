@@ -27,9 +27,9 @@ import {
 import { ApiError } from '@/lib/api';
 import { autosave, recordProctorEvent, startExam, submitAttempt, type AnswerPayload } from './api';
 
-// After this many "left the exam" events (tab switch, blur, or full-screen exit) the attempt
-// is submitted automatically. Best-effort browser proctoring — see the note on the page.
-const MAX_VIOLATIONS = 3;
+// Zero tolerance: the FIRST time the student leaves the exam window (tab switch, blur, or
+// full-screen exit) the attempt is submitted automatically. Best-effort browser proctoring.
+const MAX_VIOLATIONS = 1;
 import { idbGetAll, idbPut } from './idb';
 import { QuestionNavigator } from './QuestionNavigator';
 import { QuestionView } from './QuestionView';
@@ -208,7 +208,8 @@ function ExamInfoScreen({ data, onStart }: { data: StartAttemptResponse; onStart
           </p>
           <ul className="space-y-1.5 text-sm text-amber-900 dark:text-amber-200">
             <li>• নকল করার চেষ্টা করবেন না।</li>
-            <li>• যদি নকল করেন, পরীক্ষা স্বয়ংক্রিয়ভাবে জমা হয়ে যাবে।</li>
+            <li>• পরীক্ষা চলাকালীন স্ক্রিন মিনিমাইজ করা বা অন্য ট্যাব/উইন্ডোতে যাওয়া যাবে না।</li>
+            <li>• একবার পরীক্ষার স্ক্রিন থেকে বের হলেই পরীক্ষা স্বয়ংক্রিয়ভাবে জমা হয়ে যাবে।</li>
           </ul>
         </div>
 
@@ -550,7 +551,7 @@ function ExamRunner({ data }: { data: StartAttemptResponse }) {
     setViolations(next);
     void recordProctorEvent(attempt.publicId).catch(() => undefined);
     if (next >= MAX_VIOLATIONS) {
-      toast.error('You left the exam too many times — submitting automatically.');
+      toast.error('You left the exam — submitting automatically.');
       void doSubmit();
     } else {
       setWarn(true);
@@ -751,12 +752,10 @@ function ExamRunner({ data }: { data: StartAttemptResponse }) {
               This exam must run in full screen with no other windows or tabs. Your saved answers
               are safe — click below to continue.
             </p>
-            {violations > 0 && (
-              <p className="text-destructive mt-3 text-sm font-medium">
-                Recorded {violations} of {MAX_VIOLATIONS} allowed exits. At {MAX_VIOLATIONS} your
-                exam is submitted automatically.
-              </p>
-            )}
+            <p className="text-destructive mt-3 text-sm font-medium">
+              Leaving the exam window — switching tabs, minimizing, or exiting full screen — submits
+              your exam automatically.
+            </p>
             <Button
               className="mt-4 w-full"
               onClick={() => {

@@ -140,9 +140,12 @@ export async function downloadExport(bankPublicId: string, chapterName: string):
   URL.revokeObjectURL(url);
 }
 
-/** Download the blank question template xlsx. */
-export async function downloadTemplate(): Promise<void> {
-  const { blob, filename } = await api.blob('/questions/template');
+/** Download the blank question template xlsx. `kind` fetches an MCQ-only or short-question-only
+ *  template; omitted returns the combined workbook. */
+export async function downloadTemplate(kind?: 'mcq' | 'written'): Promise<void> {
+  const { blob, filename } = await api.blob(
+    kind ? `/questions/template?kind=${kind}` : '/questions/template',
+  );
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -151,14 +154,18 @@ export async function downloadTemplate(): Promise<void> {
   URL.revokeObjectURL(url);
 }
 
-/** Upload an xlsx file to import questions into a chapter. */
-export const importQuestions = (bankPublicId: string, file: File): Promise<{ jobId: string }> => {
+/** Upload an xlsx file to import questions into a chapter. `kind` scopes the import to one
+ *  question type (MCQ or short/written); omitted imports both sheets. */
+export const importQuestions = (
+  bankPublicId: string,
+  file: File,
+  kind?: 'mcq' | 'written',
+): Promise<{ jobId: string }> => {
   const form = new FormData();
   form.append('file', file);
-  return api.upload<{ jobId: string }>(
-    `/questions/import?bank=${encodeURIComponent(bankPublicId)}`,
-    form,
-  );
+  const q = new URLSearchParams({ bank: bankPublicId });
+  if (kind) q.set('kind', kind);
+  return api.upload<{ jobId: string }>(`/questions/import?${q.toString()}`, form);
 };
 
 /** Poll import job status. */

@@ -79,8 +79,8 @@ export class QuestionController {
 
   @Roles('teacher', 'admin', 'super_admin')
   @Get('questions/template')
-  async downloadTemplate(@Res() res: Response): Promise<void> {
-    const { buffer, filename } = await this.questions.templateBuffer();
+  async downloadTemplate(@Res() res: Response, @Query('kind') kind?: string): Promise<void> {
+    const { buffer, filename } = await this.questions.templateBuffer(parseKind(kind));
     res.set({
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename="${filename}"`,
@@ -136,6 +136,7 @@ export class QuestionController {
     @CurrentUser() u: AuthUser,
     @Query('bank') bankPublicId: string,
     @UploadedFile() file: UploadedExcel | undefined,
+    @Query('kind') kind?: string,
   ): Promise<{ jobId: string }> {
     if (!file) throw new BadRequestException('No file uploaded (field name must be "file")');
     if (!bankPublicId) throw new BadRequestException('A "bank" query parameter is required');
@@ -145,6 +146,7 @@ export class QuestionController {
       originalName: file.originalname,
       bankId,
       uploadedByUserId: u.id,
+      kind: parseKind(kind),
     });
     return { jobId };
   }
@@ -154,4 +156,11 @@ export class QuestionController {
   importStatus(@Param('jobId') jobId: string): Promise<ImportJobState> {
     return this.imports.getJobState(jobId);
   }
+}
+
+/** Validate the optional ?kind= query into the two supported question types (or undefined). */
+function parseKind(kind: string | undefined): 'mcq' | 'written' | undefined {
+  if (kind === 'mcq' || kind === 'written') return kind;
+  if (kind === undefined || kind === '') return undefined;
+  throw new BadRequestException('kind must be "mcq" or "written"');
 }

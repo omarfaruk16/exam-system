@@ -7,11 +7,17 @@
  *   (e) a teacher cannot submit/author a part they are not assigned to;
  *   (f) automatic live→ended fires for a past endAt.
  */
+import { mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
-import { Queue } from 'bullmq';
+import { ConfigService } from '@nestjs/config';
+import { Queue, type Job } from 'bullmq';
+import ExcelJS from 'exceljs';
 import IORedis, { type Redis } from 'ioredis';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AccessControlService } from '../src/common/access/access-control.service';
+import type { Env } from '../src/common/config/env.validation';
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import type { AuthUser } from '../src/common/types/auth';
 import { AuditService } from '../src/modules/audit/audit.service';
@@ -20,6 +26,10 @@ import { AttemptRedisService } from '../src/modules/attempt/attempt.redis';
 import { ExamAccessService } from '../src/modules/exam/exam-access.service';
 import { ExamSchedulerService } from '../src/modules/exam/exam-scheduler.service';
 import { ExamService } from '../src/modules/exam/exam.service';
+import {
+  QuestionImportProcessor,
+  type QuestionImportJobData,
+} from '../src/modules/exam/question-import.processor';
 import { QuestionService } from '../src/modules/exam/question.service';
 
 let prisma: PrismaService;
@@ -253,5 +263,82 @@ describe('Phase 3 — exam authoring guards & lifecycle', () => {
       select: { status: true },
     });
     expect(after.status).toBe('ended');
+  });
+
+  // ── Feature: split MCQ / short-question import (question-bank) ──
+  async function runImport(
+    bankId: number,
+    kind: 'mcq' | 'written',
+    build: (wb: ExcelJS.Workbook) => void,
+  ) {
+    const wb = new ExcelJS.Workbook();
+    build(wb);
+    const dir = await mkdtemp(join(tmpdir(), 'qimport-'));
+    const filePath = join(dir, `${kind}.xlsx`);
+    await wb.xlsx.writeFile(filePath);
+    const processor = new QuestionImportProcessor(prisma, {
+      getOrThrow: () => dir,
+    } as unknown as ConfigService<Env, true>);
+    const job = {
+      data: { filePath, originalName: `${kind}.xlsx`, bankId, uploadedByUserId: teacher1.id, kind },
+      id: `job-${kind}-${Date.now()}`,
+      updateProgress: async () => undefined,
+    } as unknown as Job<QuestionImportJobData>;
+    return processor.process(job);
+  }
+
+  it('(g) MCQ-scoped import reads only the MCQ sheet, ignoring a Written sheet in the same file', async () => {
+    const bank = await questions.createBank(teacher1, 'test', {
+      coursePartPublicId: csePartAPublicId,
+      name: `Import MCQ ${Date.now()}-${Math.random()}`,
+    });
+    const bankRow = await prisma.db.questionBank.findFirstOrThrow({
+      where: { publicId: bank.publicId },
+      select: { id: true },
+    });
+
+    const summary = await runImport(bankRow.id, 'mcq', (wb) => {
+      const mcq = wb.addWorksheet('MCQ');
+      mcq.addRow(['question', 'marks', 'optionA', 'optionB', 'correct', 'explanation']);
+      mcq.addRow(['What is 2+2?', 1, '4', '5', 'A', 'basic arithmetic']);
+      const written = wb.addWorksheet('Written');
+      written.addRow(['question', 'marks', 'modelAnswer']);
+      written.addRow(['Explain gravity', 5, 'A force of attraction']);
+    });
+
+    expect(summary.imported).toBe(1);
+    const created = await prisma.db.question.findMany({
+      where: { bankId: bankRow.id, deletedAt: null },
+      select: { type: true },
+    });
+    expect(created).toHaveLength(1);
+    expect(created[0]!.type).toBe('mcq');
+  });
+
+  it('(h) short-question import falls back to the first sheet when no "Written" sheet exists', async () => {
+    const bank = await questions.createBank(teacher1, 'test', {
+      coursePartPublicId: csePartAPublicId,
+      name: `Import Written ${Date.now()}-${Math.random()}`,
+    });
+    const bankRow = await prisma.db.questionBank.findFirstOrThrow({
+      where: { publicId: bank.publicId },
+      select: { id: true },
+    });
+
+    const summary = await runImport(bankRow.id, 'written', (wb) => {
+      // A plain single-sheet upload (arbitrary sheet name) still imports as short questions.
+      const ws = wb.addWorksheet('Sheet1');
+      ws.addRow(['question', 'marks', 'modelAnswer']);
+      ws.addRow(['Define osmosis', 4, 'Movement of water across a membrane']);
+      ws.addRow(['State Newton’s first law', 3, 'An object stays at rest…']);
+    });
+
+    expect(summary.imported).toBe(2);
+    const created = await prisma.db.question.findMany({
+      where: { bankId: bankRow.id, deletedAt: null },
+      select: { type: true },
+    });
+    expect(created).toHaveLength(2);
+    expect(created.every((q) => q.type === 'written')).toBe(true);
   });
 });

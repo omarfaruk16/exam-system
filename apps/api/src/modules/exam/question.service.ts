@@ -308,8 +308,20 @@ export class QuestionService {
   ): ExcelJS.Workbook {
     const wb = new ExcelJS.Workbook();
     wb.creator = 'Exam System';
+    this.addMcqSheet(wb, mcqRows);
+    this.addWrittenSheet(wb, writtenRows);
+    return wb;
+  }
 
-    // ── MCQ sheet ──
+  private addMcqSheet(
+    wb: ExcelJS.Workbook,
+    mcqRows: {
+      text: string;
+      marks: number;
+      options: { text: string; isCorrect: boolean; order: number }[];
+      explanation: string | null;
+    }[],
+  ): void {
     const mcq = wb.addWorksheet('MCQ');
     mcq.columns = [
       { header: 'question', key: 'question', width: 60 },
@@ -337,15 +349,14 @@ export class QuestionService {
       });
       mcq.addRow(row);
     }
-    // Style header row
     mcq.getRow(1).font = { bold: true };
-    mcq.getRow(1).fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FFE0E8FF' },
-    };
+    mcq.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E8FF' } };
+  }
 
-    // ── Written sheet ──
+  private addWrittenSheet(
+    wb: ExcelJS.Workbook,
+    writtenRows: { text: string; marks: number; modelAnswer: string | null }[],
+  ): void {
     const written = wb.addWorksheet('Written');
     written.columns = [
       { header: 'question', key: 'question', width: 60 },
@@ -356,20 +367,27 @@ export class QuestionService {
       written.addRow({ question: q.text, marks: q.marks, modelAnswer: q.modelAnswer ?? '' });
     }
     written.getRow(1).font = { bold: true };
-    written.getRow(1).fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FFFFE0D0' },
-    };
-
-    return wb;
+    written.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE0D0' } };
   }
 
-  /** Build and return a blank template workbook (no question rows). */
-  async templateBuffer(): Promise<{ buffer: Buffer; filename: string }> {
-    const wb = this.buildWorkbook([], []);
+  /**
+   * Build and return a blank template workbook (no question rows). With `kind`, the workbook
+   * carries only that type's sheet, so the MCQ and short-question imports each get their own
+   * single-sheet template; without it, both sheets are included (legacy combined template).
+   */
+  async templateBuffer(kind?: 'mcq' | 'written'): Promise<{ buffer: Buffer; filename: string }> {
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Exam System';
+    if (!kind || kind === 'mcq') this.addMcqSheet(wb, []);
+    if (!kind || kind === 'written') this.addWrittenSheet(wb, []);
     const buffer = Buffer.from(await wb.xlsx.writeBuffer());
-    return { buffer, filename: 'question_template.xlsx' };
+    const filename =
+      kind === 'mcq'
+        ? 'mcq_template.xlsx'
+        : kind === 'written'
+          ? 'short_question_template.xlsx'
+          : 'question_template.xlsx';
+    return { buffer, filename };
   }
 
   /** Export all questions in a bank as an xlsx workbook. */

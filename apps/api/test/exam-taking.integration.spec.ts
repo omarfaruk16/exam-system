@@ -397,4 +397,32 @@ describe('Phase 4 — exam-taking engine', () => {
     const gone = await prisma.db.examAttempt.findUnique({ where: { id } });
     expect(gone).toBeNull();
   });
+
+  it('(j) conducted-results carries a live headcount that clears once the student submits', async () => {
+    const ex = await publishLiveMcqExam();
+    const s = await attempts.start(student, ex.examPublicId, null);
+
+    // Visible to the teacher and to an admin (admin sees every exam).
+    const forTeacher = (await exams.getMyConductedExams(teacher1)).find(
+      (e) => e.publicId === ex.examPublicId,
+    );
+    const forAdmin = (await exams.getMyConductedExams(admin)).find(
+      (e) => e.publicId === ex.examPublicId,
+    );
+    expect(forTeacher?.status).toBe('live');
+    expect(forTeacher?.liveCount).toBe(1);
+    expect(forAdmin?.liveCount).toBe(1);
+
+    // Once the attempt is finalized the headcount drops back to zero.
+    await finalize.finalize(s.attempt.publicId, {
+      auto: false,
+      sessionId: s.sessionId,
+      idempotencyKey: rand(),
+      actorUserId: student.id,
+    });
+    const after = (await exams.getMyConductedExams(teacher1)).find(
+      (e) => e.publicId === ex.examPublicId,
+    );
+    expect(after?.liveCount).toBe(0);
+  });
 });

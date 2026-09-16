@@ -21,6 +21,8 @@ export interface QuestionImportJobData {
   originalName: string;
   bankId: number;
   uploadedByUserId: number;
+  /** Restrict the import to one question type. Omitted = import both sheets (legacy behavior). */
+  kind?: 'mcq' | 'written';
 }
 
 function cellText(v: ExcelJS.CellValue): string {
@@ -73,14 +75,28 @@ export class QuestionImportProcessor extends WorkerHost {
   }
 
   async process(job: Job<QuestionImportJobData>): Promise<ImportSummary> {
-    const { filePath, bankId } = job.data;
+    const { filePath, bankId, kind } = job.data;
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.readFile(filePath);
 
-    const mcqSheet = wb.worksheets.find((w) => w.name.trim().toLowerCase() === 'mcq');
-    const writtenSheet = wb.worksheets.find((w) => w.name.trim().toLowerCase() === 'written');
+    const findSheet = (name: string) =>
+      wb.worksheets.find((w) => w.name.trim().toLowerCase() === name);
+
+    // A type-scoped import (from the "Import MCQ" / "Import short questions" buttons) reads only
+    // that type's sheet, and — so teachers can also upload a plain single-sheet file — falls back
+    // to the first worksheet when the named sheet is absent. No kind = legacy both-sheets import.
+    let mcqSheet = !kind || kind === 'mcq' ? findSheet('mcq') : undefined;
+    let writtenSheet = !kind || kind === 'written' ? findSheet('written') : undefined;
+    if (kind === 'mcq' && !mcqSheet) mcqSheet = wb.worksheets[0];
+    if (kind === 'written' && !writtenSheet) writtenSheet = wb.worksheets[0];
     if (!mcqSheet && !writtenSheet) {
-      throw new Error('Workbook must contain an "MCQ" and/or a "Written" sheet');
+      throw new Error(
+        kind === 'mcq'
+          ? 'Workbook has no MCQ sheet or rows to import'
+          : kind === 'written'
+            ? 'Workbook has no short-question sheet or rows to import'
+            : 'Workbook must contain an "MCQ" and/or a "Written" sheet',
+      );
     }
 
     const errors: ImportRowError[] = [];

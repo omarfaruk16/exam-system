@@ -298,6 +298,7 @@ export class ExamService {
     const exams = await this.prisma.db.exam.findMany({
       where,
       select: {
+        id: true,
         publicId: true,
         title: true,
         status: true,
@@ -328,6 +329,19 @@ export class ExamService {
       orderBy: [{ startAt: 'desc' }],
     });
 
+    // Live headcount per exam: how many students are sitting it right now. Only live exams can
+    // have in-progress attempts, so we only query those ids.
+    const liveExamIds = exams.filter((e) => e.status === 'live').map((e) => e.id);
+    const liveCounts = new Map<number, number>();
+    if (liveExamIds.length > 0) {
+      const grouped = await this.prisma.db.examAttempt.groupBy({
+        by: ['examId'],
+        where: { examId: { in: liveExamIds }, status: 'in_progress' },
+        _count: { _all: true },
+      });
+      for (const g of grouped) liveCounts.set(g.examId, g._count._all);
+    }
+
     return exams.map((e) => {
       const course = e.coursePart.course;
       const sem = course.semester;
@@ -350,6 +364,7 @@ export class ExamService {
         // "Current" when the batch is presently sitting this exam's semester.
         isCurrentBatch: batch.currentSemesterId === course.semesterId,
         attempted: e._count.attempts,
+        liveCount: e.status === 'live' ? (liveCounts.get(e.id) ?? 0) : 0,
       };
     });
   }

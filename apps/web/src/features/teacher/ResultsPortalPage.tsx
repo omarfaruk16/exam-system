@@ -5,6 +5,7 @@ import {
   BookOpen,
   CalendarClock,
   ChevronRight,
+  CircleDot,
   SlidersHorizontal,
   Users,
 } from 'lucide-react';
@@ -71,6 +72,11 @@ export function ResultsPortalPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['conducted-results'],
     queryFn: fetchConductedResults,
+    // Keep the live headcount fresh while any exam is running; otherwise don't poll.
+    refetchInterval: (q) =>
+      (q.state.data as TeacherConductedExam[] | undefined)?.some((e) => e.status === 'live')
+        ? 10000
+        : false,
   });
   const exams = useMemo(() => data ?? [], [data]);
 
@@ -247,6 +253,12 @@ function ExamRow({
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="truncate font-semibold">{exam.title}</h3>
             <StatusPill status={exam.status} />
+            {exam.status === 'live' && (
+              <span className="bg-success/10 text-success inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium tabular-nums">
+                <CircleDot className="size-3.5 animate-pulse" />
+                {exam.liveCount} taking now
+              </span>
+            )}
           </div>
           <div className="text-muted-foreground mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
             <span className="inline-flex items-center gap-1.5">

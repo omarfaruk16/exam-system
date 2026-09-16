@@ -94,6 +94,8 @@ export interface TeacherConductedExam {
   isCurrentBatch: boolean;
   /** Number of students who attempted. */
   attempted: number;
+  /** Students currently sitting this exam right now (in-progress attempts); 0 unless live. */
+  liveCount: number;
 }
 
 /** One student's row in the per-exam review roster (GET /exams/:id/results). */
