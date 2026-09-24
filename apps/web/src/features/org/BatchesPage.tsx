@@ -144,15 +144,41 @@ function BatchRow({ batch, allBatches }: { batch: Batch; allBatches: Batch[] }) 
   });
 
   const assign = useMutation({
-    mutationFn: (semesterPublicId: string | null) =>
-      assignBatchSemester(batch.publicId, semesterPublicId),
+    mutationFn: (vars: { semesterPublicId: string | null; complete?: boolean }) =>
+      assignBatchSemester(batch.publicId, vars.semesterPublicId, vars.complete),
     onSuccess: async () => {
       toast.success('Current semester updated');
       await qc.invalidateQueries({ queryKey: ['org-batches-all'] });
       setAssigning(false);
+      setPendingSem(null);
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not update'),
   });
+
+  // A pending semester switch awaiting the "Does the semester complete?" answer.
+  const [pendingSem, setPendingSem] = useState<{ publicId: string | null; label: string } | null>(
+    null,
+  );
+
+  function onSemesterChange(value: string) {
+    const next = value || null;
+    if (next === (batch.currentSemester?.publicId ?? null)) return;
+    // Advancing away from a semester the batch is already sitting in → ask whether it completed.
+    if (batch.currentSemester) {
+      const opt = (semestersQuery.data ?? []).find((s) => s.publicId === value);
+      const label = opt
+        ? opt.name?.trim()
+          ? opt.name
+          : `Semester ${opt.number}`
+        : next
+          ? 'the selected semester'
+          : 'no semester';
+      setPendingSem({ publicId: next, label });
+    } else {
+      // No current semester to complete — just set it.
+      assign.mutate({ semesterPublicId: next, complete: false });
+    }
+  }
 
   const update = useMutation({
     mutationFn: () =>
@@ -250,7 +276,7 @@ function BatchRow({ batch, allBatches }: { batch: Batch; allBatches: Batch[] }) 
               value={batch.currentSemester?.publicId ?? ''}
               disabled={assign.isPending}
               onFocus={() => !assigning && setAssigning(true)}
-              onChange={(e) => assign.mutate(e.target.value || null)}
+              onChange={(e) => onSemesterChange(e.target.value)}
               title="Set current semester"
             >
               <option value="">{semestersQuery.isLoading ? 'Loading…' : '— No semester —'}</option>
@@ -314,6 +340,52 @@ function BatchRow({ batch, allBatches }: { batch: Batch; allBatches: Batch[] }) 
               disabled={remove.isPending}
             >
               {remove.isPending && <Loader2 className="size-4 animate-spin" />} Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={pendingSem !== null} onOpenChange={(o) => !o && setPendingSem(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Does the semester complete?</DialogTitle>
+            <DialogDescription>
+              You are moving <span className="font-medium">{sessionLabel(batch)}</span> from{' '}
+              <span className="font-medium">
+                {batch.currentSemester?.name?.trim()
+                  ? batch.currentSemester.name
+                  : `Semester ${batch.currentSemester?.number}`}
+              </span>{' '}
+              to <span className="font-medium">{pendingSem?.label}</span>. If the current semester
+              is complete, its courses move to the teachers' "Previous courses".
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col gap-2 sm:flex-row">
+            <Button
+              variant="outline"
+              onClick={() => setPendingSem(null)}
+              disabled={assign.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() =>
+                pendingSem &&
+                assign.mutate({ semesterPublicId: pendingSem.publicId, complete: false })
+              }
+              disabled={assign.isPending}
+            >
+              No, just switch
+            </Button>
+            <Button
+              onClick={() =>
+                pendingSem &&
+                assign.mutate({ semesterPublicId: pendingSem.publicId, complete: true })
+              }
+              disabled={assign.isPending}
+            >
+              {assign.isPending && <Loader2 className="size-4 animate-spin" />} Yes, mark complete
             </Button>
           </DialogFooter>
         </DialogContent>

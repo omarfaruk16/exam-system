@@ -287,5 +287,7 @@ export interface PartOption {
   faculty?: string;
   /** Batch(es) currently sitting in this course's semester, joined; null if none assigned. */
   currentBatch?: string | null;
+  /** True when this part's semester has been marked complete — shown under "Previous courses". */
+  completed?: boolean;
   label: string;
 }

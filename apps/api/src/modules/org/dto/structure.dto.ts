@@ -1,6 +1,7 @@
 import { DegreeType } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsEmail,
   IsEnum,
   IsInt,
@@ -93,6 +94,8 @@ export class UpdateBatchDto {
 /** Assign (or clear, with null) the semester a batch currently sits in. */
 export class AssignBatchSemesterDto {
   @IsOptional() @IsString() semesterPublicId?: string | null;
+  /** When advancing to a new semester, mark the one being left as completed. */
+  @IsOptional() @IsBoolean() completePreviousSemester?: boolean;
 }
 
 /** Move a student to a different batch. */

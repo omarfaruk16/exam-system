@@ -13,7 +13,23 @@ export function MyCoursesPage() {
   const { data: parts, isLoading } = useQuery({
     queryKey: ['my-offering-parts'],
     queryFn: fetchMyParts,
+    // Always reflect the latest assignments — a part the admin has just unassigned or
+    // whose semester was completed should update as soon as the teacher opens this page.
+    staleTime: 0,
   });
+
+  const current = (parts ?? []).filter((p) => !p.completed);
+  const previous = (parts ?? []).filter((p) => p.completed);
+
+  const renderCard = (part: PartOption) => (
+    <CoursePartCard
+      key={part.publicId}
+      part={part}
+      onCreateExam={() => navigate('/exams/new')}
+      onViewExams={() => navigate('/exams')}
+      onViewMarks={() => navigate(`/courses/${part.publicId}/marks`)}
+    />
+  );
 
   return (
     <div className="w-full">
@@ -41,16 +57,26 @@ export function MyCoursesPage() {
           </p>
         </Card>
       ) : (
-        <div className="space-y-3">
-          {parts.map((part) => (
-            <CoursePartCard
-              key={part.publicId}
-              part={part}
-              onCreateExam={() => navigate('/exams/new')}
-              onViewExams={() => navigate('/exams')}
-              onViewMarks={() => navigate(`/courses/${part.publicId}/marks`)}
-            />
-          ))}
+        <div className="space-y-8">
+          <section>
+            <h2 className="text-muted-foreground mb-3 text-xs font-semibold uppercase tracking-wide">
+              Current courses
+            </h2>
+            {current.length ? (
+              <div className="space-y-3">{current.map(renderCard)}</div>
+            ) : (
+              <p className="text-muted-foreground text-sm">No current courses.</p>
+            )}
+          </section>
+
+          {previous.length > 0 && (
+            <section>
+              <h2 className="text-muted-foreground mb-3 text-xs font-semibold uppercase tracking-wide">
+                Previous courses
+              </h2>
+              <div className="space-y-3">{previous.map(renderCard)}</div>
+            </section>
+          )}
         </div>
       )}
     </div>
@@ -89,7 +115,22 @@ function CoursePartCard({
           </p>
           <p className="mt-1.5 flex items-center gap-1.5 text-sm">
             <Users className="text-muted-foreground size-3.5 shrink-0" />
-            {part.currentBatch ? (
+            {part.completed ? (
+              <span className="text-muted-foreground">
+                Completed
+                {part.sessionName ? (
+                  <>
+                    {' · '}
+                    <span className="font-medium">{sessionLabel({ name: part.sessionName })}</span>
+                  </>
+                ) : part.sessionYear ? (
+                  <>
+                    {' · '}
+                    <span className="font-medium">{part.sessionYear}</span>
+                  </>
+                ) : null}
+              </span>
+            ) : part.currentBatch ? (
               <span className="text-foreground">
                 Current session:{' '}
                 <span className="font-medium">{sessionLabel({ name: part.currentBatch })}</span>

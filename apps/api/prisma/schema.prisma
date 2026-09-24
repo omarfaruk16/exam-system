@@ -109,6 +109,9 @@ model Semester {
   batchId   Int
   number    Int
   name      String?
+  // Set when an admin advances the batch past this semester and confirms it is complete.
+  // Drives the "Previous courses" section of a teacher's My Courses; null = still current/open.
+  completedAt DateTime?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?

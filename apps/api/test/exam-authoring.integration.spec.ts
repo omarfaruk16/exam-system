@@ -450,4 +450,61 @@ describe('Phase 3 — exam authoring guards & lifecycle', () => {
       NotFoundException,
     );
   });
+
+  // ── Feature: parts in a completed semester surface as "Previous courses" for the teacher ──
+  it('(k) listMyParts flags parts whose semester is completed and leaves active ones current', async () => {
+    const t1 = await prisma.db.teacher.findFirstOrThrow({
+      where: { user: { username: 'teacher1' } },
+      select: { id: true },
+    });
+    const partA = await prisma.db.coursePart.findFirstOrThrow({
+      where: { publicId: csePartAPublicId },
+      select: {
+        course: {
+          select: {
+            credit: true,
+            semester: { select: { batch: { select: { programId: true } } } },
+          },
+        },
+      },
+    });
+    const programId = partA.course.semester.batch.programId;
+
+    // A completed semester with a part assigned to teacher1.
+    const batch = await prisma.batch.create({
+      data: { programId, name: `DoneBatch ${Date.now()}-${Math.random()}`, year: 1991 },
+      select: { id: true },
+    });
+    const semester = await prisma.semester.create({
+      data: { batchId: batch.id, number: 1, name: 'Done Semester', completedAt: new Date() },
+      select: { id: true },
+    });
+    const course = await prisma.course.create({
+      data: {
+        semesterId: semester.id,
+        code: `DONE${Date.now()}`,
+        name: 'Done Course',
+        credit: partA.course.credit,
+      },
+      select: { id: true },
+    });
+    const donePart = await prisma.coursePart.create({
+      data: { courseId: course.id, name: 'Section A', marksWeight: 0, assignedTeacherId: t1.id },
+      select: { id: true, publicId: true },
+    });
+
+    try {
+      const mine = await exams.listMyParts(teacher1);
+      const done = mine.find((p) => p.publicId === donePart.publicId);
+      expect(done?.completed).toBe(true);
+      // A seeded, still-active part stays in the current section.
+      const active = mine.find((p) => p.publicId === csePartAPublicId);
+      expect(active?.completed).toBe(false);
+    } finally {
+      await prisma.coursePart.delete({ where: { id: donePart.id } });
+      await prisma.course.delete({ where: { id: course.id } });
+      await prisma.semester.delete({ where: { id: semester.id } });
+      await prisma.batch.delete({ where: { id: batch.id } });
+    }
+  });
 });

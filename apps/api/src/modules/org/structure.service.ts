@@ -1166,6 +1166,13 @@ export class StructureService {
     const batch = await this.batchRef(batchPublicId);
     this.acl.assertFaculty(ctx.actor, batch.facultyId);
 
+    // The semester the batch is currently sitting in — the one being left when we advance.
+    const current = await this.prisma.db.batch.findUnique({
+      where: { publicId: batchPublicId },
+      select: { currentSemesterId: true },
+    });
+    const outgoingSemesterId = current?.currentSemesterId ?? null;
+
     let semesterId: number | null = null;
     if (dto.semesterPublicId) {
       const semester = await this.semesterRef(dto.semesterPublicId);
@@ -1176,12 +1183,35 @@ export class StructureService {
     }
 
     return this.mutate(ctx, 'batch.assignSemester', 'Batch', async (tx) => {
+      // Mark the outgoing semester complete when the admin confirmed it, but only if we're
+      // actually moving away from it.
+      if (
+        dto.completePreviousSemester &&
+        outgoingSemesterId !== null &&
+        outgoingSemesterId !== semesterId
+      ) {
+        await tx.semester.update({
+          where: { id: outgoingSemesterId },
+          data: { completedAt: new Date() },
+        });
+      }
+      // The semester a batch is now sitting in is active again — clear any stale completion.
+      if (semesterId !== null) {
+        await tx.semester.update({ where: { id: semesterId }, data: { completedAt: null } });
+      }
       const result = await tx.batch.update({
         where: { publicId: batchPublicId },
         data: { currentSemesterId: semesterId },
         select: batchSelect,
       });
-      return { result, entityId: batchPublicId, after: { semesterId } };
+      return {
+        result,
+        entityId: batchPublicId,
+        after: {
+          semesterId,
+          completedPreviousSemesterId: dto.completePreviousSemester ? outgoingSemesterId : null,
+        },
+      };
     });
   }
 

@@ -148,8 +148,15 @@ export const assignTeacher = (coursePartId: string, teacherPublicId: string | nu
   api.put<CoursePart>(`/org/course-parts/${coursePartId}/teacher`, { teacherPublicId });
 
 // ── Batch → semester assignment ──
-export const assignBatchSemester = (batchId: string, semesterPublicId: string | null) =>
-  api.put<Batch>(`/org/batches/${batchId}/semester`, { semesterPublicId });
+export const assignBatchSemester = (
+  batchId: string,
+  semesterPublicId: string | null,
+  completePreviousSemester?: boolean,
+) =>
+  api.put<Batch>(`/org/batches/${batchId}/semester`, {
+    semesterPublicId,
+    completePreviousSemester,
+  });
 
 // ── Session structure export / import ──
 export const exportBatchStructure = (batchPublicId: string) =>
