@@ -327,7 +327,7 @@ function InfoTab({ dept }: { dept: Department }) {
           <DialogHeader>
             <DialogTitle>Delete this department?</DialogTitle>
             <DialogDescription>
-              “{dept.name}” and its {dept._count.programs} program
+              "{dept.name}" and its {dept._count.programs} program
               {dept._count.programs === 1 ? '' : 's'} will be removed (soft delete).
             </DialogDescription>
           </DialogHeader>
@@ -589,7 +589,7 @@ function ProgramRow({
       <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete “{program.name}”?</DialogTitle>
+            <DialogTitle>Delete "{program.name}"?</DialogTitle>
             <DialogDescription>
               This degree and its {program._count.batches} session
               {program._count.batches === 1 ? '' : 's'} (with their semesters and courses) will be
@@ -1027,7 +1027,7 @@ function SemesterCourses({
       <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete “{label}”?</DialogTitle>
+            <DialogTitle>Delete "{label}"?</DialogTitle>
             <DialogDescription>
               This semester and its {semester._count.courses} course
               {semester._count.courses === 1 ? '' : 's'} will be removed (soft delete). Exams and
@@ -1268,7 +1268,7 @@ function CourseRow({
       <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete “{course.code}”?</DialogTitle>
+            <DialogTitle>Delete "{course.code}"?</DialogTitle>
             <DialogDescription>
               {course.code} — {course.name} and its {course._count.parts} part
               {course._count.parts === 1 ? '' : 's'} (with any question banks and exams) will be
@@ -1553,7 +1553,7 @@ function PartRow({
       <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete part “{part.name}”?</DialogTitle>
+            <DialogTitle>Delete part "{part.name}"?</DialogTitle>
             <DialogDescription>
               This part{part._count.exams > 0 ? `, its ${part._count.exams} exam(s)` : ''} and any
               question banks will be removed (soft delete).
@@ -1677,15 +1677,38 @@ function BatchRow({ batch, canManage }: { batch: Batch; canManage: boolean }) {
     enabled: assigning,
   });
   const assign = useMutation({
-    mutationFn: (semesterPublicId: string | null) =>
-      assignBatchSemester(batch.publicId, semesterPublicId),
+    mutationFn: (vars: { semesterPublicId: string | null; complete?: boolean }) =>
+      assignBatchSemester(batch.publicId, vars.semesterPublicId, vars.complete),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['org-batches'] });
       toast.success('Semester updated');
       setAssigning(false);
+      setPendingSem(null);
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not update'),
   });
+
+  const [pendingSem, setPendingSem] = useState<{ publicId: string | null; label: string } | null>(
+    null,
+  );
+
+  function onSemesterChange(value: string) {
+    const next = value || null;
+    if (next === (batch.currentSemester?.publicId ?? null)) return;
+    if (batch.currentSemester) {
+      const opt = (semestersQuery.data ?? []).find((s) => s.publicId === value);
+      const label = opt
+        ? opt.name?.trim()
+          ? opt.name
+          : `Semester ${opt.number}`
+        : next
+          ? 'the selected semester'
+          : 'no semester';
+      setPendingSem({ publicId: next, label });
+    } else {
+      assign.mutate({ semesterPublicId: next, complete: false });
+    }
+  }
 
   const rename = useMutation({
     mutationFn: () =>
@@ -1770,7 +1793,7 @@ function BatchRow({ batch, canManage }: { batch: Batch; canManage: boolean }) {
                 value={batch.currentSemester?.publicId ?? ''}
                 disabled={assign.isPending}
                 onFocus={() => !assigning && setAssigning(true)}
-                onChange={(e) => assign.mutate(e.target.value || null)}
+                onChange={(e) => onSemesterChange(e.target.value)}
                 title="Set current semester"
               >
                 <option value="">
@@ -1838,10 +1861,56 @@ function BatchRow({ batch, canManage }: { batch: Batch; canManage: boolean }) {
         )}
       </div>
 
+      <Dialog open={pendingSem !== null} onOpenChange={(o) => !o && setPendingSem(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Does the semester complete?</DialogTitle>
+            <DialogDescription>
+              You are moving <span className="font-medium">{sessionLabel(batch)}</span> from{' '}
+              <span className="font-medium">
+                {batch.currentSemester?.name?.trim()
+                  ? batch.currentSemester.name
+                  : `Semester ${batch.currentSemester?.number}`}
+              </span>{' '}
+              to <span className="font-medium">{pendingSem?.label}</span>. If the current semester
+              is complete, its courses move to the teachers' "Previous courses".
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col gap-2 sm:flex-row">
+            <Button
+              variant="outline"
+              onClick={() => setPendingSem(null)}
+              disabled={assign.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() =>
+                pendingSem &&
+                assign.mutate({ semesterPublicId: pendingSem.publicId, complete: false })
+              }
+              disabled={assign.isPending}
+            >
+              No, just switch
+            </Button>
+            <Button
+              onClick={() =>
+                pendingSem &&
+                assign.mutate({ semesterPublicId: pendingSem.publicId, complete: true })
+              }
+              disabled={assign.isPending}
+            >
+              {assign.isPending && <Loader2 className="size-4 animate-spin" />} Yes, mark complete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete “{sessionLabel(batch)}”?</DialogTitle>
+            <DialogTitle>Delete "{sessionLabel(batch)}"?</DialogTitle>
             <DialogDescription>
               {batch._count.students > 0
                 ? `This session has ${batch._count.students} student${batch._count.students === 1 ? '' : 's'}. Deleting it (soft delete) will detach them. This cannot be easily undone.`
