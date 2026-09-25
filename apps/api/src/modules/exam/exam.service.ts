@@ -387,7 +387,15 @@ export class ExamService {
                 name: true,
                 // The session (batch) that owns this course part — the definitive
                 // discriminator when the same part exists across multiple sessions.
-                batch: { select: { name: true, year: true } },
+                batch: {
+                  select: {
+                    name: true,
+                    year: true,
+                    program: {
+                      select: { department: { select: { name: true } } },
+                    },
+                  },
+                },
                 // Batches currently sitting in this semester see this course's exams.
                 batches: {
                   where: { deletedAt: null },
@@ -416,6 +424,7 @@ export class ExamService {
         sessionName: owner?.name ?? null,
         sessionYear: owner?.year ?? null,
         currentBatch: batches.length ? batches.map((b) => b.name).join(', ') : null,
+        department: owner?.program?.department?.name ?? null,
         label: `${p.course.code} · ${p.course.name} · ${p.name}`,
       };
     });

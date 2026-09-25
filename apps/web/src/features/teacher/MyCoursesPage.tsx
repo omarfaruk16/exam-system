@@ -18,8 +18,17 @@ export function MyCoursesPage() {
   });
 
   // Show only parts where a batch is currently running in this semester.
-  // Parts with no active batch have no students and aren't actionable right now.
   const parts = (allParts ?? []).filter((p) => p.currentBatch != null);
+
+  // Group by department; preserve insertion order so the first-seen dept comes first.
+  const grouped = parts.reduce<Map<string, PartOption[]>>((map, p) => {
+    const dept = p.department ?? 'Other';
+    if (!map.has(dept)) map.set(dept, []);
+    map.get(dept)!.push(p);
+    return map;
+  }, new Map());
+
+  const multiDept = grouped.size > 1;
 
   return (
     <div className="w-full">
@@ -36,7 +45,7 @@ export function MyCoursesPage() {
             <Skeleton key={i} className="h-24 w-full rounded-xl" />
           ))}
         </div>
-      ) : !parts || parts.length === 0 ? (
+      ) : parts.length === 0 ? (
         <Card className="flex flex-col items-center gap-3 py-16 text-center">
           <div className="bg-muted flex size-14 items-center justify-center rounded-full">
             <BookOpen className="text-muted-foreground size-7" />
@@ -47,15 +56,26 @@ export function MyCoursesPage() {
           </p>
         </Card>
       ) : (
-        <div className="space-y-3">
-          {parts.map((part) => (
-            <CoursePartCard
-              key={part.publicId}
-              part={part}
-              onCreateExam={() => navigate('/exams/new')}
-              onViewExams={() => navigate('/exams')}
-              onViewMarks={() => navigate(`/courses/${part.publicId}/marks`)}
-            />
+        <div className="space-y-8">
+          {[...grouped.entries()].map(([dept, deptParts]) => (
+            <section key={dept}>
+              {multiDept && (
+                <h2 className="text-muted-foreground mb-3 text-xs font-semibold uppercase tracking-wide">
+                  {dept}
+                </h2>
+              )}
+              <div className="space-y-3">
+                {deptParts.map((part) => (
+                  <CoursePartCard
+                    key={part.publicId}
+                    part={part}
+                    onCreateExam={() => navigate('/exams/new')}
+                    onViewExams={() => navigate('/exams')}
+                    onViewMarks={() => navigate(`/courses/${part.publicId}/marks`)}
+                  />
+                ))}
+              </div>
+            </section>
           ))}
         </div>
       )}
