@@ -10,10 +10,16 @@ import { fetchMyParts } from '@/features/authoring/authoringApi';
 
 export function MyCoursesPage() {
   const navigate = useNavigate();
-  const { data: parts, isLoading } = useQuery({
+  const { data: allParts, isLoading } = useQuery({
     queryKey: ['my-offering-parts'],
     queryFn: fetchMyParts,
+    // Always fetch fresh — an admin removing an assignment should be visible immediately.
+    staleTime: 0,
   });
+
+  // Show only parts where a batch is currently running in this semester.
+  // Parts with no active batch have no students and aren't actionable right now.
+  const parts = (allParts ?? []).filter((p) => p.currentBatch != null);
 
   return (
     <div className="w-full">
