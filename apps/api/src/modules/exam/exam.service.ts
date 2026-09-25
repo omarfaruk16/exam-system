@@ -385,7 +385,6 @@ export class ExamService {
               select: {
                 number: true,
                 name: true,
-                completedAt: true,
                 // The session (batch) that owns this course part — the definitive
                 // discriminator when the same part exists across multiple sessions.
                 batch: { select: { name: true, year: true } },
@@ -417,8 +416,6 @@ export class ExamService {
         sessionName: owner?.name ?? null,
         sessionYear: owner?.year ?? null,
         currentBatch: batches.length ? batches.map((b) => b.name).join(', ') : null,
-        // A part whose semester the admin marked complete moves to "Previous courses".
-        completed: p.course.semester.completedAt != null,
         label: `${p.course.code} · ${p.course.name} · ${p.name}`,
       };
     });
