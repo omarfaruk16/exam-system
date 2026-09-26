@@ -1,8 +1,8 @@
-import { KeyRound, LogOut, Mail, Menu } from 'lucide-react';
+import { KeyRound, LogOut, Mail, Menu, UserRound } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { SessionUser } from '@exam/types';
 import { ThemeToggle } from '@/components/theme';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -45,6 +45,7 @@ export function Topbar({ title, user, onMenu }: TopbarProps) {
           <DropdownMenuTrigger asChild>
             <button className="hover:bg-accent focus-visible:ring-ring flex items-center gap-2 rounded-full py-1 pl-1 pr-2.5 transition-colors focus-visible:outline-none focus-visible:ring-2">
               <Avatar>
+                {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.displayName} />}
                 <AvatarFallback>{initials(user.displayName)}</AvatarFallback>
               </Avatar>
               <span className="hidden text-sm font-medium sm:block">{user.displayName}</span>
@@ -58,10 +59,15 @@ export function Topbar({ title, user, onMenu }: TopbarProps) {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {isStudent && (
+            {isStudent ? (
               <DropdownMenuItem onSelect={() => navigate('/account')}>
                 <Mail />
                 Edit email
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem onSelect={() => navigate('/profile')}>
+                <UserRound />
+                Edit profile
               </DropdownMenuItem>
             )}
             <DropdownMenuItem onSelect={() => navigate('/change-password')}>

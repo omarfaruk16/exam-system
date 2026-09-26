@@ -66,6 +66,7 @@ function principal(over: Pick<AuthUser, 'id' | 'roles'>): AuthUser {
     displayName: 'U',
     status: 'active',
     mustChangePassword: false,
+    avatarUrl: null,
     twoFactorEnabled: false,
     ...over,
   };

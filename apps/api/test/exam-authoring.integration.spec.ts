@@ -52,6 +52,7 @@ function principal(over: Partial<AuthUser> & Pick<AuthUser, 'id' | 'roles'>): Au
     displayName: 'U',
     status: 'active',
     mustChangePassword: false,
+    avatarUrl: null,
     twoFactorEnabled: false,
     ...over,
   };

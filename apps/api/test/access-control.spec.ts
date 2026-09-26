@@ -13,6 +13,7 @@ function user(roles: AuthUser['roles']): AuthUser {
     displayName: 'U',
     status: 'active',
     mustChangePassword: false,
+    avatarUrl: null,
     twoFactorEnabled: false,
     roles,
   };

@@ -18,6 +18,7 @@ export interface AuthUser {
   username: string;
   email: string | null;
   displayName: string;
+  avatarUrl: string | null;
   status: 'active' | 'suspended';
   mustChangePassword: boolean;
   twoFactorEnabled: boolean;

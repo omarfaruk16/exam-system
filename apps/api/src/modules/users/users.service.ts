@@ -23,6 +23,54 @@ export class UsersService {
     private readonly auth: AuthService,
   ) {}
 
+  /**
+   * Self-service profile update: any combination of display name, email and avatar. Only the
+   * fields present in `data` are changed, so the form can send just what the user edited.
+   * `avatarUrl: null` removes the current picture.
+   */
+  async updateProfile(
+    user: AuthUser,
+    data: { displayName?: string; email?: string; avatarUrl?: string | null },
+    ctx: ChangePasswordContext,
+  ): Promise<{ user: SessionUser }> {
+    const patch: { displayName?: string; email?: string; avatarUrl?: string | null } = {};
+
+    if (data.displayName !== undefined) {
+      const name = data.displayName.trim();
+      if (!name) throw new BadRequestException('Name cannot be empty');
+      patch.displayName = name;
+    }
+
+    if (data.email !== undefined) {
+      const normalized = data.email.toLowerCase().trim();
+      const existing = await this.prisma.db.user.findFirst({
+        where: { email: { equals: normalized, mode: 'insensitive' }, NOT: { id: user.id } },
+        select: { id: true },
+      });
+      if (existing) throw new BadRequestException('That email address is already in use');
+      patch.email = normalized;
+    }
+
+    if (data.avatarUrl !== undefined) {
+      patch.avatarUrl = data.avatarUrl;
+    }
+
+    if (Object.keys(patch).length > 0) {
+      await this.prisma.user.update({ where: { id: user.id }, data: patch });
+      await this.audit.record({
+        actorUserId: user.id,
+        action: 'user.update_profile',
+        entity: 'User',
+        entityId: user.id,
+        ip: ctx.ip ?? null,
+        userAgent: ctx.userAgent ?? null,
+      });
+    }
+
+    const fresh = await this.auth.buildAuthUser(user.id);
+    return { user: await this.auth.toSessionUser(fresh ?? user) };
+  }
+
   async updateEmail(
     user: AuthUser,
     newEmail: string,

@@ -5,6 +5,7 @@ import type {
   LoginResult,
   SessionUser,
   UpdateEmailInput,
+  UpdateProfileInput,
 } from '@exam/types';
 import { api, ApiError } from './api';
 
@@ -74,6 +75,15 @@ export function useUpdateEmail() {
   return useMutation({
     mutationFn: (input: UpdateEmailInput) =>
       api.patch<{ user: SessionUser }>('/users/me/email', input),
+    onSuccess: (res) => qc.setQueryData(sessionKey, res.user),
+  });
+}
+
+export function useUpdateProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateProfileInput) =>
+      api.patch<{ user: SessionUser }>('/users/me/profile', input),
     onSuccess: (res) => qc.setQueryData(sessionKey, res.user),
   });
 }

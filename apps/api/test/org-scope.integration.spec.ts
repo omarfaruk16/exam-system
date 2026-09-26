@@ -54,6 +54,7 @@ beforeAll(async () => {
     displayName: 'Prof. Rahima Khatun',
     status: 'active',
     mustChangePassword: false,
+    avatarUrl: null,
     twoFactorEnabled: false,
     roles: [
       { role: 'department_head', scopeFacultyId: null, scopeDepartmentId: cse.id },
