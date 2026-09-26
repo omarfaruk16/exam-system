@@ -129,6 +129,8 @@ export interface StudentExamResult {
 export interface StudentSemesterResult {
   semester: { number: number; name: string | null };
   programName: string;
+  /** The session (batch) this semester's exams belonged to — a student may span sessions. */
+  session?: { name: string; year: number } | null;
   exams: StudentExamResult[];
 }
 

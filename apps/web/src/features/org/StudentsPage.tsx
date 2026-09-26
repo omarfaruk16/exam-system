@@ -234,9 +234,15 @@ function StudentRowItem({
 }) {
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [pendingBatch, setPendingBatch] = useState<{ publicId: string; label: string } | null>(
+    null,
+  );
   const [eName, setEName] = useState(student.user.displayName);
   const [eEmail, setEEmail] = useState(student.user.email ?? '');
   const [eReg, setEReg] = useState(student.registrationNumber ?? '');
+
+  // Sessions newest-first (26 → 25 → 24) for the change-session dropdown.
+  const batchesDesc = [...allBatches].sort((a, b) => b.year - a.year);
 
   function startEdit() {
     setEName(student.user.displayName);
@@ -264,6 +270,7 @@ function StudentRowItem({
     mutationFn: (batchPublicId: string) => changeStudentBatch(student.publicId, batchPublicId),
     onSuccess: () => {
       toast.success('Session updated');
+      setPendingBatch(null);
       onMutated();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not change session'),
@@ -351,12 +358,17 @@ function StudentRowItem({
               value={student.batch.publicId}
               disabled={move.isPending}
               onChange={(e) => {
-                if (e.target.value !== student.batch.publicId) {
-                  move.mutate(e.target.value);
+                const v = e.target.value;
+                if (v && v !== student.batch.publicId) {
+                  const b = batchesDesc.find((x) => x.publicId === v);
+                  setPendingBatch({
+                    publicId: v,
+                    label: b ? sessionLabel(b) : 'the selected session',
+                  });
                 }
               }}
             >
-              {allBatches.map((b) => (
+              {batchesDesc.map((b) => (
                 <option key={b.publicId} value={b.publicId}>
                   {sessionLabel(b)}
                 </option>
@@ -415,6 +427,32 @@ function StudentRowItem({
               disabled={remove.isPending}
             >
               {remove.isPending && <Loader2 className="size-4 animate-spin" />} Remove
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={pendingBatch !== null} onOpenChange={(o) => !o && setPendingBatch(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change session?</DialogTitle>
+            <DialogDescription>
+              Move <span className="font-medium">{student.user.displayName}</span> (
+              {student.studentId}) from{' '}
+              <span className="font-medium">{sessionLabel(student.batch)}</span> to{' '}
+              <span className="font-medium">{pendingBatch?.label}</span>? Their past results stay
+              with the old session.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingBatch(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => pendingBatch && move.mutate(pendingBatch.publicId)}
+              disabled={move.isPending}
+            >
+              {move.isPending && <Loader2 className="size-4 animate-spin" />} Yes, change session
             </Button>
           </DialogFooter>
         </DialogContent>

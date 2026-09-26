@@ -15,7 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { cn } from '@/lib/utils';
+import { cn, sessionLabel } from '@/lib/utils';
 import { StatusPill } from '../shared/StatusPill';
 import { StartCountdown } from '../shared/ExamCountdown';
 import { useServerNow } from '../shared/useServerNow';
@@ -193,6 +193,7 @@ export function MyExamsPage() {
             <SemesterAccordion
               key={semKey}
               label={semLabel}
+              sublabel={sem.session ? sessionLabel(sem.session) : undefined}
               open={openSems.has(semKey)}
               onToggle={() => toggleSem(semKey)}
               examCount={sem.exams.length}
@@ -233,6 +234,7 @@ export function MyExamsPage() {
 
 function SemesterAccordion({
   label,
+  sublabel,
   isCurrent,
   open,
   onToggle,
@@ -240,6 +242,7 @@ function SemesterAccordion({
   children,
 }: {
   label: string;
+  sublabel?: string;
   isCurrent?: boolean;
   open: boolean;
   onToggle: () => void;
@@ -255,6 +258,7 @@ function SemesterAccordion({
       >
         <div className="flex min-w-0 items-center gap-2">
           <span className="min-w-0 truncate font-medium">{label}</span>
+          {sublabel && <span className="text-muted-foreground shrink-0 text-xs">· {sublabel}</span>}
           {isCurrent && (
             <span className="bg-primary/10 text-primary shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold">
               Current

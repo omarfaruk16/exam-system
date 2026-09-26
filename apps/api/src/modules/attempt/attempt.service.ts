@@ -558,7 +558,13 @@ export class AttemptService {
                       select: {
                         number: true,
                         name: true,
-                        batch: { select: { program: { select: { name: true } } } },
+                        batch: {
+                          select: {
+                            name: true,
+                            year: true,
+                            program: { select: { name: true } },
+                          },
+                        },
                       },
                     },
                   },
@@ -580,7 +586,13 @@ export class AttemptService {
 
     const semMap = new Map<
       number,
-      { number: number; name: string | null; programName: string; exams: typeof attempts }
+      {
+        number: number;
+        name: string | null;
+        programName: string;
+        session: { name: string; year: number };
+        exams: typeof attempts;
+      }
     >();
     for (const a of attempts) {
       const sem = a.exam.coursePart.course.semester;
@@ -589,6 +601,7 @@ export class AttemptService {
           number: sem.number,
           name: sem.name,
           programName: sem.batch.program.name,
+          session: { name: sem.batch.name, year: sem.batch.year },
           exams: [],
         });
       }
@@ -598,6 +611,7 @@ export class AttemptService {
     return [...semMap.values()].map((g) => ({
       semester: { number: g.number, name: g.name },
       programName: g.programName,
+      session: g.session,
       exams: g.exams.map((a) => {
         const settings = (a.exam.settings as ExamSettings) ?? {};
         return {
