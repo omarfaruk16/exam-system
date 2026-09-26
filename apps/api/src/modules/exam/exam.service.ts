@@ -13,7 +13,7 @@ import { AuditService } from '../audit/audit.service';
 import { AttemptFinalizeService } from '../attempt/attempt-finalize.service';
 import { AttemptRedisService } from '../attempt/attempt.redis';
 import type { AddExamQuestionDto, CreateExamDto, UpdateExamDto } from './dto/exam.dto';
-import { ExamAccessService } from './exam-access.service';
+import { ExamAccessService, normalizePartToken } from './exam-access.service';
 import { ADMIN_EDITABLE_STATUSES, canTransition } from './exam-state';
 import { examListSelect, examQuestionSelect, examSelect } from './exam.select';
 
@@ -507,7 +507,7 @@ export class ExamService {
     const byIdentity = new Map<string, (typeof parts)[number]>();
     for (const p of parts) {
       const dept = p.course.semester.batch.program.department;
-      const key = `${dept.faculty.name}||${dept.name}||${p.course.code.trim().toLowerCase()}||${p.name.trim().toLowerCase()}`;
+      const key = `${dept.faculty.name}||${dept.name}||${normalizePartToken(p.course.code)}||${normalizePartToken(p.name)}`;
       const cur = byIdentity.get(key);
       if (!cur || p.id > cur.id) byIdentity.set(key, p);
     }

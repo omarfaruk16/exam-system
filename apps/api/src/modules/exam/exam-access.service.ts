@@ -15,6 +15,20 @@ export interface CoursePartContext {
   assignedTeacherId: number | null;
 }
 
+/**
+ * Normalize a course code or part name for identity matching. Case-, whitespace- and
+ * punctuation-insensitive, so "Section - A", "Section-A", "Section A" and "section a" all
+ * collapse to the same token (while "Section B" stays distinct). Used to treat the same
+ * course part written in a different style as one identity for bank-sharing and list dedup.
+ */
+export function normalizePartToken(s: string): string {
+  return s
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
 @Injectable()
 export class ExamAccessService {
   constructor(
@@ -98,8 +112,8 @@ export class ExamAccessService {
       },
     });
     if (!part) throw new NotFoundException('Course part not found');
-    const code = part.course.code.trim().toLowerCase();
-    const name = part.name.trim().toLowerCase();
+    const code = normalizePartToken(part.course.code);
+    const name = normalizePartToken(part.name);
     const departmentId = part.course.semester.batch.program.departmentId;
 
     const candidates = await this.prisma.db.coursePart.findMany({
@@ -111,7 +125,7 @@ export class ExamAccessService {
     });
     const ids = candidates
       .filter(
-        (c) => c.course.code.trim().toLowerCase() === code && c.name.trim().toLowerCase() === name,
+        (c) => normalizePartToken(c.course.code) === code && normalizePartToken(c.name) === name,
       )
       .map((c) => c.id);
     return ids.includes(part.id) ? ids : [part.id, ...ids];

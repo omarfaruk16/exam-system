@@ -22,7 +22,6 @@ const DESCRIPTIONS: Record<string, string> = {
 
 export function DashboardPage({ user }: { user: SessionUser }) {
   const items = navForRoles(user.roles.map((r) => r.role)).filter((i) => i.path !== '/');
-  const firstName = user.displayName.split(/\s+/)[0];
 
   return (
     <div className="space-y-8">
@@ -37,7 +36,7 @@ export function DashboardPage({ user }: { user: SessionUser }) {
             </Badge>
           ))}
         </div>
-        <h2 className="mt-3 text-2xl font-medium">Welcome, {firstName}</h2>
+        <h2 className="mt-3 text-2xl font-medium">Welcome, {user.displayName}</h2>
         <p className="text-muted-foreground mt-1">
           Here’s what you can do in the examination system.
         </p>
