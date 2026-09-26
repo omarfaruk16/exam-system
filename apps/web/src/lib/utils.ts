@@ -37,8 +37,8 @@ export function sessionLabel(session: { name?: string | null; year?: number | nu
 
 /**
  * Canonical ordering for student IDs used across every student list: primary sort on the
- * first two digits (the session year, ascending), then the last three digits (the roll,
- * ascending). e.g. "21107001" sorts before "21107002" sorts before "22107001".
+ * first two digits (the session year, descending — newest first), then the last three
+ * digits (the roll, ascending). e.g. "23107001" sorts before "22107001".
  * Non-digit or short IDs fall back to a plain string compare so nothing throws.
  */
 export function compareStudentId(a: string, b: string): number {
@@ -46,7 +46,7 @@ export function compareStudentId(a: string, b: string): number {
   const tail = (s: string) => parseInt(s.slice(-3), 10);
   const ha = head(a);
   const hb = head(b);
-  if (Number.isFinite(ha) && Number.isFinite(hb) && ha !== hb) return ha - hb;
+  if (Number.isFinite(ha) && Number.isFinite(hb) && ha !== hb) return hb - ha;
   const ta = tail(a);
   const tb = tail(b);
   if (Number.isFinite(ta) && Number.isFinite(tb) && ta !== tb) return ta - tb;
