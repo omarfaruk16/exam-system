@@ -128,7 +128,7 @@ export class WrittenGradingService {
         questionId: true,
         snapshotText: true,
         snapshotMarks: true,
-        question: { select: { publicId: true } },
+        question: { select: { publicId: true, explanation: true } },
       },
       orderBy: { order: 'asc' },
     });
@@ -158,6 +158,7 @@ export class WrittenGradingService {
       questionPublicId: eq.question.publicId,
       text: eq.snapshotText,
       maxMarks: eq.snapshotMarks,
+      explanation: eq.question.explanation,
       pending: answers
         .filter((a) => a.questionId === eq.questionId)
         .map((a) => ({

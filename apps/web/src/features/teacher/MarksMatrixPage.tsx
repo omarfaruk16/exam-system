@@ -15,7 +15,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
-import { cn } from '@/lib/utils';
+import { cn, sortByStudentId } from '@/lib/utils';
 import { fetchMarksMatrix } from '@/features/authoring/authoringApi';
 import { fetchPartSummary, finalizePart } from '@/features/marking/markingApi';
 
@@ -275,7 +275,7 @@ export function MarksMatrixPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r, i) => (
+                {sortByStudentId(rows, (r) => r.studentId).map((r, i) => (
                   <tr
                     key={r.studentPublicId}
                     className={cn('border-b last:border-0', i % 2 === 1 && 'bg-muted/30')}

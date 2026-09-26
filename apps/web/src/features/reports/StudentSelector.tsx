@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Loader2, Search } from 'lucide-react';
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
-import { cn } from '@/lib/utils';
+import { cn, sortByStudentId } from '@/lib/utils';
 import { fetchRoster } from './reportsApi';
 
 /** Searchable enrolled-student picker for an exam's individual mark sheet. */
@@ -20,10 +20,13 @@ export function StudentSelector({
     queryKey: ['exam-roster', examPublicId],
     queryFn: () => fetchRoster(examPublicId),
   });
-  const roster = (data ?? []).filter((s) => {
-    const t = q.trim().toLowerCase();
-    return !t || s.name.toLowerCase().includes(t) || s.studentId.toLowerCase().includes(t);
-  });
+  const roster = sortByStudentId(
+    (data ?? []).filter((s) => {
+      const t = q.trim().toLowerCase();
+      return !t || s.name.toLowerCase().includes(t) || s.studentId.toLowerCase().includes(t);
+    }),
+    (s) => s.studentId,
+  );
 
   return (
     <div className="bg-muted/40 rounded-md border p-3">

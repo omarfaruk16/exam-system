@@ -78,7 +78,7 @@ const BY_ROLE: Record<RoleName, NavItem[]> = {
     { label: 'My Courses', path: '/courses', icon: BookOpen },
     { label: 'Exams', path: '/exams', icon: FileCheck2 },
     { label: 'Question Bank', path: '/questions', icon: ListChecks },
-    { label: 'Grading', path: '/grading', icon: ClipboardCheck },
+    { label: 'Written Exam Evaluation', path: '/grading', icon: ClipboardCheck },
     { label: 'Results', path: '/exam-results', icon: ClipboardList },
     { label: 'Reports', path: '/reports', icon: BarChart3 },
   ],

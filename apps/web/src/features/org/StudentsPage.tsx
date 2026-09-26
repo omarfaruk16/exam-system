@@ -16,7 +16,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
-import { sessionLabel } from '@/lib/utils';
+import { sessionLabel, sortByStudentId } from '@/lib/utils';
 import {
   changeStudentBatch,
   createStudent,
@@ -55,7 +55,7 @@ export function StudentsPage() {
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not reset passwords'),
   });
   const allStudents = data ?? [];
-  const students = search.trim()
+  const filtered = search.trim()
     ? allStudents.filter((s) => {
         const q = search.toLowerCase();
         return (
@@ -66,6 +66,7 @@ export function StudentsPage() {
         );
       })
     : allStudents;
+  const students = sortByStudentId(filtered, (s) => s.studentId);
 
   function invalidate() {
     void qc.invalidateQueries({ queryKey: ['org-students'] });

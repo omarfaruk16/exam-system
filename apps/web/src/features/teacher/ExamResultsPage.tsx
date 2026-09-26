@@ -16,7 +16,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { cn, sessionLabel } from '@/lib/utils';
+import { cn, sessionLabel, sortByStudentId } from '@/lib/utils';
 import { requestReport, pollReport } from '../reports/reportsApi';
 import { StatusPill } from '../shared/StatusPill';
 import { ExamLiveMonitor } from './ExamLiveMonitor';
@@ -119,7 +119,7 @@ export function ExamResultsPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {sortByStudentId(rows, (r) => r.studentId).map((r) => (
                 <RosterRow
                   key={r.studentPublicId}
                   row={r}

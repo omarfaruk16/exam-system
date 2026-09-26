@@ -4,6 +4,7 @@ import { ArrowLeft, CircleDot, Loader2, LogOut, Send, ShieldAlert, UserX } from 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { sortByStudentId } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import {
@@ -61,7 +62,7 @@ export function ExamLiveMonitor({
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Action failed'),
   });
 
-  const attempts = live.data?.attempts ?? [];
+  const attempts = sortByStudentId(live.data?.attempts ?? [], (a) => a.studentId);
 
   return (
     <div className="w-full">

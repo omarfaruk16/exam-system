@@ -21,7 +21,7 @@ export function GradingExamsPage() {
   return (
     <div className="w-full">
       <header className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Grading</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Written Exam Evaluation</h1>
         <p className="text-muted-foreground mt-1 text-sm">
           Written answers awaiting your marks. Results publish automatically once every answer is
           graded.

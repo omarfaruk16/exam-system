@@ -21,6 +21,8 @@ export interface PendingWrittenGroup {
   questionPublicId: string;
   text: string | null;
   maxMarks: number | null;
+  /** Model answer / explanation from the question bank, shown to the grader as a reference. */
+  explanation: string | null;
   pending: PendingWrittenAnswer[];
 }
 

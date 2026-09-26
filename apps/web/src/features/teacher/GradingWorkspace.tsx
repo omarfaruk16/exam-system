@@ -12,11 +12,13 @@ import { MathText } from '@/components/ui/math-text';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiError } from '@/lib/api';
+import { sortByStudentId } from '@/lib/utils';
 import { fetchPending, gradeAnswer } from './gradingApi';
 
 interface QueueItem {
   questionPublicId: string;
   questionText: string;
+  explanation: string | null;
   maxMarks: number;
   answerPublicId: string;
   studentId: string;
@@ -27,10 +29,11 @@ interface QueueItem {
 function buildQueue(groups: PendingWrittenGroup[]): QueueItem[] {
   const items: QueueItem[] = [];
   for (const g of groups) {
-    for (const a of g.pending) {
+    for (const a of sortByStudentId(g.pending, (p) => p.studentId)) {
       items.push({
         questionPublicId: g.questionPublicId,
         questionText: g.text ?? '',
+        explanation: g.explanation,
         maxMarks: g.maxMarks ?? 0,
         answerPublicId: a.answerPublicId,
         studentId: a.studentId,
@@ -115,7 +118,7 @@ export function GradingWorkspace() {
       {/* Progress */}
       <div className="mb-6">
         <div className="mb-1.5 flex items-center justify-between text-sm">
-          <span className="font-medium">Written grading</span>
+          <span className="font-medium">Written Exam Evaluation</span>
           <span className="text-muted-foreground tabular-nums">
             {graded} of {total} graded
           </span>
@@ -150,7 +153,7 @@ export function GradingWorkspace() {
             <MathText text={current.questionText} />
           </div>
 
-          <div className="bg-muted/40 mb-6 rounded-lg border p-4">
+          <div className="bg-muted/40 mb-4 rounded-lg border p-4">
             <p className="text-muted-foreground mb-1 text-xs font-medium">Student's answer</p>
             <div className="whitespace-pre-wrap">
               {current.writtenText ? (
@@ -161,6 +164,17 @@ export function GradingWorkspace() {
             </div>
           </div>
 
+          {current.explanation?.trim() && (
+            <div className="border-primary/30 bg-primary/5 mb-6 rounded-lg border p-4">
+              <p className="text-muted-foreground mb-1 text-xs font-medium">
+                Model answer / explanation
+              </p>
+              <div className="whitespace-pre-wrap">
+                <MathText text={current.explanation} />
+              </div>
+            </div>
+          )}
+
           <div className="grid gap-4">
             <div className="grid gap-1.5">
               <Label htmlFor="score">Score (0–{max})</Label>
@@ -170,7 +184,7 @@ export function GradingWorkspace() {
                 inputMode="decimal"
                 min={0}
                 max={max}
-                step="0.5"
+                step="0.25"
                 value={score}
                 autoFocus
                 onChange={(e) => setScore(e.target.value)}

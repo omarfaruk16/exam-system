@@ -37,7 +37,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useSession } from '@/lib/session';
-import { cn, sessionLabel } from '@/lib/utils';
+import { cn, sessionLabel, sortByStudentId } from '@/lib/utils';
 import { fetchDeptBankSummary, fetchDeptExams } from '../authoring/authoringApi';
 import {
   assignBatchSemester,
@@ -1951,7 +1951,7 @@ function BatchStudentsSection({
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not remove students'),
   });
 
-  const students = studentsQuery.data ?? [];
+  const students = sortByStudentId(studentsQuery.data ?? [], (s) => s.studentId);
   const allSelected = students.length > 0 && selected.size === students.length;
 
   const toggleSelect = (id: string) => {
@@ -2407,7 +2407,7 @@ function StudentsTab({ batches }: { batches: Batch[] }) {
     );
   }
 
-  const students = studentsQuery.data ?? [];
+  const students = sortByStudentId(studentsQuery.data ?? [], (s) => s.studentId);
   const allSelected = students.length > 0 && selected.size === students.length;
   const toggleSelect = (id: string) =>
     setSelected((p) => {

@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { cn } from '@/lib/utils';
+import { cn, sortByStudentId } from '@/lib/utils';
 import { downloadMarkingXlsx, fetchMarkingFilters, fetchMarkingMatrix } from './markingApi';
 
 // The cascading selector order — picking one clears everything to its right.
@@ -213,7 +213,7 @@ export function FinalMarkingPage() {
                 </tr>
               </thead>
               <tbody>
-                {matrix.rows.map((r, i) => (
+                {sortByStudentId(matrix.rows, (r) => r.studentId).map((r, i) => (
                   <tr
                     key={r.studentPublicId}
                     className={cn('border-b last:border-0', i % 2 === 1 && 'bg-muted/30')}
