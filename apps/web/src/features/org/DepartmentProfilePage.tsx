@@ -42,6 +42,7 @@ import { fetchDeptBankSummary, fetchDeptExams } from '../authoring/authoringApi'
 import {
   assignBatchSemester,
   assignTeacher,
+  changeStudentBatch,
   createBatch,
   createCourse,
   createCoursePart,
@@ -2324,6 +2325,11 @@ function StudentsTab({ batches }: { batches: Batch[] }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmBulk, setConfirmBulk] = useState(false);
+  const [pendingMove, setPendingMove] = useState<{
+    studentPublicId: string;
+    targetBatchPublicId: string;
+    targetLabel: string;
+  } | null>(null);
 
   const [newStudentId, setNewStudentId] = useState('');
   const [newName, setNewName] = useState('');
@@ -2382,6 +2388,23 @@ function StudentsTab({ batches }: { batches: Batch[] }) {
       setConfirmBulk(false);
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not remove students'),
+  });
+
+  const moveMut = useMutation({
+    mutationFn: ({
+      studentPublicId,
+      targetBatchPublicId,
+    }: {
+      studentPublicId: string;
+      targetBatchPublicId: string;
+    }) => changeStudentBatch(studentPublicId, targetBatchPublicId),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['org-students', active?.publicId] });
+      await qc.invalidateQueries({ queryKey: ['org-batches'] });
+      toast.success('Session changed');
+      setPendingMove(null);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not change session'),
   });
 
   const handleExport = async () => {
@@ -2599,6 +2622,7 @@ function StudentsTab({ batches }: { batches: Batch[] }) {
                 <th className="py-2 pr-3 font-medium">Name</th>
                 <th className="py-2 pr-3 font-medium">Email</th>
                 <th className="py-2 pr-3 font-medium">Reg. no.</th>
+                {canManage && <th className="py-2 pr-3 font-medium">Session</th>}
                 {canManage && <th className="py-2" />}
               </tr>
             </thead>
@@ -2631,6 +2655,30 @@ function StudentsTab({ batches }: { batches: Batch[] }) {
                     <td className="text-muted-foreground py-2 pr-3">
                       {s.registrationNumber ?? '—'}
                     </td>
+                    {canManage && (
+                      <td className="py-2 pr-3">
+                        <select
+                          value={active?.publicId ?? ''}
+                          className="border-input bg-card focus-visible:ring-ring h-7 rounded-md border px-1.5 text-xs disabled:opacity-60"
+                          disabled={moveMut.isPending}
+                          onChange={(e) => {
+                            const target = batches.find((b) => b.publicId === e.target.value);
+                            if (!target || target.publicId === active?.publicId) return;
+                            setPendingMove({
+                              studentPublicId: s.publicId,
+                              targetBatchPublicId: target.publicId,
+                              targetLabel: sessionLabel(target),
+                            });
+                          }}
+                        >
+                          {batches.map((b) => (
+                            <option key={b.publicId} value={b.publicId}>
+                              {sessionLabel(b)}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                    )}
                     {canManage && (
                       <td className="py-2">
                         <div className="flex gap-1">
@@ -2672,6 +2720,35 @@ function StudentsTab({ batches }: { batches: Batch[] }) {
           }}
         />
       )}
+
+      <Dialog open={pendingMove !== null} onOpenChange={(o) => !o && setPendingMove(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change session?</DialogTitle>
+            <DialogDescription>
+              Move this student to <span className="font-medium">{pendingMove?.targetLabel}</span>?
+              Their past results stay in the original session.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingMove(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() =>
+                pendingMove &&
+                moveMut.mutate({
+                  studentPublicId: pendingMove.studentPublicId,
+                  targetBatchPublicId: pendingMove.targetBatchPublicId,
+                })
+              }
+              disabled={moveMut.isPending}
+            >
+              {moveMut.isPending && <Loader2 className="size-4 animate-spin" />} Move
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
