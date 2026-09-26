@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import ExcelJS from 'exceljs';
+import { randomUUID } from 'node:crypto';
 import { AccessControlService } from '../../common/access/access-control.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { AuthUser } from '../../common/types/auth';
@@ -168,24 +169,6 @@ export class StructureService {
       facultyId: program.department.facultyId,
       departmentId: program.departmentId,
     };
-  }
-
-  /**
-   * If a soft-deleted User with this username exists, mangle its username/email so the slot
-   * is freed. Allows re-adding a record after accidental deletion.
-   */
-  private async freeDeletedUserSlot(username: string): Promise<void> {
-    const deleted = await this.prisma.user.findFirst({
-      where: { username, deletedAt: { not: null } },
-      select: { id: true },
-    });
-    if (deleted) {
-      const del = `__del_${Date.now()}`;
-      await this.prisma.user.update({
-        where: { id: deleted.id },
-        data: { username: `${username}${del}`, email: null },
-      });
-    }
   }
 
   /**
@@ -778,19 +761,12 @@ export class StructureService {
     const teacherRole = await this.prisma.db.role.findUnique({ where: { name: 'teacher' } });
     if (!teacherRole) throw new BadRequestException('Role "teacher" missing — run seed first');
 
-    // Teachers sign in with their email; username is an internal unique handle only.
-    const username = `${
-      dto.email
-        .split('@')[0]
-        ?.replace(/[^a-z0-9]/gi, '')
-        .toLowerCase() ?? 'teacher'
-    }_${Math.random().toString(36).slice(2, 8)}`;
     const hash = await this.password.hash(TEACHER_DEFAULT_PASSWORD);
 
     return this.mutate(ctx, 'teacher.create', 'Teacher', async (tx) => {
       const user = await tx.user.create({
         data: {
-          username,
+          username: randomUUID(),
           email: dto.email,
           passwordHash: hash,
           displayName: dto.displayName,
@@ -1362,14 +1338,13 @@ export class StructureService {
     const studentRole = await this.prisma.db.role.findUnique({ where: { name: 'student' } });
     if (!studentRole) throw new BadRequestException('Role "student" missing — run seed first');
 
-    await this.freeDeletedUserSlot(dto.studentId);
     await this.freeDeletedStudentSlot(dto.studentId);
     const hash = await this.password.hash('Student@123');
 
     return this.mutate(ctx, 'student.create', 'Student', async (tx) => {
       const user = await tx.user.create({
         data: {
-          username: dto.studentId,
+          username: randomUUID(),
           email: dto.email ?? null,
           passwordHash: hash,
           displayName: dto.displayName,

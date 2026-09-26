@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import type { Job } from 'bullmq';
 import ExcelJS from 'exceljs';
+import { randomUUID } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ImportRowError, ImportSummary } from '@exam/types';
@@ -124,17 +125,7 @@ export class StudentImportProcessor extends WorkerHost {
           continue;
         }
 
-        // Free unique slots held by any prior soft-deleted record with the same studentId.
-        const staleUser = await this.prisma.user.findFirst({
-          where: { username: row.studentId, deletedAt: { not: null } },
-          select: { id: true },
-        });
-        if (staleUser) {
-          await this.prisma.user.update({
-            where: { id: staleUser.id },
-            data: { username: `${row.studentId}__del_${Date.now()}`, email: null },
-          });
-        }
+        // Free unique slot held by any prior soft-deleted Student with the same studentId.
         const staleStudent = await this.prisma.student.findFirst({
           where: { studentId: row.studentId, deletedAt: { not: null } },
           select: { id: true },
@@ -148,7 +139,7 @@ export class StudentImportProcessor extends WorkerHost {
         await this.prisma.$transaction(async (tx) => {
           const user = await tx.user.create({
             data: {
-              username: row.studentId,
+              username: randomUUID(),
               email: row.email,
               passwordHash: hash,
               displayName: row.name,
